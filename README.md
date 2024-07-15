@@ -10,7 +10,7 @@ It makes the following changes
 * Removes irrelevant nodes such as temperature, elevation
   and heart rate
 * Writes only the first 6 decimal places of accuracy in
-  the "lat" and "lon" attributes of the "<trkpt>" node.
+  the "lat" and "lon" attributes of the "&lt;trkpt&gt;" node.
   6 d.p. are sufficient to locate a point to within 11cm
   of accuracy: see https://en.wikipedia.org/wiki/Decimal_degrees
 
@@ -26,3 +26,9 @@ Run the EXE (double click is OK on windows).
 The program looks for all the GPX files in the same directory
 as the EXE and writes a new ".simplified.gpx" file in the same
 directory. No input files are changed.
+
+# Possible enhancements
+
+The "&lt;metadata&gt;" and "&lt;name&gt;" nodes (the latter under
+the "&lt;trkpt&gt;" node) are currently stripped. They don't take
+up much space so they could be kept if needed.

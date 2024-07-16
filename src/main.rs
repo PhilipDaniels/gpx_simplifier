@@ -4,6 +4,7 @@ use quick_xml::{
     name::QName,
     Writer,
 };
+use std::borrow::Cow;
 use std::{
     fs::{read_dir, File},
     io::BufWriter,
@@ -70,32 +71,16 @@ fn simplify(input_file: &Path) {
                         // Only 6 d.p. are needed to be precise to 11cm.
                         // See https://en.wikipedia.org/wiki/Decimal_degrees
                         let lat = e.try_get_attribute("lat").unwrap().unwrap().value;
-                        let mut idx = 0;
-                        while lat[idx] != b'.' {
-                            idx += 1;
-                        }
-                        let trimmed_lat = &lat[0..idx + 7];
+                        let trimmed_lat = trim_dp(&lat);
+                        let trimmed_lat = make_attr("lat", trimmed_lat);
 
                         let lon = e.try_get_attribute("lon").unwrap().unwrap().value;
-                        let mut idx = 0;
-                        while lon[idx] != b'.' {
-                            idx += 1;
-                        }
-                        let trimmed_lon = &lon[0..idx + 7];
-
-                        // Make a new trkpt node with the shortened attributes.
-                        let lat2 = Attribute {
-                            key: QName(b"lat"),
-                            value: trimmed_lat.into(),
-                        };
-                        let lon2 = Attribute {
-                            key: QName(b"lon"),
-                            value: trimmed_lon.into(),
-                        };
+                        let trimmed_lon = trim_dp(&lon);
+                        let trimmed_lon = make_attr("lon", trimmed_lon);
 
                         let mut e2 = BytesStart::new("trkpt");
-                        e2.push_attribute(lat2);
-                        e2.push_attribute(lon2);
+                        e2.push_attribute(trimmed_lat);
+                        e2.push_attribute(trimmed_lon);
 
                         writer.write_event(Event::Start(e2)).unwrap();
                     }
@@ -172,4 +157,29 @@ fn get_exe_dir() -> PathBuf {
     let mut exe_path = std::env::current_exe().unwrap();
     exe_path.pop();
     exe_path
+}
+
+fn trim_dp(v: &[u8]) -> &[u8] {
+    let mut idx = 0;
+    while v[idx] != b'.' {
+        idx += 1;
+    }
+
+    &v[0..idx + 7]
+}
+
+// fn trim_dp<'a>(v: &'a [u8]) -> Cow<'a, [u8]> {
+//     let mut idx = 0;
+//     while v[idx] != b'.' {
+//         idx += 1;
+//     }
+
+//     Cow::Borrowed(&v[0..idx + 7])
+// }
+
+fn make_attr<'a, 'b: 'a>(name: &'b str, value: &'a [u8]) -> Attribute<'a> {
+    Attribute {
+        key: QName(name.as_bytes()),
+        value: Cow::Borrowed(value)
+    }
 }

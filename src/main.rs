@@ -1,5 +1,6 @@
 use core::{panic, str};
-use model::Trackpoint;
+use std::io::Write;
+use model::{Gpx, Track, TrackPoint};
 use quick_xml::events::BytesText;
 use quick_xml::reader::Reader;
 use quick_xml::Error;
@@ -24,8 +25,69 @@ fn main() {
     }
 
     for f in input_files {
-        simplify(&f);
+        let mut output_file = f.to_owned();
+        output_file.set_extension("simplified.gpx");
+        if output_file.exists() {
+            println!(
+                "Simplified file {:?} already exists, skipping...",
+                &output_file
+            );
+            continue;
+        }
+
+        let mut gpx = read_gpx_file(&f);
+        //reduce_trackpoints(&mut data);
+        // Join any tracks together so there is only 1.
+        assert!(gpx.tracks.len() == 1);
+        assert!(gpx.tracks[0].segments.len() == 1);
+        write_output_file(&output_file, &gpx);
     }
+}
+
+/// The serde/quick-xml deserialization integration does a "good enough" job of parsing
+/// the XML file.
+fn read_gpx_file(input_file: &Path) -> Gpx {
+    let reader = Reader::from_file(input_file).expect("Could not create XML reader");
+    let doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
+    //dbg!(&doc);
+    doc
+}
+
+fn reduce_trackpoints(data: &[Track]) {
+}
+
+fn write_output_file(output_file: &Path, gpx: &Gpx) {
+    println!("Writing file {:?}", &output_file);
+
+    // TODO: If Garmin ever changes this then what we need to do is read the GPX node in the way
+    // we used to do, using the streaming interface, then write it to the output file.
+    // But for now, let's wing it...
+    let mut w = BufWriter::new(File::create(&output_file).expect("Could not open output_file"));
+    writeln!(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>").unwrap();
+    writeln!(w, "<gpx creator=\"{}\" version=\"{}\"", gpx.creator, gpx.version).unwrap();
+    writeln!(w, "  xsi::schemaLocation=\"{}\"", gpx.xsi_schema_location).unwrap();
+    writeln!(w, "  xmlns:ns3=\"{}\"", gpx.xmlns_ns3).unwrap();
+    writeln!(w, "  xmlns=\"{}\"", gpx.xmlns).unwrap();
+    writeln!(w, "  xmlns:xsi=\"{}\"", gpx.xmlns_xsi).unwrap();
+    writeln!(w, "  xmlns:ns2=\"{}\"", gpx.xmlns_ns2).unwrap();
+    writeln!(w, "  <metadata>").unwrap();
+    writeln!(w, "    <time>{}</time>", gpx.metadata.time).unwrap();
+    writeln!(w, "  </metadata>").unwrap();
+
+    writeln!(w, "  <trk>").unwrap();
+    writeln!(w, "    <name>{}</name>", gpx.tracks[0].name).unwrap();
+    writeln!(w, "    <type>{}</type>", gpx.tracks[0].r#type).unwrap();
+    writeln!(w, "    <trkseg>").unwrap();
+    for tp in &gpx.tracks[0].segments[0].points {
+        writeln!(w, "      <trkpt lat=\"{}\" lon=\"{}\">", tp.lat, tp.lon).unwrap();
+        writeln!(w, "        <ele>{}</ele>", tp.ele).unwrap();
+        writeln!(w, "        <time>{}</time>", tp.time).unwrap();
+        writeln!(w, "      </trkpt").unwrap();
+    }
+    writeln!(w, "    </trkseg>").unwrap();
+    writeln!(w, "  </trk>").unwrap();
+
+    w.flush().unwrap();
 }
 
 fn simplify(input_file: &Path) {
@@ -87,7 +149,7 @@ fn simplify(input_file: &Path) {
                             _ => panic!("Did not get both the <ele> and <time> tags"),
                         }
 
-                        let tp = Trackpoint {
+                        let tp = TrackPoint {
                             lat,
                             lon,
                             ele,
@@ -108,27 +170,35 @@ fn simplify(input_file: &Path) {
                 // simplification algorithms on them all in memory (it's impossible
                 // to do this in a purely streaming approach.)
                 b"gpx" => {
-                    writer.create_element("trk").write_inner_content::<_, Error>(|w| {
-                        w.create_element("trkseg").write_inner_content::<_, Error>(|w| {
-                            for tp in &trackpoints {
-                                w.create_element("trkpt")
-                                    .with_attribute(("lat", format!("{}", tp.lat).as_str()))
-                                    .with_attribute(("lon", format!("{}", tp.lon).as_str()))
-                                    .write_inner_content::<_, Error>(|w| {
-                                        let ele = format!("{}", tp.ele);
-                                        w.create_element("ele").write_text_content(BytesText::new(&ele)).unwrap();
-                                        let time = format!("{}", tp.time);
-                                        w.create_element("time").write_text_content(BytesText::new(&time)).unwrap();
-                                        Ok(())
-                                    })
+                    writer
+                        .create_element("trk")
+                        .write_inner_content::<_, Error>(|w| {
+                            w.create_element("trkseg")
+                                .write_inner_content::<_, Error>(|w| {
+                                    for tp in &trackpoints {
+                                        w.create_element("trkpt")
+                                            .with_attribute(("lat", format!("{}", tp.lat).as_str()))
+                                            .with_attribute(("lon", format!("{}", tp.lon).as_str()))
+                                            .write_inner_content::<_, Error>(|w| {
+                                                let ele = format!("{}", tp.ele);
+                                                w.create_element("ele")
+                                                    .write_text_content(BytesText::new(&ele))
+                                                    .unwrap();
+                                                let time = format!("{}", tp.time);
+                                                w.create_element("time")
+                                                    .write_text_content(BytesText::new(&time))
+                                                    .unwrap();
+                                                Ok(())
+                                            })
+                                            .unwrap();
+                                    }
+                                    Ok(())
+                                })
                                 .unwrap();
-                            }
                             Ok(())
-                        }).unwrap();
-                        Ok(())
-                    }
-                    ).unwrap();
-                    
+                        })
+                        .unwrap();
+
                     writer.write_event(Event::End(e)).unwrap();
                 }
                 _ => (),

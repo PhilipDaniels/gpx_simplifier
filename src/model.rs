@@ -89,4 +89,51 @@ impl Gpx {
             tracks: Vec::new(),
         }
     }
+
+    /// Merges all the tracks and segments within the GPX into
+    /// a new structure that just has one set of points.
+    /// The name and type of the first track in `self` is used
+    /// to name the new track.
+    pub fn to_merged_gpx(&self) -> MergedGpx {
+        let mut result = MergedGpx {
+            creator: self.creator.clone(),
+            version: self.version.clone(),
+            xmlns_ns3: self.xmlns_ns3.clone(),
+            xmlns: self.xmlns.clone(),
+            xmlns_xsi: self.xmlns_xsi.clone(),
+            xmlns_ns2: self.xmlns_ns2.clone(),
+            xsi_schema_location: self.xsi_schema_location.clone(),
+            metadata_time: self.metadata.time.clone(),
+            track_name: self.tracks[0].name.clone(),
+            track_type: self.tracks[0].r#type.clone(),
+            points: Vec::new(),
+        };
+
+        for src_track in &self.tracks {
+            for src_segment in &src_track.segments {
+                for src_point in &src_segment.points {
+                    result.points.push(src_point.clone());
+                }
+            }
+        }
+
+        result
+    }
 }
+
+
+
+pub struct MergedGpx {
+    pub creator: String,
+    pub version: String,
+    pub xmlns_ns3: String,
+    pub xmlns: String,
+    pub xmlns_xsi: String,
+    pub xmlns_ns2: String,
+    pub xsi_schema_location: String,
+    pub metadata_time: String,
+    pub track_name: String,
+    pub track_type: String,
+    pub points: Vec<TrackPoint>,
+}
+

@@ -1,4 +1,4 @@
-use model::{Gpx, Track, TrackSegment};
+use model::{Gpx, MergedGpx, Track, TrackSegment};
 use quick_xml::reader::Reader;
 use std::io::Write;
 use std::{
@@ -29,7 +29,7 @@ fn main() {
         }
 
         let gpx = read_gpx_file(&f);
-        let gpx = join_all_tracks(&gpx);
+        let gpx = gpx.to_merged_gpx();
         write_output_file(&output_file, &gpx);
     }
 }
@@ -42,6 +42,7 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
     doc
 }
 
+/*
 /// Joins all the tracks and track segments in the file so there
 /// is only one trackk and one segment containing all the points.
 /// TODO: An alternative implementation would have a simpler model, with
@@ -59,7 +60,7 @@ fn join_all_tracks(gpx: &Gpx) -> Gpx {
 
     // Happy to use the name of the first track in the file as
     // the name for the merged track.
-    let track = Track { 
+    let track = Track {
         name: gpx.tracks[0].name.clone(),
         r#type: gpx.tracks[0].r#type.clone(),
         segments: vec![TrackSegment { points }]
@@ -74,8 +75,9 @@ fn join_all_tracks(gpx: &Gpx) -> Gpx {
 
     result
 }
+*/
 
-fn write_output_file(output_file: &Path, gpx: &Gpx) {
+fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     println!("Writing file {:?}", &output_file);
 
     // TODO: If Garmin ever changes this then what we need to do is read the GPX node in the way
@@ -93,20 +95,20 @@ fn write_output_file(output_file: &Path, gpx: &Gpx) {
     writeln!(w, "  xmlns:ns3=\"{}\"", gpx.xmlns_ns3).unwrap();
     writeln!(w, "  xmlns=\"{}\"", gpx.xmlns).unwrap();
     writeln!(w, "  xmlns:xsi=\"{}\"", gpx.xmlns_xsi).unwrap();
-    writeln!(w, "  xmlns:ns2=\"{}\"", gpx.xmlns_ns2).unwrap();
+    writeln!(w, "  xmlns:ns2=\"{}\">", gpx.xmlns_ns2).unwrap();
     writeln!(w, "  <metadata>").unwrap();
-    writeln!(w, "    <time>{}</time>", gpx.metadata.time).unwrap();
+    writeln!(w, "    <time>{}</time>", gpx.metadata_time).unwrap();
     writeln!(w, "  </metadata>").unwrap();
 
     writeln!(w, "  <trk>").unwrap();
-    writeln!(w, "    <name>{}</name>", gpx.tracks[0].name).unwrap();
-    writeln!(w, "    <type>{}</type>", gpx.tracks[0].r#type).unwrap();
+    writeln!(w, "    <name>{}</name>", gpx.track_name).unwrap();
+    writeln!(w, "    <type>{}</type>", gpx.track_type).unwrap();
     writeln!(w, "    <trkseg>").unwrap();
-    for tp in &gpx.tracks[0].segments[0].points {
+    for tp in &gpx.points {
         writeln!(w, "      <trkpt lat=\"{}\" lon=\"{}\">", tp.lat, tp.lon).unwrap();
         writeln!(w, "        <ele>{}</ele>", tp.ele).unwrap();
         writeln!(w, "        <time>{}</time>", tp.time).unwrap();
-        writeln!(w, "      </trkpt").unwrap();
+        writeln!(w, "      </trkpt>").unwrap();
     }
     writeln!(w, "    </trkseg>").unwrap();
     writeln!(w, "  </trk>").unwrap();

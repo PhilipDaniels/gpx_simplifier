@@ -1,12 +1,12 @@
 use core::{panic, str};
 use model::Trackpoint;
+use quick_xml::events::BytesText;
 use quick_xml::reader::Reader;
+use quick_xml::Error;
 use quick_xml::{
-    events::{attributes::Attribute, BytesStart, Event},
-    name::QName,
+    events::{BytesStart, Event},
     Writer,
 };
-use std::borrow::Cow;
 use std::{
     fs::{read_dir, File},
     io::BufWriter,
@@ -108,11 +108,27 @@ fn simplify(input_file: &Path) {
                 // simplification algorithms on them all in memory (it's impossible
                 // to do this in a purely streaming approach.)
                 b"gpx" => {
-                    writer.create_element("trk").write_inner_content(|w| {
-                        w.create_element("trkseg").write_empty().unwrap();
+                    writer.create_element("trk").write_inner_content::<_, Error>(|w| {
+                        w.create_element("trkseg").write_inner_content::<_, Error>(|w| {
+                            for tp in &trackpoints {
+                                w.create_element("trkpt")
+                                    .with_attribute(("lat", format!("{}", tp.lat).as_str()))
+                                    .with_attribute(("lon", format!("{}", tp.lon).as_str()))
+                                    .write_inner_content::<_, Error>(|w| {
+                                        let ele = format!("{}", tp.ele);
+                                        w.create_element("ele").write_text_content(BytesText::new(&ele)).unwrap();
+                                        let time = format!("{}", tp.time);
+                                        w.create_element("time").write_text_content(BytesText::new(&time)).unwrap();
+                                        Ok(())
+                                    })
+                                .unwrap();
+                            }
+                            Ok(())
+                        }).unwrap();
                         Ok(())
                     }
-                    );
+                    ).unwrap();
+                    
                     writer.write_event(Event::End(e)).unwrap();
                 }
                 _ => (),
@@ -175,10 +191,11 @@ fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec
     }
 }
 
+/// Reads an attribute value and converts it to an f32.
 fn get_f32_attr(e: &BytesStart, arg: &str) -> f32 {
     let lat2 = e
         .try_get_attribute(arg)
-        .expect("Unless the file is corrupt the attributes we asl for always exist")
+        .expect("Unless the file is corrupt the attributes we ask for always exist")
         .expect("And always have values")
         .value;
     let lat2 = lat2.as_ref();
@@ -222,11 +239,4 @@ fn get_exe_dir() -> PathBuf {
     let mut exe_path = std::env::current_exe().unwrap();
     exe_path.pop();
     exe_path
-}
-
-fn make_attr<'a, 'b: 'a>(name: &'b str, value: &'a [u8]) -> Attribute<'a> {
-    Attribute {
-        key: QName(name.as_bytes()),
-        value: Cow::Borrowed(value),
-    }
 }

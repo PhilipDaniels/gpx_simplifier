@@ -1,4 +1,4 @@
-use model::{Gpx, MergedGpx};
+use model::{Gpx, MergedGpx, TrackPoint};
 use quick_xml::reader::Reader;
 use std::io::Write;
 use std::{
@@ -29,9 +29,24 @@ fn main() {
         }
 
         let gpx = read_gpx_file(&f);
-        let gpx = gpx.to_merged_gpx();
+        let mut gpx = gpx.to_merged_gpx();
+        reduce_trackpoints(&mut gpx.points, 5);
         write_output_file(&output_file, &gpx);
     }
+}
+
+/// Reduces the number of points in the track. The Garmin Edge 1040 writes
+/// 1 point per second, which is ridiculous. Example: if keep_each is 3,
+/// every 3rd point is kept, starting with the first.
+/// Up to 10 seems fine.
+/// The max size of an upload file is 1.25Mb - and that can be after zipping.
+fn reduce_trackpoints(points: &mut Vec<TrackPoint>, keep_each: i32) {
+    let mut n = 0;
+    points.retain(|_| {
+        let keep = n % keep_each == 0;
+        n += 1;
+        keep
+    })
 }
 
 /// The serde/quick-xml deserialization integration does a "good enough" job of parsing
@@ -56,7 +71,7 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
         gpx.creator, gpx.version
     )
     .unwrap();
-    writeln!(w, "  xsi::schemaLocation=\"{}\"", gpx.xsi_schema_location).unwrap();
+    writeln!(w, "  xsi:schemaLocation=\"{}\"", gpx.xsi_schema_location).unwrap();
     writeln!(w, "  xmlns:ns3=\"{}\"", gpx.xmlns_ns3).unwrap();
     writeln!(w, "  xmlns=\"{}\"", gpx.xmlns).unwrap();
     writeln!(w, "  xmlns:xsi=\"{}\"", gpx.xmlns_xsi).unwrap();

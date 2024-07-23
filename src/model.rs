@@ -4,7 +4,7 @@ use serde::Deserialize;
 pub struct Gpx {
     #[serde(rename = "@creator")]
     pub creator: String,
-    
+
     #[serde(rename = "@version")]
     pub version: String,
 
@@ -29,7 +29,7 @@ pub struct Gpx {
     pub xsi_schema_location: String,
 
     pub metadata: Metadata,
-    
+
     #[serde(rename = "trk")]
     pub tracks: Vec<Track>,
 }
@@ -37,7 +37,7 @@ pub struct Gpx {
 /// Represents the <metadata> node from the header.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
-    pub time: String
+    pub time: String,
 }
 
 /// Represents a single <trk>
@@ -53,7 +53,7 @@ pub struct Track {
 #[derive(Debug, Deserialize)]
 pub struct TrackSegment {
     #[serde(rename = "trkpt")]
-    pub points: Vec<TrackPoint>
+    pub points: Vec<TrackPoint>,
 }
 
 /// Represents a single <trkpt>.
@@ -73,23 +73,7 @@ pub struct TrackPoint {
     pub time: String,
 }
 
-
 impl Gpx {
-    /// Make a duplicate, except without any tracks.
-    pub fn duplicate(&self) -> Self {
-        Gpx {
-            creator: self.creator.clone(),
-            version: self.version.clone(),
-            xmlns_ns3: self.xmlns_ns3.clone(),
-            xmlns: self.xmlns.clone(),
-            xmlns_xsi: self.xmlns_xsi.clone(),
-            xmlns_ns2: self.xmlns_ns2.clone(),
-            xsi_schema_location: self.xsi_schema_location.clone(),
-            metadata: self.metadata.clone(),
-            tracks: Vec::new(),
-        }
-    }
-
     /// Merges all the tracks and segments within the GPX into
     /// a new structure that just has one set of points.
     /// The name and type of the first track in `self` is used
@@ -121,8 +105,6 @@ impl Gpx {
     }
 }
 
-
-
 pub struct MergedGpx {
     pub creator: String,
     pub version: String,
@@ -136,4 +118,3 @@ pub struct MergedGpx {
     pub track_type: String,
     pub points: Vec<TrackPoint>,
 }
-

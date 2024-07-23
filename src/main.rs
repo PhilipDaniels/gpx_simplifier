@@ -1,4 +1,4 @@
-use model::{Gpx, MergedGpx, Track, TrackSegment};
+use model::{Gpx, MergedGpx};
 use quick_xml::reader::Reader;
 use std::io::Write;
 use std::{

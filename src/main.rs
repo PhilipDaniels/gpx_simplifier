@@ -1,4 +1,4 @@
-use model::{Gpx, Track};
+use model::{Gpx, Track, TrackSegment};
 use quick_xml::reader::Reader;
 use std::io::Write;
 use std::{
@@ -28,11 +28,8 @@ fn main() {
             continue;
         }
 
-        let mut gpx = read_gpx_file(&f);
-        //reduce_trackpoints(&mut data);
-        // Join any tracks together so there is only 1.
-        assert!(gpx.tracks.len() == 1);
-        assert!(gpx.tracks[0].segments.len() == 1);
+        let gpx = read_gpx_file(&f);
+        let gpx = join_all_tracks(&gpx);
         write_output_file(&output_file, &gpx);
     }
 }
@@ -42,11 +39,41 @@ fn main() {
 fn read_gpx_file(input_file: &Path) -> Gpx {
     let reader = Reader::from_file(input_file).expect("Could not create XML reader");
     let doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
-    //dbg!(&doc);
     doc
 }
 
-fn reduce_trackpoints(data: &[Track]) {}
+/// Joins all the tracks and track segments in the file so there
+/// is only one trackk and one segment containing all the points.
+/// TODO: An alternative implementation would have a simpler model, with
+/// just Gpx, Metadata and a Vec of TrackPoints.
+fn join_all_tracks(gpx: &Gpx) -> Gpx {
+    // Duplicate all the track points into one vec.
+    let mut points = Vec::new();
+    for src_track in &gpx.tracks {
+        for src_segment in &src_track.segments {
+            for src_point in &src_segment.points {
+                points.push(src_point.clone());
+            }
+        }
+    }
+
+    // Happy to use the name of the first track in the file as
+    // the name for the merged track.
+    let track = Track { 
+        name: gpx.tracks[0].name.clone(),
+        r#type: gpx.tracks[0].r#type.clone(),
+        segments: vec![TrackSegment { points }]
+    };
+
+    let mut result = gpx.duplicate();
+    result.tracks.push(track);
+
+    // Join any tracks together so there is only 1.
+    assert!(result.tracks.len() == 1);
+    assert!(result.tracks[0].segments.len() == 1);
+
+    result
+}
 
 fn write_output_file(output_file: &Path, gpx: &Gpx) {
     println!("Writing file {:?}", &output_file);
@@ -83,6 +110,7 @@ fn write_output_file(output_file: &Path, gpx: &Gpx) {
     }
     writeln!(w, "    </trkseg>").unwrap();
     writeln!(w, "  </trk>").unwrap();
+    writeln!(w, "</gpx>").unwrap();
 
     w.flush().unwrap();
 }

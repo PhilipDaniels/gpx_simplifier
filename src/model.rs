@@ -35,7 +35,7 @@ pub struct Gpx {
 }
 
 /// Represents the <metadata> node from the header.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
     pub time: String
 }
@@ -57,7 +57,7 @@ pub struct TrackSegment {
 }
 
 /// Represents a single <trkpt>.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TrackPoint {
     /// The latitude, read from the "lat" attribute.
     #[serde(rename = "@lat")]
@@ -71,4 +71,22 @@ pub struct TrackPoint {
     /// do any "time processing" on the time, so just a string is
     /// good enough.
     pub time: String,
+}
+
+
+impl Gpx {
+    /// Make a duplicate, except without any tracks.
+    pub fn duplicate(&self) -> Self {
+        Gpx {
+            creator: self.creator.clone(),
+            version: self.version.clone(),
+            xmlns_ns3: self.xmlns_ns3.clone(),
+            xmlns: self.xmlns.clone(),
+            xmlns_xsi: self.xmlns_xsi.clone(),
+            xmlns_ns2: self.xmlns_ns2.clone(),
+            xsi_schema_location: self.xsi_schema_location.clone(),
+            metadata: self.metadata.clone(),
+            tracks: Vec::new(),
+        }
+    }
 }

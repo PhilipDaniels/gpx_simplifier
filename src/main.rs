@@ -42,41 +42,6 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
     doc
 }
 
-/*
-/// Joins all the tracks and track segments in the file so there
-/// is only one trackk and one segment containing all the points.
-/// TODO: An alternative implementation would have a simpler model, with
-/// just Gpx, Metadata and a Vec of TrackPoints.
-fn join_all_tracks(gpx: &Gpx) -> Gpx {
-    // Duplicate all the track points into one vec.
-    let mut points = Vec::new();
-    for src_track in &gpx.tracks {
-        for src_segment in &src_track.segments {
-            for src_point in &src_segment.points {
-                points.push(src_point.clone());
-            }
-        }
-    }
-
-    // Happy to use the name of the first track in the file as
-    // the name for the merged track.
-    let track = Track {
-        name: gpx.tracks[0].name.clone(),
-        r#type: gpx.tracks[0].r#type.clone(),
-        segments: vec![TrackSegment { points }]
-    };
-
-    let mut result = gpx.duplicate();
-    result.tracks.push(track);
-
-    // Join any tracks together so there is only 1.
-    assert!(result.tracks.len() == 1);
-    assert!(result.tracks[0].segments.len() == 1);
-
-    result
-}
-*/
-
 fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     println!("Writing file {:?}", &output_file);
 

@@ -1,5 +1,6 @@
 
 /// Represents a single <trkpt>.
+#[derive(Debug)]
 pub struct Trackpoint {
     /// The latitude, read from the "lat" attribute.
     pub lat: f32,

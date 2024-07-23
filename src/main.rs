@@ -11,6 +11,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod model;
+
 fn main() {
     let exe_dir = get_exe_dir();
     let input_files = get_list_of_input_files(&exe_dir);

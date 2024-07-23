@@ -84,6 +84,15 @@ fn simplify(input_file: &Path) {
 
                         writer.write_event(Event::Start(e2)).unwrap();
                     }
+                    b"ele" => {
+                        // Read again to get the text inside the <ele>...</ele> tags.
+                        match reader.read_event_into(&mut buf) {
+                            Ok(Event::Text(t)) => {
+                                writer.create_element("ele").write_text_content(t).unwrap();
+                            }
+                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
+                        }
+                    }
                     b"time" => {
                         // Read again to get the text inside the <time>...</time> tags.
                         match reader.read_event_into(&mut buf) {

@@ -37,9 +37,9 @@ fn simplify(input_file: &Path) {
             &output_file
         );
         return;
-    } else {
-        println!("Writing file {:?}", &output_file);
     }
+
+    println!("Writing file {:?}", &output_file);
 
     // Reading.
     let mut reader = Reader::from_file(input_file).expect("Could not create XML reader");
@@ -52,38 +52,35 @@ fn simplify(input_file: &Path) {
 
     loop {
         match reader.read_event_into(&mut buf) {
+            // Write this node direct to the output file so we
+            // don't have to parse it.
             Ok(Event::Decl(decl)) => {
                 writer.write_event(Event::Decl(decl)).unwrap();
             }
             Ok(Event::Start(e)) => {
                 match e.name().as_ref() {
+                    // Write this node direct to the output file so we
+                    // don't have to parse it.
                     b"gpx" => {
                         println!("Found the gpx tag");
                         writer.write_event(Event::Start(e)).unwrap();
                     }
-                    b"trk" => {
-                        println!("Found a trk tag");
-                        writer.write_event(Event::Start(e)).unwrap();
-                    }
-                    b"trkseg" => {
-                        println!("Found a trkseg tag");
-                        writer.write_event(Event::Start(e)).unwrap();
-                    }
                     b"trkpt" => {
+                        // Accumulate all the trackpoints into a Vec.
                         let lat = get_f32_attr(&e, "lat");
                         let lon = get_f32_attr(&e, "lon");
+
                         let ele: f32;
                         let time: String;
-
                         let eot1 = read_ele_or_time(&mut reader, &mut buf);
                         let eot2 = read_ele_or_time(&mut reader, &mut buf);
 
                         match (eot1, eot2) {
-                            (EleOrTime::ele(e), EleOrTime::time(t)) => {
+                            (EleOrTime::Ele(e), EleOrTime::Time(t)) => {
                                 ele = e;
                                 time = t;
                             }
-                            (EleOrTime::time(t), EleOrTime::ele(e)) => {
+                            (EleOrTime::Time(t), EleOrTime::Ele(e)) => {
                                 ele = e;
                                 time = t;
                             }
@@ -97,58 +94,25 @@ fn simplify(input_file: &Path) {
                             time,
                         };
 
-                        println!("{:?}", tp);
                         trackpoints.push(tp);
-
-                        // // The lat and lon attributes have an absurd number of decimal places.
-                        // // Only 6 d.p. are needed to be precise to 11cm.
-                        // // See https://en.wikipedia.org/wiki/Decimal_degrees
-                        // let lat = e.try_get_attribute("lat").unwrap().unwrap().value;
-                        // let trimmed_lat = trim_dp(&lat);
-                        // let trimmed_lat = make_attr("lat", trimmed_lat);
-
-                        // let lon = e.try_get_attribute("lon").unwrap().unwrap().value;
-                        // let trimmed_lon = trim_dp(&lon);
-                        // let trimmed_lon = make_attr("lon", trimmed_lon);
-
-                        // let mut e2 = BytesStart::new("trkpt");
-                        // e2.push_attribute(trimmed_lat);
-                        // e2.push_attribute(trimmed_lon);
-
-                        // writer.write_event(Event::Start(e2)).unwrap();
-                    }
-                    b"ele" => {
-                        // Read again to get the text inside the <ele>...</ele> tags.
-                        match reader.read_event_into(&mut buf) {
-                            Ok(Event::Text(t)) => {
-                                writer.create_element("ele").write_text_content(t).unwrap();
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    b"time" => {
-                        // Read again to get the text inside the <time>...</time> tags.
-                        match reader.read_event_into(&mut buf) {
-                            Ok(Event::Text(t)) => {
-                                writer.create_element("time").write_text_content(t).unwrap();
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
                     }
                     _ => (),
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
+                // Once we hit the end <gpx> tag we can write out all the trkpts.
+                // We also need the other tags to make a valid GPX file. Writing <trk>
+                // and <trkseg> at the end instead of as we go along means that we also
+                // effectively merge split tracks that are recorded in a single file.
+                // And having all the trkpts in a big vec means we can run various
+                // simplification algorithms on them all in memory (it's impossible
+                // to do this in a purely streaming approach.)
                 b"gpx" => {
-                    writer.write_event(Event::End(e)).unwrap();
-                }
-                b"trk" => {
-                    writer.write_event(Event::End(e)).unwrap();
-                }
-                b"trkseg" => {
-                    writer.write_event(Event::End(e)).unwrap();
-                }
-                b"trkpt" => {
+                    writer.create_element("trk").write_inner_content(|w| {
+                        w.create_element("trkseg").write_empty().unwrap();
+                        Ok(())
+                    }
+                    );
                     writer.write_event(Event::End(e)).unwrap();
                 }
                 _ => (),
@@ -165,8 +129,8 @@ fn simplify(input_file: &Path) {
 }
 
 enum EleOrTime {
-    ele(f32),
-    time(String),
+    Ele(f32),
+    Time(String),
 }
 
 /// Read the <ele> or <time> sub-node. I am not assuming which comes first in the file,
@@ -182,12 +146,12 @@ fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec
                         match reader.read_event_into(buf) {
                             Ok(Event::Text(ele)) => {
                                 let ele = ele.as_ref();
-                                let ele = str::from_utf8(ele).expect("The bytes should be ASCII, therefore valid UTF-8");
-                                let ele: f32 = ele.parse().expect("The string should be a valid number");
+                                let ele = str::from_utf8(ele).unwrap();
+                                let ele: f32 = ele.parse().unwrap();
                                 // All the ele's will come out to 1 d.p., because that is all that my Garmin
                                 // Edge 1040 can actually manage, even though it records them as
                                 // "151.1999969482421875" or "149.8000030517578125".
-                                return EleOrTime::ele(ele)
+                                return EleOrTime::Ele(ele);
                             }
                             _ => panic!("Got unexpected XML node, document is probably corrupt"),
                         }
@@ -198,12 +162,12 @@ fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec
                             Ok(Event::Text(time)) => {
                                 let time = time.as_ref();
                                 let time = String::from_utf8_lossy(time).into_owned();
-                                return EleOrTime::time(time)
+                                return EleOrTime::Time(time);
                             }
                             _ => panic!("Got unexpected XML node, document is probably corrupt"),
                         }
                     }
-                    _ => panic!("Unexpected element")
+                    _ => panic!("Unexpected element"),
                 }
             }
             _ => {}
@@ -259,24 +223,6 @@ fn get_exe_dir() -> PathBuf {
     exe_path.pop();
     exe_path
 }
-
-fn trim_dp(v: &[u8]) -> &[u8] {
-    let mut idx = 0;
-    while v[idx] != b'.' {
-        idx += 1;
-    }
-
-    &v[0..idx + 7]
-}
-
-// fn trim_dp<'a>(v: &'a [u8]) -> Cow<'a, [u8]> {
-//     let mut idx = 0;
-//     while v[idx] != b'.' {
-//         idx += 1;
-//     }
-
-//     Cow::Borrowed(&v[0..idx + 7])
-// }
 
 fn make_attr<'a, 'b: 'a>(name: &'b str, value: &'a [u8]) -> Attribute<'a> {
     Attribute {

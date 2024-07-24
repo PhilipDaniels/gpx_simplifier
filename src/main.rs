@@ -30,7 +30,10 @@ fn main() {
 
         let gpx = read_gpx_file(&f);
         let mut gpx = gpx.to_merged_gpx();
-        reduce_trackpoints(&mut gpx.points, 5);
+        let keep_each = 5;
+        let start_count = gpx.points.len();
+        reduce_trackpoints(&mut gpx.points, keep_each);
+        println!("Keeping every {keep_each} trackpoints reduced the count from {start_count} to {}", gpx.points.len());
         write_output_file(&output_file, &gpx);
     }
 }

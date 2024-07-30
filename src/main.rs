@@ -1,3 +1,4 @@
+use args::parse_args;
 use model::{Gpx, MergedGpx, TrackPoint};
 use quick_xml::reader::Reader;
 use std::io::Write;
@@ -7,9 +8,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod args;
 mod model;
 
 fn main() {
+    let args = parse_args();
+
     let exe_dir = get_exe_dir();
     let input_files = get_list_of_input_files(&exe_dir);
     if input_files.is_empty() {

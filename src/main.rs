@@ -102,8 +102,7 @@ fn metres_to_epsilon(metres: f32) -> f32 {
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
 fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
-    let coords_iter = points.iter().map(|p| coord! { x: p.lon, y: p.lat });
-    let line_string: LineString<f32> = coords_iter.collect();
+    let line_string: LineString<f32> = points.iter().map(|p| coord! { x: p.lon, y: p.lat }).collect();
     let indices_to_keep: HashSet<usize> = HashSet::from_iter(line_string.simplify_idx(&epsilon));
 
     let mut n = 0;

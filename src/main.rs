@@ -47,10 +47,11 @@ fn main() {
                 );
             }
 
-            Args::RdpEpsilon(epsilon) => {
+            Args::RdpMetres(metres) => {
+                let epsilon = metres_to_epsilon(metres);
                 reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
                 println!(
-                    "Using Ramer-Douglas-Peucker with an epsilon of {epsilon} reduced the trackpoint count from {start_count} to {}",
+                    "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {}",
                     gpx.points.len()
                 );
             }
@@ -74,19 +75,32 @@ fn reduce_trackpoints_by_keep(points: &mut Vec<TrackPoint>, keep_each: i32) {
     })
 }
 
+/// We take input from the user in "metres of accuracy".
+/// The 'geo' implementation of RDP requires an epsilon
+/// which is relative to the coordinate scale in use.
+/// Since we are using lat-lon, we need to convert metres
+/// using the following relation: 1 degree of latitude = 111,111 metres
+fn metres_to_epsilon(metres: f32) -> f32 {
+    metres / 111111.0
+}
+
 /// Feed the points into the GEO crate so we can use its implementation
-/// of RDP. It will tell us which indexes (i.e. TrackPoints) to keep.
-/// Max size allowed by Audax UK: 1.25Mb.
-///
-/// Input Points   epsilon      Output Points   Quality
-/// 31358          0.001        220 (29kb)      Poor, lots of straight lines that cut off road corners
-/// 31358          0.0005       367 (48kb)      Poor
-/// 31358          0.0001       933 (121kb)     OK - good enough for submission
-/// 31358          0.00005      1406 (182kb)    Very close map to the road, mainly stays within the road lines
-/// 31358          0.00001      4036 (519kb)    Near-perfect map to the road
+/// of https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
 /// 
-/// 1 degree of latitude = 111,111 metres
-/// 111,111 * 0.0001 = 11m
+/// These measurements are based on a 200km track from a Garmin Edge 1040,
+/// which records 1 trackpoint every second. The original file is 11.5Mb, that
+/// includes a lot of extension data such as heartrate which this program also
+/// strips out. The percentages shown below are based solely on point counts.
+/// 
+/// The Audax UK DIY upload form allows a max file size of 1.25Mb.
+/// 
+/// Input Points    Metres  Output Points       Quality
+/// 31358           1       4374 (13%, 563Kb)   Near-perfect map to the road
+/// 31358           5       1484 (4.7%, 192Kb)  Very close map to the road, mainly stays within the road lines
+/// 31358           10      978 (3.1%, 127Kb)   OK - good enough for submission
+/// 31358           20      636 (2.0%, 83Kb)    Ok - within a few metres of the road
+/// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
+/// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
 fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
     let coords_iter = points.iter().map(|p| coord! { x: p.lon, y: p.lat });
     let line_string: LineString<f32> = coords_iter.collect();

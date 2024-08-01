@@ -30,13 +30,13 @@ pub fn parse_args() -> Args {
     if let Some(&n) = matches.get_one::<u8>("keep") {
         Args::Keep(n)
     } else if let Some(&eps) = matches.get_one::<f32>("epsilon") {
-        if eps < 0.1 || eps > 50.0 {
-            cmd.error(
-                ErrorKind::ValueValidation,
-                "epsilon must be in range 0.1..50.0",
-            )
-            .exit();
-        }
+        // if eps < 0.1 || eps > 50.0 {
+        //     cmd.error(
+        //         ErrorKind::ValueValidation,
+        //         "epsilon must be in range 0.1..50.0",
+        //     )
+        //     .exit();
+        // }
 
         Args::RdpEpsilon(eps)
     } else {

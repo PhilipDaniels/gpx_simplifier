@@ -1,6 +1,8 @@
-use args::parse_args;
+use args::{parse_args, Args};
+use geo::{coord, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, TrackPoint};
 use quick_xml::reader::Reader;
+use std::collections::HashSet;
 use std::io::Write;
 use std::{
     fs::{read_dir, File},
@@ -34,10 +36,26 @@ fn main() {
 
         let gpx = read_gpx_file(&f);
         let mut gpx = gpx.to_merged_gpx();
-        let keep_each = 5;
         let start_count = gpx.points.len();
-        reduce_trackpoints(&mut gpx.points, keep_each);
-        println!("Keeping every {keep_each} trackpoints reduced the count from {start_count} to {}", gpx.points.len());
+
+        match args {
+            Args::Keep(keep) => {
+                reduce_trackpoints_by_keep(&mut gpx.points, keep.into());
+                println!(
+                    "Keeping every {keep} trackpoints reduced the count from {start_count} to {}",
+                    gpx.points.len()
+                );
+            }
+
+            Args::RdpEpsilon(epsilon) => {
+                reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
+                println!(
+                    "Using Ramer-Douglas-Peucker with an epsilon of {epsilon} reduced the trackpoint count from {start_count} to {}",
+                    gpx.points.len()
+                );
+            }
+        }
+
         write_output_file(&output_file, &gpx);
     }
 }
@@ -47,13 +65,39 @@ fn main() {
 /// every 3rd point is kept, starting with the first.
 /// Up to 10 seems fine.
 /// The max size of an upload file is 1.25Mb - and that can be after zipping.
-fn reduce_trackpoints(points: &mut Vec<TrackPoint>, keep_each: i32) {
+fn reduce_trackpoints_by_keep(points: &mut Vec<TrackPoint>, keep_each: i32) {
     let mut n = 0;
     points.retain(|_| {
         let keep = n % keep_each == 0;
         n += 1;
         keep
     })
+}
+
+/// Feed the points into the GEO crate so we can use its implementation
+/// of RDP. It will tell us which indexes (i.e. TrackPoints) to keep.
+/// Max size allowed by Audax UK: 1.25Mb.
+///
+/// Input Points   epsilon      Output Points   Quality
+/// 31358          0.001        220 (29kb)      Poor, lots of straight lines that cut off road corners
+/// 31358          0.0005       367 (48kb)      Poor
+/// 31358          0.0001       933 (121kb)     OK - good enough for submission
+/// 31358          0.00005      1406 (182kb)    Very close map to the road, mainly stays within the road lines
+/// 31358          0.00001      4036 (519kb)    Near-perfect map to the road
+/// 
+/// 1 degree of latitude = 111,111 metres
+/// 111,111 * 0.0001 = 11m
+fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
+    let coords_iter = points.iter().map(|p| coord! { x: p.lon, y: p.lat });
+    let line_string: LineString<f32> = coords_iter.collect();
+    let indices_to_keep: HashSet<usize> = HashSet::from_iter(line_string.simplify_idx(&epsilon));
+
+    let mut n = 0;
+    points.retain(|_| {
+        let keep = indices_to_keep.contains(&n);
+        n += 1;
+        keep
+    });
 }
 
 /// The serde/quick-xml deserialization integration does a "good enough" job of parsing

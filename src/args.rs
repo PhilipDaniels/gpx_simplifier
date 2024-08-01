@@ -30,7 +30,7 @@ pub fn parse_args() -> Args {
     if let Some(&n) = matches.get_one::<u8>("keep") {
         Args::Keep(n)
     } else if let Some(&metres) = matches.get_one::<f32>("metres") {
-        if metres < 0.1 || metres > 1000.0 {
+        if !(0.1..=1000.0).contains(&metres) {
             cmd.error(
                 ErrorKind::ValueValidation,
                 "metres must be in range 0.1..1000.0",

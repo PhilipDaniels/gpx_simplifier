@@ -127,7 +127,7 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     // TODO: If Garmin ever changes this then what we need to do is read the GPX node in the way
     // we used to do, using the streaming interface, then write it to the output file.
     // But for now, let's wing it...
-    let mut w = BufWriter::new(File::create(&output_file).expect("Could not open output_file"));
+    let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
     writeln!(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>").unwrap();
     writeln!(
         w,
@@ -159,7 +159,7 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     writeln!(w, "</gpx>").unwrap();
 
     w.flush().unwrap();
-    let metadata = std::fs::metadata(&output_file).unwrap();
+    let metadata = std::fs::metadata(output_file).unwrap();
     println!(", {}Kb", metadata.len() / 1024);
 }
 

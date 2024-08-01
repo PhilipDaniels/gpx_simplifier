@@ -86,14 +86,14 @@ fn metres_to_epsilon(metres: f32) -> f32 {
 
 /// Feed the points into the GEO crate so we can use its implementation
 /// of https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
-/// 
+///
 /// These measurements are based on a 200km track from a Garmin Edge 1040,
 /// which records 1 trackpoint every second. The original file is 11.5Mb, that
 /// includes a lot of extension data such as heartrate which this program also
 /// strips out. The percentages shown below are based solely on point counts.
-/// 
+///
 /// The Audax UK DIY upload form allows a max file size of 1.25Mb.
-/// 
+///
 /// Input Points    Metres  Output Points       Quality
 /// 31358           1       4374 (13%, 563Kb)   Near-perfect map to the road
 /// 31358           5       1484 (4.7%, 192Kb)  Very close map to the road, mainly stays within the road lines
@@ -171,7 +171,7 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
 fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let Ok(entries) = read_dir(exe_dir) else {
-        return Vec::new();
+        return files;
     };
 
     for entry in entries {

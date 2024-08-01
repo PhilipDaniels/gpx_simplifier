@@ -123,7 +123,7 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
 }
 
 fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
-    println!("Writing file {:?}", &output_file);
+    print!("Writing file {:?}", &output_file);
 
     // TODO: If Garmin ever changes this then what we need to do is read the GPX node in the way
     // we used to do, using the streaming interface, then write it to the output file.
@@ -160,6 +160,8 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     writeln!(w, "</gpx>").unwrap();
 
     w.flush().unwrap();
+    let metadata = std::fs::metadata(&output_file).unwrap();
+    println!(", {}Kb", metadata.len() / 1024);
 }
 
 // Get a list of all files in the exe_dir that have the ".gpx" extension.

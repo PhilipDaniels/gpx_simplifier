@@ -18,7 +18,7 @@ pub fn parse_args() -> Args {
         )
         .arg(
             arg!(--metres <VALUE>)
-                .help("Simplify by using Ramer–Douglas–Peucker with METRES accuracy")
+                .help("Simplify by using Ramer-Douglas-Peucker with METRES accuracy")
                 .short('m')
                 .conflicts_with("keep")
                 .required(false)

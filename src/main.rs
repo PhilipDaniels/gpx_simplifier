@@ -35,7 +35,7 @@ fn main() {
         }
 
         let gpx = read_gpx_file(&f);
-        let mut gpx = gpx.to_merged_gpx();
+        let mut gpx = gpx.merge_all_tracks();
         let start_count = gpx.points.len();
 
         match args {

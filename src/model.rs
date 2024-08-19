@@ -78,7 +78,7 @@ impl Gpx {
     /// a new structure that just has one set of points.
     /// The name and type of the first track in `self` is used
     /// to name the new track.
-    pub fn to_merged_gpx(&self) -> MergedGpx {
+    pub fn merge_all_tracks(&self) -> MergedGpx {
         let mut result = MergedGpx {
             creator: self.creator.clone(),
             version: self.version.clone(),

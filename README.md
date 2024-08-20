@@ -51,7 +51,7 @@ joining and one for simplifying. For example, in my
 
 `gpx_simplifier.exe --metres=10`
 
-Which gives a very good size reduction while still being an
+which gives a very good size reduction while still being an
 excellent fit to the road.
 
 

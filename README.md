@@ -39,7 +39,7 @@ There are two command line options:
 * `--metres=NN` - simplify the output file by applying the RDP
   algorithm with an accurancy of NN metres. 10 is a good value
   (see below for some estimates of reduction sizes).
-* `--join` - joins all the input files together, producing a
+* `--join` - joins all the input files together, producing
   one file with a single track. The name of the first file is
   used to derive the name of the output file.
 

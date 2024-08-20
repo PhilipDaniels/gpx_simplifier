@@ -7,7 +7,7 @@ Edge 1040 are huge - about 13MB for a 200km ride. This is far
 too large for [Audax UK](https://www.audax.uk/) to validate
 for a DIY ride (max file size of 1.25Mb). The files are so
 large because the Edge 1040 writes a trackpoint every second, each
-one has extra information such as heart and temperature, and it
+one has extra information such as heart rate and temperature, and it
 records lat-long to a ridiculous number of decimal places,
 e.g. "53.0758009292185306549072265625" and elevation likewise
 to femtometre precision "173.8000030517578125".

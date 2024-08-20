@@ -1,4 +1,4 @@
-use args::{parse_args, Args};
+use args::parse_args;
 use geo::{coord, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, TrackPoint};
 use quick_xml::reader::Reader;
@@ -23,56 +23,62 @@ fn main() {
         return;
     }
 
-    for f in input_files {
-        let mut output_file = f.to_owned();
-        output_file.set_extension("simplified.gpx");
-        if output_file.exists() {
+    // We can operate in 3 modes depending on the command line
+    // arguments.
+    // --metres=NN          - simplify each input file individually
+    // --join               - join all the input files into a single file
+    // --join --metres=NN   - join into a single file then simplify
+
+    // Read all files into RAM.
+    let gpxs: Vec<Gpx> = input_files.iter().map(|f| read_gpx_file(f)).collect();
+
+    // Within each file, merge multiple tracks and segments into a single
+    // track-segment.
+    let mut gpxs: Vec<MergedGpx> =
+        gpxs.iter().map(|f| f.merge_all_tracks()).collect();
+
+    // Join if necessary. Keep as a vec (of one element) so that
+    // following loop can be used whether we join or not.
+    if args.join {
+        gpxs = vec![join_input_files(gpxs)];
+    }
+
+    // Simplify if necessary.
+    if let Some(metres) = args.metres {
+        let epsilon = metres_to_epsilon(metres);
+
+        for merged_gpx in &mut gpxs {
+            let start_count = merged_gpx.points.len();
+            reduce_trackpoints_by_rdp(&mut merged_gpx.points, epsilon);
             println!(
-                "Simplified file {:?} already exists, skipping...",
-                &output_file
+                "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {}",
+                merged_gpx.points.len()
             );
-            continue;
         }
+    }
 
-        let gpx = read_gpx_file(&f);
-        let mut gpx = gpx.merge_all_tracks();
-        let start_count = gpx.points.len();
-
-        match args {
-            Args::Keep(keep) => {
-                reduce_trackpoints_by_keep(&mut gpx.points, keep.into());
-                println!(
-                    "Keeping every {keep} trackpoints reduced the count from {start_count} to {}",
-                    gpx.points.len()
-                );
-            }
-
-            Args::RdpMetres(metres) => {
-                let epsilon = metres_to_epsilon(metres);
-                reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
-                println!(
-                    "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {}",
-                    gpx.points.len()
-                );
-            }
-        }
-
-        write_output_file(&output_file, &gpx);
+    for merged_gpx in gpxs {
+        let mut output_filename = merged_gpx.filename.clone();
+        output_filename.set_extension("simplified.gpx");
+        write_output_file(&output_filename, &merged_gpx);
     }
 }
 
-/// Reduces the number of points in the track. The Garmin Edge 1040 writes
-/// 1 point per second, which is ridiculous. Example: if keep_each is 3,
-/// every 3rd point is kept, starting with the first.
-/// Up to 10 seems fine.
-/// The max size of an upload file is 1.25Mb - and that can be after zipping.
-fn reduce_trackpoints_by_keep(points: &mut Vec<TrackPoint>, keep_each: i32) {
-    let mut n = 0;
-    points.retain(|_| {
-        let keep = n % keep_each == 0;
-        n += 1;
-        keep
-    })
+/// TODO: This is awful, does a clone of the first element.
+fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
+    if input_files.len() == 1 {
+        return input_files.remove(0);
+    }
+
+    let required_capacity: usize = input_files.iter().map(|f| f.points.len()).sum();
+    let mut m = input_files[0].clone();
+    m.points = Vec::with_capacity(required_capacity);
+    
+    for f in &mut input_files {
+        m.points.append(&mut f.points);
+    }
+
+    m
 }
 
 /// We take input from the user in "metres of accuracy".
@@ -80,8 +86,8 @@ fn reduce_trackpoints_by_keep(points: &mut Vec<TrackPoint>, keep_each: i32) {
 /// which is relative to the coordinate scale in use.
 /// Since we are using lat-lon, we need to convert metres
 /// using the following relation: 1 degree of latitude = 111,111 metres
-fn metres_to_epsilon(metres: f32) -> f32 {
-    metres / 111111.0
+fn metres_to_epsilon(metres: u16) -> f32 {
+    metres as f32 / 111111.0
 }
 
 /// Feed the points into the GEO crate so we can use its implementation
@@ -102,7 +108,10 @@ fn metres_to_epsilon(metres: f32) -> f32 {
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
 fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
-    let line_string: LineString<f32> = points.iter().map(|p| coord! { x: p.lon, y: p.lat }).collect();
+    let line_string: LineString<f32> = points
+        .iter()
+        .map(|p| coord! { x: p.lon, y: p.lat })
+        .collect();
     let indices_to_keep: HashSet<usize> = HashSet::from_iter(line_string.simplify_idx(&epsilon));
 
     let mut n = 0;
@@ -114,10 +123,12 @@ fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
 }
 
 /// The serde/quick-xml deserialization integration does a "good enough" job of parsing
-/// the XML file.
+/// the XML file. We also tag on the original filename as it's handy to track this
+/// through the program for when we come to the point of writing output.
 fn read_gpx_file(input_file: &Path) -> Gpx {
     let reader = Reader::from_file(input_file).expect("Could not create XML reader");
-    let doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
+    let mut doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
+    doc.filename = input_file.to_owned();
     doc
 }
 
@@ -163,10 +174,13 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     println!(", {}Kb", metadata.len() / 1024);
 }
 
-// Get a list of all files in the exe_dir that have the ".gpx" extension.
-// Be careful to exclude files that actually end in ".simplified.gpx" -
-// they are output files we already created! If we don't exclude them here,
-// we end up generating ".simplified.simplified.gpx", etc.
+/// Get a list of all files in the exe_dir that have the ".gpx" extension.
+/// Be careful to exclude files that actually end in ".simplified.gpx" -
+/// they are output files we already created! If we don't exclude them here,
+/// we end up generating ".simplified.simplified.gpx", etc.
+/// Remarks: the list of files is guaranteed to be sorted, this is
+/// important for the joining algorithm (the first file is expected to
+/// be the first part of the track, and so on).
 fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let Ok(entries) = read_dir(exe_dir) else {
@@ -190,6 +204,8 @@ fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
             }
         }
     }
+
+    files.sort_unstable();
 
     files
 }

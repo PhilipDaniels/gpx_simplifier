@@ -1,7 +1,11 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Gpx {
+    pub filename: PathBuf,
+    
     #[serde(rename = "@creator")]
     pub creator: String,
 
@@ -80,6 +84,7 @@ impl Gpx {
     /// to name the new track.
     pub fn merge_all_tracks(&self) -> MergedGpx {
         let mut result = MergedGpx {
+            filename: self.filename.clone(),
             creator: self.creator.clone(),
             version: self.version.clone(),
             xmlns_ns3: self.xmlns_ns3.clone(),
@@ -105,7 +110,9 @@ impl Gpx {
     }
 }
 
+#[derive(Clone)]
 pub struct MergedGpx {
+    pub filename: PathBuf,
     pub creator: String,
     pub version: String,
     pub xmlns_ns3: String,

@@ -5,7 +5,7 @@ A small command-line tool to join and simplify GPX tracks.
 I wrote this tool because the GPX files produced by my Garmin
 Edge 1040 are huge - about 13MB for a 200km ride. This is far
 too large for [Audax UK](https://www.audax.uk/) to validate
-for a DIY ride (max file size of 1.25Mb.). The files are so
+for a DIY ride (max file size of 1.25Mb). The files are so
 large because the Edge 1040 writes a trackpoint every second, each
 one has extra information such as heart and temperature, and it
 records lat-long to a ridiculous number of decimal places,
@@ -63,6 +63,7 @@ It was from a Garmin Edge 1040 which records 1 trackpoint every second.
 including a lot of extension data such as heartrate and temperature.
 
 |--metres|Output Points|File Size|Quality|
+|-|-|-|-|
 |1  |4374 (13%) |563Kb|Near-perfect map to the road|
 |5  |1484 (4.7%)|192Kb|Very close map to the road, mainly stays within the road lines|
 |10 |978 (3.1%) |127Kb|Good - good enough for submission|

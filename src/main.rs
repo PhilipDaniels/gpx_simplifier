@@ -43,6 +43,18 @@ fn main() {
         gpxs = vec![join_input_files(gpxs)];
     }
 
+    // Skip any files if the output already exists. It's wasteful to do this
+    // after the load and parse and join, but it keeps the logic simpler.
+    gpxs.retain(|gpx| {
+        let output_filename = make_simplified_filename(&gpx.filename);
+        if output_filename.exists() {
+            println!("Skipping {:?} because the output file already exists", &gpx.filename);
+            false
+        } else {
+            true
+        }
+    });
+
     // Simplify if necessary.
     if let Some(metres) = args.metres {
         let epsilon = metres_to_epsilon(metres);
@@ -51,32 +63,37 @@ fn main() {
             let start_count = merged_gpx.points.len();
             reduce_trackpoints_by_rdp(&mut merged_gpx.points, epsilon);
             println!(
-                "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {}",
-                merged_gpx.points.len()
+                "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
+                merged_gpx.points.len(),
+                merged_gpx.filename
             );
         }
     }
 
     for merged_gpx in gpxs {
-        let mut output_filename = merged_gpx.filename.clone();
-        output_filename.set_extension("simplified.gpx");
+        let output_filename = make_simplified_filename(&merged_gpx.filename);
         write_output_file(&output_filename, &merged_gpx);
     }
 }
 
+fn make_simplified_filename(p: &Path) -> PathBuf {
+    let mut p = p.to_owned();
+    p.set_extension("simplified.gpx");
+    p
+}
+
 /// TODO: This is awful, does a clone of the first element.
 fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
-    if input_files.len() == 1 {
-        return input_files.remove(0);
-    }
-
     let required_capacity: usize = input_files.iter().map(|f| f.points.len()).sum();
     let mut m = input_files[0].clone();
     m.points = Vec::with_capacity(required_capacity);
     
     for f in &mut input_files {
+        println!("Joining {:?}", f.filename);
         m.points.append(&mut f.points);
     }
+
+    println!("Joined {} files", input_files.len());
 
     m
 }

@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Gpx {
+    #[serde(skip)]
     pub filename: PathBuf,
     
     #[serde(rename = "@creator")]

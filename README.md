@@ -1,34 +1,75 @@
 # gpx_simplifier
 
-The GPS files produced by the Garmin Edge 1040 are huge -
-about 13MB for a 200km ride. This program shrinks them down,
-the main aim being to produce a file that can be uploaded
-to Audax UK to validate a DIY ride.
+A small command-line tool to join and simplify GPX tracks.
 
-It makes the following changes
+I wrote this tool because the GPX files produced by my Garmin
+Edge 1040 are huge - about 13MB for a 200km ride. This is far
+too large for [Audax UK](https://www.audax.uk/) to validate
+for a DIY ride (max file size of 1.25Mb.). The files are so
+large because the Edge 1040 writes a trackpoint every second, each
+one has extra information such as heart and temperature, and it
+records lat-long to a ridiculous number of decimal places,
+e.g. "53.0758009292185306549072265625" and elevation likewise
+to femtometre precision "173.8000030517578125".
 
-* Removes irrelevant nodes such as temperature, elevation
-  and heart rate
-* Writes only the first 6 decimal places of accuracy in
-  the "lat" and "lon" attributes of the "&lt;trkpt&gt;" node.
-  6 d.p. are sufficient to locate a point to within 11cm
-  of accuracy: see https://en.wikipedia.org/wiki/Decimal_degrees
+In reality, the device only measures elevation to 1 decimal place and
+6 decimal places are sufficient to record lat-long to within 11cm
+of accuracy: see https://en.wikipedia.org/wiki/Decimal_degrees
+
+This program shrinks the files down by simplifying the individual
+trackpoints to just lat/long, elevation and time and optionally
+by applying the [Ramer-Douglas-Peucker algorithm](https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm) to
+eliminate unnecessary trackpoints - that is, those that lie
+along the line.
 
 
-# Running
+# How to use
 
-Put the gpx_simplifier.exe into a folder.
+When **gpx_simplifier** is run it looks for its input files
+in the same folder as the exe. This is mainly for convenience -
+I have a known folder containing a copy of the exe, I then
+drop the GPXs I want to process into that folder and double-click
+a batch file setup with the appropriate command line options
+to process them. The program produces an output
+filename ending in ".simplified.gpx" and never overwrites the
+source file. If the output file already exists, nothing happens.
 
-Copy any GPXes you want to simplify into the same folder.
+There are two command line options:
 
-Run the EXE (double click is OK on windows).
+* `--metres=NN` - simplify the output file by applying the RDP
+  algorithm with an accurancy of NN metres. 10 is a good value
+  (see below for some estimates of reduction sizes).
+* `--join` - joins all the input files together, producing a
+  one file with a single track. The name of the first file is
+  used to derive the name of the output file.
 
-The program looks for all the GPX files in the same directory
-as the EXE and writes a new ".simplified.gpx" file in the same
-directory. No input files are changed.
+If you specify both options then the input files will be joined
+and then the result file simplified. But typically, I have
+two folders setup with separate batch files, one for
+joining and one for simplifying. For example, in my
+"simplify" folder I have a batch file with the command
 
-# Possible enhancements
+`gpx_simplifier.exe --metres=10`
 
-The "&lt;metadata&gt;" and "&lt;name&gt;" nodes (the latter under
-the "&lt;trkpt&gt;" node) are currently stripped. They don't take
-up much space so they could be kept if needed.
+Which gives a very good size reduction while still being an
+excellent fit to the road.
+
+
+# Size Reduction Estimates
+
+The original file is 11.5Mb with 31,358 trackpoints and was 200km long.
+
+It was from a Garmin Edge 1040 which records 1 trackpoint every second. 
+including a lot of extension data such as heartrate and temperature.
+
+|--metres|Output Points|File Size|Quality|
+|1  |4374 (13%) |563Kb|Near-perfect map to the road|
+|5  |1484 (4.7%)|192Kb|Very close map to the road, mainly stays within the road lines|
+|10 |978 (3.1%) |127Kb|Good - good enough for submission|
+|20 |636 (2.0%) |83Kb |Ok - within a few metres of the road|
+|50 |387 (1.2%) |51Kb |Poor - cuts off a lot of corners|
+|100|236 (0.8%) |31Kb |Very poor - significant corner truncation|
+
+
+# Bugs
+* Has only been tested on my own GPX files from a Garmin Edge 1040.

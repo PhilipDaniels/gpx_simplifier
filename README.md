@@ -17,7 +17,7 @@ In reality, the device only measures elevation to 1 decimal place and
 of accuracy: see https://en.wikipedia.org/wiki/Decimal_degrees
 
 This program shrinks the files down by simplifying the individual
-trackpoints to just lat/long, elevation and time and optionally
+trackpoints to just lat-long, elevation and time and optionally
 by applying the [Ramer-Douglas-Peucker algorithm](https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm) to
 eliminate unnecessary trackpoints - that is, those that lie
 along the line.

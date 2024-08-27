@@ -7,32 +7,6 @@ pub struct Gpx {
     #[serde(skip)]
     pub filename: PathBuf,
     
-    #[serde(rename = "@creator")]
-    pub creator: String,
-
-    #[serde(rename = "@version")]
-    pub version: String,
-
-    #[serde(rename = "@xmlns:ns3")]
-    pub xmlns_ns3: String,
-
-    #[serde(rename = "@xmlns")]
-    pub xmlns: String,
-
-    #[serde(rename = "@xmlns:xsi")]
-    pub xmlns_xsi: String,
-
-    #[serde(rename = "@xmlns:ns2")]
-    pub xmlns_ns2: String,
-
-    // TODO: Weird, can't get this to name the same as others.
-    // This works for deserialization, but it you try to serialize
-    // using serde it comes out as "schemaLocation" instead of
-    // "xsi:schemaLocation". Don't know how to reconcile the two.
-    // This is one of the reasons I am writing the output file manually.
-    #[serde(rename = "@schemaLocation")]
-    pub xsi_schema_location: String,
-
     pub metadata: Metadata,
 
     #[serde(rename = "trk")]
@@ -86,13 +60,6 @@ impl Gpx {
     pub fn merge_all_tracks(&self) -> MergedGpx {
         let mut result = MergedGpx {
             filename: self.filename.clone(),
-            creator: self.creator.clone(),
-            version: self.version.clone(),
-            xmlns_ns3: self.xmlns_ns3.clone(),
-            xmlns: self.xmlns.clone(),
-            xmlns_xsi: self.xmlns_xsi.clone(),
-            xmlns_ns2: self.xmlns_ns2.clone(),
-            xsi_schema_location: self.xsi_schema_location.clone(),
             metadata_time: self.metadata.time.clone(),
             track_name: self.tracks[0].name.clone(),
             track_type: self.tracks[0].r#type.clone(),
@@ -114,13 +81,6 @@ impl Gpx {
 #[derive(Clone)]
 pub struct MergedGpx {
     pub filename: PathBuf,
-    pub creator: String,
-    pub version: String,
-    pub xmlns_ns3: String,
-    pub xmlns: String,
-    pub xmlns_xsi: String,
-    pub xmlns_ns2: String,
-    pub xsi_schema_location: String,
     pub metadata_time: String,
     pub track_name: String,
     pub track_type: String,

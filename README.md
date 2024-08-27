@@ -66,11 +66,15 @@ including a lot of extension data such as heartrate and temperature.
 |-|-|-|-|
 |1  |4374 (13%) |563Kb|Near-perfect map to the road|
 |5  |1484 (4.7%)|192Kb|Very close map to the road, mainly stays within the road lines|
-|10 |978 (3.1%) |127Kb|Good - good enough for submission|
+|10 |978 (3.1%) |127Kb|Very Good - good enough for submission to Audax UK|
 |20 |636 (2.0%) |83Kb |Ok - within a few metres of the road|
 |50 |387 (1.2%) |51Kb |Poor - cuts off a lot of corners|
 |100|236 (0.8%) |31Kb |Very poor - significant corner truncation|
 
+# Installation
 
-# Bugs
+There is a release on Github, one for Windows and one for Linux.
+Or build from source using cargo.
+
+# Caveats
 * Has only been tested on my own GPX files from a Garmin Edge 1040.

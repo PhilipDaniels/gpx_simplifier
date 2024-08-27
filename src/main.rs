@@ -150,24 +150,12 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
 }
 
 fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
+    const HDR: &str = include_str!("header.txt");
+
     print!("Writing file {:?}", &output_file);
 
-    // TODO: If Garmin ever changes this then what we need to do is read the GPX node in the way
-    // we used to do, using the streaming interface, then write it to the output file.
-    // But for now, let's wing it...
     let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
-    writeln!(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>").unwrap();
-    writeln!(
-        w,
-        "<gpx creator=\"{}\" version=\"{}\"",
-        gpx.creator, gpx.version
-    )
-    .unwrap();
-    writeln!(w, "  xsi:schemaLocation=\"{}\"", gpx.xsi_schema_location).unwrap();
-    writeln!(w, "  xmlns:ns3=\"{}\"", gpx.xmlns_ns3).unwrap();
-    writeln!(w, "  xmlns=\"{}\"", gpx.xmlns).unwrap();
-    writeln!(w, "  xmlns:xsi=\"{}\"", gpx.xmlns_xsi).unwrap();
-    writeln!(w, "  xmlns:ns2=\"{}\">", gpx.xmlns_ns2).unwrap();
+    writeln!(w, "{}", HDR).unwrap();
     writeln!(w, "  <metadata>").unwrap();
     writeln!(w, "    <time>{}</time>", gpx.metadata_time).unwrap();
     writeln!(w, "  </metadata>").unwrap();

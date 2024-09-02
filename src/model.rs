@@ -78,6 +78,8 @@ impl Gpx {
     }
 }
 
+/// Represents the result of merging several GPX files
+/// into a single file.
 #[derive(Clone)]
 pub struct MergedGpx {
     pub filename: PathBuf,
@@ -85,4 +87,11 @@ pub struct MergedGpx {
     pub track_name: String,
     pub track_type: String,
     pub points: Vec<TrackPoint>,
+}
+
+/// Represents a stop as detected in a GPX track.
+/// A stop is a point where you were at speed 0
+/// for some time.
+pub struct Stop {
+
 }

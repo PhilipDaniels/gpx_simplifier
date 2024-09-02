@@ -17,7 +17,32 @@ pub struct Args {
         help = "Join multiple input GPX files into a single file with 1 track"
     )]
     pub join: bool,
+
+
+    #[arg(
+        short,
+        long,
+        default_value = "false",
+        help = "Whether to detect stops (intervals of 0 speed) in the GPX track"
+    )]
+    pub detect_stops: bool,
+
+
+    #[arg(
+        long,
+        default_value = "10",
+        help = "Minimum length of a stop, in minutes, for it to be detected"
+    )]
+    pub min_stop_time: u8,
+
+    #[arg(
+        long,
+        default_value = "15",
+        help = "A stop is considered to end when you start moving with this speed, in km/h"
+    )]
+    pub resume_speed: u8
 }
+
 
 pub fn parse_args() -> Args {
     Args::parse()

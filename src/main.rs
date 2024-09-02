@@ -1,6 +1,6 @@
 use args::parse_args;
 use geo::{coord, LineString, SimplifyIdx};
-use model::{Gpx, MergedGpx, TrackPoint};
+use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
 use std::collections::HashSet;
 use std::io::Write;
@@ -55,6 +55,15 @@ fn main() {
         }
     });
 
+    if args.detect_stops {
+        for gpx in &mut gpxs {
+            calculate_speed(gpx);
+            calculate_cumulative_distance(gpx);
+            let stops = detect_stops(gpx);
+            write_stop_report(&stops);
+        }
+    }
+
     // Simplify if necessary.
     if let Some(metres) = args.metres {
         let epsilon = metres_to_epsilon(metres);
@@ -74,6 +83,23 @@ fn main() {
         let output_filename = make_simplified_filename(&merged_gpx.filename);
         write_output_file(&output_filename, &merged_gpx);
     }
+}
+
+
+fn calculate_speed(gpx: &mut MergedGpx) {
+    todo!()
+}
+
+fn calculate_cumulative_distance(gpx: &mut MergedGpx) {
+    todo!()
+}
+
+fn detect_stops(gpx: &mut MergedGpx) -> Vec<Stop> {
+    todo!()
+}
+
+fn write_stop_report(stops: &[Stop]) {
+    todo!()
 }
 
 fn make_simplified_filename(p: &Path) -> PathBuf {

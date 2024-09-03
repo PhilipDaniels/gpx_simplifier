@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use time::OffsetDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct Gpx {
@@ -46,10 +47,10 @@ pub struct TrackPoint {
     pub lon: f32,
     /// The elevation, as read from the <ele> tag.
     pub ele: f32,
-    /// Represents the time as read from the <time> tag. We don't
-    /// do any "time processing" on the time, so just a string is
-    /// good enough.
-    pub time: String,
+    /// Represents the time as read from the <time> tag.
+    /// Serde handles the parsing.
+    #[serde(with = "time::serde::rfc3339")]
+    pub time: OffsetDateTime,
 
     // The below fields are not read from the file, they are
     // calculated later.

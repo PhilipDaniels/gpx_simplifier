@@ -3,6 +3,7 @@ use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
 use time::format_description::well_known::Rfc3339;
+use std::cmp::max;
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -59,7 +60,7 @@ fn main() {
     if args.detect_stops {
         for gpx in &mut gpxs {
             calculate_distance_and_speed(&mut gpx.points);
-            let stops = detect_stops(gpx);
+            let stops = detect_stops(& gpx.points);
             write_stop_report(&stops);
         }
     }
@@ -85,7 +86,9 @@ fn main() {
     }
 }
 
-
+/// Calculates the distance from one trackpoint to the next using the geo
+/// crate. This seems to be reasonably accurate, but over-estimates the
+/// total distance by approx 0.5% compared to plotaroute.com.
 fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
     if points.len() < 2 {
         return;
@@ -105,11 +108,19 @@ fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
         p1 = p2;
     }
 
-    // Then speed is easy.
-
+    // Then speed is easy. We can calculate this for every point but the first.
+    // Again, this is heavily dependent upon the accuracy of the distance
+    // calculation, but seems "about right".
+    // TODO: Probably would be better with smoothing.
+    for i in 1..points.len() - 1 {
+        let time_delta_seconds = (points[i].time - points[i-1].time).as_seconds_f32();
+        let speed_metres_per_sec = points[i].distance_from_prev / time_delta_seconds;
+        let speed_kmh = speed_metres_per_sec * 3.6;
+        points[i].speed = speed_kmh;
+    }
 }
 
-fn detect_stops(gpx: &mut MergedGpx) -> Vec<Stop> {
+fn detect_stops(points: &[TrackPoint]) -> Vec<Stop> {
     Vec::new()
 }
 
@@ -213,6 +224,7 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
         write!(w, "        <time>").unwrap();
         tp.time.format_into(&mut w, &DATE_FMT).unwrap();
         writeln!(w, "</time>").unwrap();
+        writeln!(w, "<speed>{}</speed>", tp.speed).unwrap();    // TODO: For testing
         writeln!(w, "      </trkpt>").unwrap();
     }
     writeln!(w, "    </trkseg>").unwrap();

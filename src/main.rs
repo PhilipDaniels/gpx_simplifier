@@ -2,6 +2,7 @@ use args::parse_args;
 use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
+use time::format_description::well_known::Rfc3339;
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -105,6 +106,7 @@ fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
     }
 
     // Then speed is easy.
+
 }
 
 fn detect_stops(gpx: &mut MergedGpx) -> Vec<Stop> {
@@ -190,7 +192,7 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
 
 fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     const HDR: &str = include_str!("header.txt");
-
+    const DATE_FMT: Rfc3339 = time::format_description::well_known::Rfc3339;
     print!("Writing file {:?}", &output_file);
 
     let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
@@ -206,7 +208,9 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     for tp in &gpx.points {
         writeln!(w, "      <trkpt lat=\"{}\" lon=\"{}\">", tp.lat, tp.lon).unwrap();
         writeln!(w, "        <ele>{}</ele>", tp.ele).unwrap();
-        writeln!(w, "        <time>{}</time>", tp.time).unwrap();
+        write!(w, "        <time>").unwrap();
+        tp.time.format_into(&mut w, &DATE_FMT).unwrap();
+        writeln!(w, "</time>").unwrap();
         writeln!(w, "      </trkpt>").unwrap();
     }
     writeln!(w, "    </trkseg>").unwrap();

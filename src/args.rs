@@ -27,6 +27,12 @@ pub struct Args {
     )]
     pub detect_stops: bool,
 
+    #[arg(
+        long,
+        default_value = "15",
+        help = "A stop is considered to end when you start moving with this speed, in km/h"
+    )]
+    pub resume_speed: u8,
 
     #[arg(
         long,
@@ -34,13 +40,6 @@ pub struct Args {
         help = "Minimum length of a stop, in minutes, for it to be detected"
     )]
     pub min_stop_time: u8,
-
-    #[arg(
-        long,
-        default_value = "15",
-        help = "A stop is considered to end when you start moving with this speed, in km/h"
-    )]
-    pub resume_speed: u8
 }
 
 

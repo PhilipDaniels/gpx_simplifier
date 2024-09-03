@@ -3,7 +3,6 @@ use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
 use time::format_description::well_known::Rfc3339;
-use std::cmp::max;
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -60,10 +59,12 @@ fn main() {
     if args.detect_stops {
         for gpx in &mut gpxs {
             calculate_distance_and_speed(&mut gpx.points);
-            let stops = detect_stops(& gpx.points);
+            let stops = detect_stops(& gpx.points, args.resume_speed, args.min_stop_time);
             write_stop_report(&stops);
         }
     }
+
+    //dbg!(&gpxs[0].points[7654]);
 
     // Simplify if necessary.
     if let Some(metres) = args.metres {
@@ -103,8 +104,8 @@ fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
         let p2 = point!(x: points[i].lon as f64, y: points[i].lat as f64);
         let distance = p1.geodesic_distance(&p2);
         cum_distance += distance;
-        points[i].distance_from_prev = distance as f32;
-        points[i].cumulative_distance = cum_distance as f32;
+        points[i].distance_from_prev_metres = distance as f32;
+        points[i].cumulative_distance_metres = cum_distance as f32;
         p1 = p2;
     }
 
@@ -114,17 +115,17 @@ fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
     // TODO: Probably would be better with smoothing.
     for i in 1..points.len() - 1 {
         let time_delta_seconds = (points[i].time - points[i-1].time).as_seconds_f32();
-        let speed_metres_per_sec = points[i].distance_from_prev / time_delta_seconds;
+        let speed_metres_per_sec = points[i].distance_from_prev_metres / time_delta_seconds;
         let speed_kmh = speed_metres_per_sec * 3.6;
-        points[i].speed = speed_kmh;
+        points[i].speed_kmh = speed_kmh;
     }
 }
 
-fn detect_stops(points: &[TrackPoint]) -> Vec<Stop> {
+fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> Vec<Stop> {
     Vec::new()
 }
 
-fn write_stop_report(stops: &[Stop]) {
+fn write_stop_report(_stops: &[Stop]) {
     
 }
 
@@ -224,7 +225,7 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
         write!(w, "        <time>").unwrap();
         tp.time.format_into(&mut w, &DATE_FMT).unwrap();
         writeln!(w, "</time>").unwrap();
-        writeln!(w, "<speed>{}</speed>", tp.speed).unwrap();    // TODO: For testing
+        writeln!(w, "<speed>{}</speed>", tp.speed_kmh).unwrap();    // TODO: For testing
         writeln!(w, "      </trkpt>").unwrap();
     }
     writeln!(w, "    </trkseg>").unwrap();

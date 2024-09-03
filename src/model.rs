@@ -56,11 +56,11 @@ pub struct TrackPoint {
     // The below fields are not read from the file, they are
     // calculated later.
     #[serde(skip)]
-    pub distance_from_prev: f32,
+    pub distance_from_prev_metres: f32,
     #[serde(skip)]
-    pub cumulative_distance: f32,
+    pub cumulative_distance_metres: f32,
     #[serde(skip)]
-    pub speed: f32,
+    pub speed_kmh: f32,
 }
 
 impl Gpx {

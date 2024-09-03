@@ -50,6 +50,15 @@ pub struct TrackPoint {
     /// do any "time processing" on the time, so just a string is
     /// good enough.
     pub time: String,
+
+    // The below fields are not read from the file, they are
+    // calculated later.
+    #[serde(skip)]
+    pub distance_from_prev: f32,
+    #[serde(skip)]
+    pub cumulative_distance: f32,
+    #[serde(skip)]
+    pub speed: f32,
 }
 
 impl Gpx {
@@ -69,7 +78,7 @@ impl Gpx {
         for src_track in &self.tracks {
             for src_segment in &src_track.segments {
                 for src_point in &src_segment.points {
-                    result.points.push(src_point.clone());
+                    result.points.push(src_point.clone().into());
                 }
             }
         }

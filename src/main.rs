@@ -1,5 +1,5 @@
 use args::parse_args;
-use geo::{coord, LineString, SimplifyIdx};
+use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
 use std::collections::HashSet;
@@ -57,8 +57,7 @@ fn main() {
 
     if args.detect_stops {
         for gpx in &mut gpxs {
-            calculate_speed(gpx);
-            calculate_cumulative_distance(gpx);
+            calculate_distance_and_speed(&mut gpx.points);
             let stops = detect_stops(gpx);
             write_stop_report(&stops);
         }
@@ -86,20 +85,34 @@ fn main() {
 }
 
 
-fn calculate_speed(gpx: &mut MergedGpx) {
-    todo!()
-}
+fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
+    if points.len() < 2 {
+        return;
+    }
 
-fn calculate_cumulative_distance(gpx: &mut MergedGpx) {
-    todo!()
+    // Distances first.
+    // n.b. x=lon, y=lat. If you do it the other way round the
+    // distances are wrong - a lot wrong.
+    let mut cum_distance = 0.0;
+    let mut p1 = point!(x: points[0].lon as f64, y: points[0].lat as f64);
+    for i in 1..points.len() - 1 {
+        let p2 = point!(x: points[i].lon as f64, y: points[i].lat as f64);
+        let distance = p1.geodesic_distance(&p2);
+        cum_distance += distance;
+        points[i].distance_from_prev = distance as f32;
+        points[i].cumulative_distance = cum_distance as f32;
+        p1 = p2;
+    }
+
+    // Then speed is easy.
 }
 
 fn detect_stops(gpx: &mut MergedGpx) -> Vec<Stop> {
-    todo!()
+    Vec::new()
 }
 
 fn write_stop_report(stops: &[Stop]) {
-    todo!()
+    
 }
 
 fn make_simplified_filename(p: &Path) -> PathBuf {

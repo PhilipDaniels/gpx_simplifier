@@ -17,7 +17,8 @@ pub struct Gpx {
 /// Represents the <metadata> node from the header.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
-    pub time: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub time: OffsetDateTime,
 }
 
 /// Represents a single <trk>
@@ -93,7 +94,7 @@ impl Gpx {
 #[derive(Clone)]
 pub struct MergedGpx {
     pub filename: PathBuf,
-    pub metadata_time: String,
+    pub metadata_time: OffsetDateTime,
     pub track_name: String,
     pub track_type: String,
     pub points: Vec<TrackPoint>,

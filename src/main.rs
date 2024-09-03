@@ -198,7 +198,9 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
     writeln!(w, "{}", HDR).unwrap();
     writeln!(w, "  <metadata>").unwrap();
-    writeln!(w, "    <time>{}</time>", gpx.metadata_time).unwrap();
+    write!(w, "    <time>").unwrap();
+    gpx.metadata_time.format_into(&mut w, &DATE_FMT).unwrap();
+    writeln!(w, "</time>").unwrap();
     writeln!(w, "  </metadata>").unwrap();
 
     writeln!(w, "  <trk>").unwrap();

@@ -2,7 +2,7 @@ use args::parse_args;
 use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
-use time::format_description::well_known::Rfc3339;
+use time::{OffsetDateTime, Duration};
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -10,6 +10,7 @@ use std::{
     io::BufWriter,
     path::{Path, PathBuf},
 };
+use time::format_description::well_known::Rfc3339;
 
 mod args;
 mod model;
@@ -35,8 +36,7 @@ fn main() {
 
     // Within each file, merge multiple tracks and segments into a single
     // track-segment.
-    let mut gpxs: Vec<MergedGpx> =
-        gpxs.iter().map(|f| f.merge_all_tracks()).collect();
+    let mut gpxs: Vec<MergedGpx> = gpxs.iter().map(|f| f.merge_all_tracks()).collect();
 
     // Join if necessary. Keep as a vec (of one element) so that
     // following loop can be used whether we join or not.
@@ -49,7 +49,10 @@ fn main() {
     gpxs.retain(|gpx| {
         let output_filename = make_simplified_filename(&gpx.filename);
         if output_filename.exists() {
-            println!("Skipping {:?} because the output file already exists", &gpx.filename);
+            println!(
+                "Skipping {:?} because the output file already exists",
+                &gpx.filename
+            );
             false
         } else {
             true
@@ -59,12 +62,11 @@ fn main() {
     if args.detect_stops {
         for gpx in &mut gpxs {
             calculate_distance_and_speed(&mut gpx.points);
-            let stops = detect_stops(& gpx.points, args.resume_speed, args.min_stop_time);
-            write_stop_report(&stops);
+            let stops = detect_stops(&gpx.points, args.resume_speed, args.min_stop_time);
+            let mut io = std::io::stdout().lock();
+            write_stop_report(&mut io, &gpx, &stops);
         }
     }
-
-    //dbg!(&gpxs[0].points[7654]);
 
     // Simplify if necessary.
     if let Some(metres) = args.metres {
@@ -100,7 +102,7 @@ fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
     // distances are wrong - a lot wrong.
     let mut cum_distance = 0.0;
     let mut p1 = point!(x: points[0].lon as f64, y: points[0].lat as f64);
-    for i in 1..points.len() - 1 {
+    for i in 1..points.len() {
         let p2 = point!(x: points[i].lon as f64, y: points[i].lat as f64);
         let distance = p1.geodesic_distance(&p2);
         cum_distance += distance;
@@ -113,20 +115,100 @@ fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
     // Again, this is heavily dependent upon the accuracy of the distance
     // calculation, but seems "about right".
     // TODO: Probably would be better with smoothing.
-    for i in 1..points.len() - 1 {
-        let time_delta_seconds = (points[i].time - points[i-1].time).as_seconds_f32();
-        let speed_metres_per_sec = points[i].distance_from_prev_metres / time_delta_seconds;
-        let speed_kmh = speed_metres_per_sec * 3.6;
-        points[i].speed_kmh = speed_kmh;
+    for i in 1..points.len() {
+        let time_delta_seconds = (points[i].time - points[i - 1].time).as_seconds_f32();
+        points[i].speed_kmh = calc_speed_kmh(points[i].distance_from_prev_metres, time_delta_seconds);
+
+        // While we are at it, also fill in the climb figures.
+        // TODO: Doesn't work, probably not enough change per point.
+        points[i].ascent_from_prev_metres = points[i].ele - points[i - 1].ele;
+        if points[i].ascent_from_prev_metres > 0.0 {
+            points[i].cumulative_ascent_metres = points[i - 1].cumulative_ascent_metres + points[i].ascent_from_prev_metres;
+        } else {
+            points[i].cumulative_descent_metres = points[i - 1].cumulative_descent_metres + points[i].ascent_from_prev_metres.abs();
+        }
     }
 }
 
+/// You are determined to be stopped if your speed drops below MIN_SPEED km/h and does not
+/// go above 'resume_speed' until at least 'min_stop_time' minutes have passed.
 fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> Vec<Stop> {
-    Vec::new()
+    const MIN_SPEED: f32 = 0.1;
+    let resume_speed = resume_speed as f32;
+    let min_stop_time = min_stop_time as f32 * 60.0; // convert to seconds
+
+    let mut iter = points.iter().enumerate();
+
+    // Skip the first point, it always has speed 0.
+    iter.next();
+
+    let mut stops = Vec::new();
+
+    while let Some((start_idx, start_point)) = iter.find(|(_, p)| p.speed_kmh < MIN_SPEED) {
+        // Find the next point that has a speed of at least resume_speed, i.e. we started riding again.
+        if let Some((end_idx, end_point)) = iter.find(|(_, p)| p.speed_kmh > resume_speed) {
+            if (end_point.time - start_point.time).as_seconds_f32() > min_stop_time {
+                let stop = Stop {
+                    start: start_point.clone(),
+                    start_idx,
+                    end: end_point.clone(),
+                    end_idx
+                };
+    
+                stops.push(stop);
+            }
+        }
+    }
+
+    stops
 }
 
-fn write_stop_report(_stops: &[Stop]) {
-    
+fn calc_speed_kmh(metres: f32, seconds: f32) -> f32 {
+    (metres / seconds) * 3.6
+}
+
+fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
+    fn total_stopped_duration(stops: &[Stop]) -> Duration {
+        let total_seconds = stops.iter().map(|s| s.time_in_seconds()).sum();
+        Duration::seconds_f32(total_seconds)
+    }
+
+    let stopped_time = total_stopped_duration(stops);
+    let moving_time = gpx.total_time() - stopped_time;
+    let min_ele = gpx.min_elevation();
+    let max_ele = gpx.max_elevation();
+
+    writeln!(w, "Distance     : {:.2} km", gpx.distance_km()).unwrap();
+    writeln!(w, "Start time   : {}", format_utc_date(gpx.start_time())).unwrap();
+    writeln!(w, "End time     : {}", format_utc_date(gpx.end_time())).unwrap();
+    writeln!(w, "Total time   : {}", gpx.total_time()).unwrap();
+    writeln!(w, "Moving time  : {}", moving_time).unwrap();
+    writeln!(w, "Stopped time : {}", stopped_time).unwrap();
+    writeln!(w, "Moving speed : {:.2} km/h", calc_speed_kmh(gpx.distance_metres(), moving_time.as_seconds_f32())).unwrap();
+    writeln!(w, "Overall speed: {:.2} km/h", calc_speed_kmh(gpx.distance_metres(), gpx.total_time().as_seconds_f32())).unwrap();
+    writeln!(w, "Total ascent : {:.2} m", gpx.total_ascent_metres()).unwrap();
+    writeln!(w, "Total descent: {:.2} m", gpx.total_descent_metres()).unwrap();
+    writeln!(w, "Min elevation: {} m, at {:.2} km, {}",
+        min_ele.ele, min_ele.cumulative_distance_metres / 1000.0, format_utc_date(min_ele.time)
+        ).unwrap();
+    writeln!(w, "Max elevation: {} m, at {:.2} km, {}",
+        max_ele.ele, max_ele.cumulative_distance_metres / 1000.0, format_utc_date(max_ele.time)
+        ).unwrap();
+    writeln!(w).unwrap();
+
+    writeln!(w, "Stop No. | Start | End | Lat-Lon | Location").unwrap();
+
+    for (idx, stop) in stops.iter().enumerate() {
+        writeln!(w, "{} | {} | {} | ({}, {}) | {}",
+            idx + 1,
+            format_utc_date(stop.start.time),
+            format_utc_date(stop.end.time),
+            stop.start.lat, stop.start.lon,
+            "unk",
+        ).unwrap();
+    }
+
+    writeln!(w).unwrap();
 }
 
 fn make_simplified_filename(p: &Path) -> PathBuf {
@@ -140,7 +222,7 @@ fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
     let required_capacity: usize = input_files.iter().map(|f| f.points.len()).sum();
     let mut m = input_files[0].clone();
     m.points = Vec::with_capacity(required_capacity);
-    
+
     for f in &mut input_files {
         println!("Joining {:?}", f.filename);
         m.points.append(&mut f.points);
@@ -192,6 +274,17 @@ fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
     });
 }
 
+fn format_utc_date(date: OffsetDateTime) -> String {
+    let mut buf = Vec::with_capacity(32);
+    write_utc_date(&mut buf, date);
+    String::from_utf8(buf).unwrap()
+}
+
+fn write_utc_date<W: Write>(w: &mut W, date: OffsetDateTime) {
+    const DATE_FMT: Rfc3339 = time::format_description::well_known::Rfc3339;
+    date.format_into(w, &DATE_FMT).unwrap();
+}
+
 /// The serde/quick-xml deserialization integration does a "good enough" job of parsing
 /// the XML file. We also tag on the original filename as it's handy to track this
 /// through the program for when we come to the point of writing output.
@@ -204,17 +297,13 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
 
 fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     const HDR: &str = include_str!("header.txt");
-    const DATE_FMT: Rfc3339 = time::format_description::well_known::Rfc3339;
     print!("Writing file {:?}", &output_file);
 
     let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
     writeln!(w, "{}", HDR).unwrap();
     writeln!(w, "  <metadata>").unwrap();
-    write!(w, "    <time>").unwrap();
-    gpx.metadata_time.format_into(&mut w, &DATE_FMT).unwrap();
-    writeln!(w, "</time>").unwrap();
+    writeln!(w, "    <time>{}</time>", format_utc_date(gpx.metadata_time)).unwrap();
     writeln!(w, "  </metadata>").unwrap();
-
     writeln!(w, "  <trk>").unwrap();
     writeln!(w, "    <name>{}</name>", gpx.track_name).unwrap();
     writeln!(w, "    <type>{}</type>", gpx.track_type).unwrap();
@@ -222,10 +311,8 @@ fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
     for tp in &gpx.points {
         writeln!(w, "      <trkpt lat=\"{}\" lon=\"{}\">", tp.lat, tp.lon).unwrap();
         writeln!(w, "        <ele>{}</ele>", tp.ele).unwrap();
-        write!(w, "        <time>").unwrap();
-        tp.time.format_into(&mut w, &DATE_FMT).unwrap();
-        writeln!(w, "</time>").unwrap();
-        writeln!(w, "<speed>{}</speed>", tp.speed_kmh).unwrap();    // TODO: For testing
+        writeln!(w, "        <time>{}</time>", format_utc_date(tp.time)).unwrap();
+        writeln!(w, "        <speed>{}</speed>", tp.speed_kmh).unwrap(); // TODO: For testing
         writeln!(w, "      </trkpt>").unwrap();
     }
     writeln!(w, "    </trkseg>").unwrap();

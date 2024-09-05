@@ -227,3 +227,126 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
 
     writeln!(w, "{}", table).unwrap();
 }
+
+/*
+/// Calculates the distance from one trackpoint to the next using the geo
+/// crate. This seems to be reasonably accurate, but over-estimates the
+/// total distance by approx 0.5% compared to plotaroute.com.
+fn calculate_distance_and_speed(points: &mut [TrackPoint]) {
+    if points.len() < 2 {
+        return;
+    }
+
+    // Distances first.
+    // n.b. x=lon, y=lat. If you do it the other way round the
+    // distances are wrong - a lot wrong.
+    let mut cum_distance = 0.0;
+    let mut p1 = point!(x: points[0].lon as f64, y: points[0].lat as f64);
+    for i in 1..points.len() {
+        let p2 = point!(x: points[i].lon as f64, y: points[i].lat as f64);
+        let distance = p1.geodesic_distance(&p2);
+        cum_distance += distance;
+        points[i].distance_from_prev_metres = distance as f32;
+        points[i].cumulative_distance_metres = cum_distance as f32;
+        p1 = p2;
+    }
+
+    // Then speed is easy. We can calculate this for every point but the first.
+    // Again, this is heavily dependent upon the accuracy of the distance
+    // calculation, but seems "about right".
+    // TODO: Probably would be better with smoothing.
+    for i in 1..points.len() {
+        let time_delta_seconds = (points[i].time - points[i - 1].time).as_seconds_f32();
+        points[i].speed_kmh = calc_speed_kmh(points[i].distance_from_prev_metres, time_delta_seconds);
+
+        // While we are at it, also fill in the climb figures.
+        // TODO: Doesn't work, probably not enough change per point.
+        points[i].ascent_from_prev_metres = points[i].ele - points[i - 1].ele;
+        if points[i].ascent_from_prev_metres > 0.0 {
+            points[i].cumulative_ascent_metres = points[i - 1].cumulative_ascent_metres + points[i].ascent_from_prev_metres;
+        } else {
+            points[i].cumulative_descent_metres = points[i - 1].cumulative_descent_metres + points[i].ascent_from_prev_metres.abs();
+        }
+    }
+}
+*/
+
+/*
+/// You are determined to be stopped if your speed drops below MIN_SPEED km/h and does not
+/// go above 'resume_speed' until at least 'min_stop_time' minutes have passed.
+fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> Vec<Stop> {
+    const MIN_SPEED: f32 = 0.1;
+    let resume_speed = resume_speed as f32;
+    let min_stop_time = min_stop_time as f32 * 60.0; // convert to seconds
+
+    let mut iter = points.iter().enumerate();
+
+    // Skip the first point, it always has speed 0.
+    iter.next();
+
+    let mut stops = Vec::new();
+
+    while let Some((start_idx, start_point)) = iter.find(|(_, p)| p.speed_kmh < MIN_SPEED) {
+        // Find the next point that has a speed of at least resume_speed, i.e. we started riding again.
+        if let Some((end_idx, end_point)) = iter.find(|(_, p)| p.speed_kmh > resume_speed) {
+            if (end_point.time - start_point.time).as_seconds_f32() > min_stop_time {
+                let stop = Stop {
+                    start: start_point.clone(),
+                    start_idx,
+                    end: end_point.clone(),
+                    end_idx
+                };
+    
+                stops.push(stop);
+            }
+        }
+    }
+
+    stops
+}
+*/
+
+/*
+fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
+    let stopped_time: Duration = stops.iter().map(|s| s.duration()).sum();
+    let moving_time = gpx.total_time() - stopped_time;
+    let min_ele = gpx.min_elevation();
+    let max_ele = gpx.max_elevation();
+
+    writeln!(w, "Distance     : {:.2} km", gpx.distance_km()).unwrap();
+    writeln!(w, "Start time   : {}", format_utc_date(gpx.start_time())).unwrap();
+    writeln!(w, "End time     : {}", format_utc_date(gpx.end_time())).unwrap();
+    writeln!(w, "Total time   : {}", gpx.total_time()).unwrap();
+    writeln!(w, "Moving time  : {}", moving_time).unwrap();
+    writeln!(w, "Stopped time : {}", stopped_time).unwrap();
+    writeln!(w, "Moving speed : {:.2} km/h", calc_speed_kmh(gpx.distance_metres(), moving_time.as_seconds_f32())).unwrap();
+    writeln!(w, "Overall speed: {:.2} km/h", calc_speed_kmh(gpx.distance_metres(), gpx.total_time().as_seconds_f32())).unwrap();
+    writeln!(w, "Total ascent : {:.2} m", gpx.total_ascent_metres()).unwrap();
+    writeln!(w, "Total descent: {:.2} m", gpx.total_descent_metres()).unwrap();
+    writeln!(w, "Min elevation: {} m, at {:.2} km, {}",
+        min_ele.ele, min_ele.cumulative_distance_metres / 1000.0, format_utc_date(min_ele.time)
+        ).unwrap();
+    writeln!(w, "Max elevation: {} m, at {:.2} km, {}",
+        max_ele.ele, max_ele.cumulative_distance_metres / 1000.0, format_utc_date(max_ele.time)
+        ).unwrap();
+    writeln!(w).unwrap();
+
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec!["Stop", "Start", "End", "Length", "Location"])
+        .set_content_arrangement(ContentArrangement::Dynamic);
+        
+    for (idx, stop) in stops.iter().enumerate() {
+        table.add_row(vec![
+            Cell::new(idx + 1).set_alignment(CellAlignment::Right),
+            Cell::new(format_utc_and_local_date(stop.start.time, "\n")),
+            Cell::new(format_utc_and_local_date(stop.end.time, "\n")),
+            Cell::new(stop.duration()),
+            Cell::new(format!("{}\n({},{})", "unk", stop.start.lat, stop.start.lon)),
+        ]);
+    }
+
+    writeln!(w, "{}", table).unwrap();
+}
+ */

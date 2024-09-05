@@ -17,6 +17,7 @@ use time::format_description::well_known::Rfc3339;
 
 mod args;
 mod model;
+mod section;
 
 fn main() {
     let args = parse_args();
@@ -298,12 +299,12 @@ fn to_local_date(date: OffsetDateTime) -> OffsetDateTime {
 }
 
 fn format_utc_and_local_date(date: OffsetDateTime, sep: &str) -> String {
-    let LOCAL_FMT = format_description::parse("[year]-[month]-[day] [hour repr:24]:[minute]:[second][end] (local time)").unwrap();
+    let local_fmt = format_description::parse("[year]-[month]-[day] [hour repr:24]:[minute]:[second][end] (local time)").unwrap();
     let mut buf = Vec::with_capacity(64);
     write_utc_date(&mut buf, date);
     write!(buf, "{}", sep).unwrap();
     let d = to_local_date(date);
-    d.format_into(&mut buf, &LOCAL_FMT).unwrap();
+    d.format_into(&mut buf, &local_fmt).unwrap();
     String::from_utf8(buf).unwrap()
 }
 

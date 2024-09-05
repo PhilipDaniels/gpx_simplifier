@@ -5,7 +5,6 @@ use comfy_table::{Cell, CellAlignment, ContentArrangement, Table};
 use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
-use time::util::local_offset;
 use time::{format_description, Duration, OffsetDateTime, UtcOffset};
 use std::collections::HashSet;
 use std::io::Write;
@@ -69,6 +68,10 @@ fn main() {
             let stops = detect_stops(&gpx.points, args.resume_speed, args.min_stop_time);
             let mut io = std::io::stdout().lock();
             write_stop_report(&mut io, &gpx, &stops);
+
+            let p = make_stats_filename(&gpx.filename);
+            let mut writer = BufWriter::new(File::create(&p).unwrap());
+            write_stop_report(&mut writer, &gpx, &stops);
         }
     }
 
@@ -217,6 +220,12 @@ fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
 fn make_simplified_filename(p: &Path) -> PathBuf {
     let mut p = p.to_owned();
     p.set_extension("simplified.gpx");
+    p
+}
+
+fn make_stats_filename(p: &Path) -> PathBuf {
+    let mut p = p.to_owned();
+    p.set_extension("stats.txt");
     p
 }
 

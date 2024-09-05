@@ -93,7 +93,7 @@ fn main() {
 
     for merged_gpx in gpxs {
         let output_filename = make_simplified_filename(&merged_gpx.filename);
-        write_output_file(&output_filename, &merged_gpx);
+        write_simplified_gpx_file(&output_filename, &merged_gpx);
     }
 }
 
@@ -323,7 +323,7 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
     doc
 }
 
-fn write_output_file(output_file: &Path, gpx: &MergedGpx) {
+fn write_simplified_gpx_file(output_file: &Path, gpx: &MergedGpx) {
     const HDR: &str = include_str!("header.txt");
     print!("Writing file {:?}", &output_file);
 

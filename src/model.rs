@@ -42,12 +42,12 @@ pub struct TrackSegment {
 pub struct TrackPoint {
     /// The latitude, read from the "lat" attribute.
     #[serde(rename = "@lat")]
-    pub lat: f32,
+    pub lat: f64,
     /// The longitude, read from the "lon" attribute.
     #[serde(rename = "@lon")]
-    pub lon: f32,
+    pub lon: f64,
     /// The elevation, as read from the <ele> tag.
-    pub ele: f32,
+    pub ele: f64,
     /// Represents the time as read from the <time> tag.
     /// Serde handles the parsing.
     #[serde(with = "time::serde::rfc3339")]

@@ -3,6 +3,7 @@ use formatting::format_utc_date;
 use geo::{coord, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, TrackPoint};
 use quick_xml::reader::Reader;
+use section::{detect_sections, write_section_report};
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -60,16 +61,24 @@ fn main() {
         }
     });
 
+    // If we are detecting stops (really Sections now), then do that on
+    // the original file, for more precision. Though whether it matters
+    // much in practice is debatable - it only really makes a difference
+    // if your 'metres' input to RDP is largish.
     if args.detect_stops {
         for gpx in &mut gpxs {
-            // calculate_distance_and_speed(&mut gpx.points);
-            // let stops = detect_stops(&gpx.points, args.resume_speed, args.min_stop_time);
-            // let mut io = std::io::stdout().lock();
-            // write_stop_report(&mut io, &gpx, &stops);
+            let sections = detect_sections(
+                gpx,
+                args.resume_speed as f64,
+                args.min_stop_time as f64 * 60.0,
+            );
 
-            // let p = make_sections_filename(&gpx.filename);
-            // let mut writer = BufWriter::new(File::create(&p).unwrap());
-            // write_section_report(&mut writer, &gpx, &stops);
+            let mut io = std::io::stdout().lock();
+            write_section_report(&mut io, &sections);
+
+            let p = make_sections_filename(&gpx.filename);
+            let mut writer = BufWriter::new(File::create(&p).unwrap());
+            write_section_report(&mut writer, &sections);
         }
     }
 
@@ -131,8 +140,8 @@ fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
 /// which is relative to the coordinate scale in use.
 /// Since we are using lat-lon, we need to convert metres
 /// using the following relation: 1 degree of latitude = 111,111 metres
-fn metres_to_epsilon(metres: u16) -> f32 {
-    metres as f32 / 111111.0
+fn metres_to_epsilon(metres: u16) -> f64 {
+    metres as f64 / 111111.0
 }
 
 /// Feed the points into the GEO crate so we can use its implementation
@@ -152,8 +161,8 @@ fn metres_to_epsilon(metres: u16) -> f32 {
 /// 31358           20      636 (2.0%, 83Kb)    Ok - within a few metres of the road
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
-fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
-    let line_string: LineString<f32> = points
+fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f64) {
+    let line_string: LineString<f64> = points
         .iter()
         .map(|p| coord! { x: p.lon, y: p.lat })
         .collect();

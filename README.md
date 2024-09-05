@@ -78,3 +78,10 @@ Or build from source using cargo.
 
 # Caveats
 * Has only been tested on my own GPX files from a Garmin Edge 1040.
+
+
+# TODO
+- In the report, also show stages, not just the stops. Include
+  time and average speed over the stage (max too?). Perhaps
+  the cum avg speed, ascent and descent.
+- The current "overall" report can become the last row in the table.

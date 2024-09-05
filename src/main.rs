@@ -1,8 +1,12 @@
 use args::parse_args;
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Cell, CellAlignment, ContentArrangement, Table};
 use geo::{coord, point, GeodesicDistance, LineString, SimplifyIdx};
 use model::{Gpx, MergedGpx, Stop, TrackPoint};
 use quick_xml::reader::Reader;
-use time::{OffsetDateTime, Duration};
+use time::util::local_offset;
+use time::{format_description, Duration, OffsetDateTime, UtcOffset};
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -168,12 +172,7 @@ fn calc_speed_kmh(metres: f32, seconds: f32) -> f32 {
 }
 
 fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
-    fn total_stopped_duration(stops: &[Stop]) -> Duration {
-        let total_seconds = stops.iter().map(|s| s.time_in_seconds()).sum();
-        Duration::seconds_f32(total_seconds)
-    }
-
-    let stopped_time = total_stopped_duration(stops);
+    let stopped_time: Duration = stops.iter().map(|s| s.duration()).sum();
     let moving_time = gpx.total_time() - stopped_time;
     let min_ele = gpx.min_elevation();
     let max_ele = gpx.max_elevation();
@@ -196,19 +195,23 @@ fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
         ).unwrap();
     writeln!(w).unwrap();
 
-    writeln!(w, "Stop No. | Start | End | Lat-Lon | Location").unwrap();
-
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec!["Stop", "Start", "End", "Length", "Location"])
+        .set_content_arrangement(ContentArrangement::Dynamic);
+        
     for (idx, stop) in stops.iter().enumerate() {
-        writeln!(w, "{} | {} | {} | ({}, {}) | {}",
-            idx + 1,
-            format_utc_date(stop.start.time),
-            format_utc_date(stop.end.time),
-            stop.start.lat, stop.start.lon,
-            "unk",
-        ).unwrap();
+        table.add_row(vec![
+            Cell::new(idx + 1).set_alignment(CellAlignment::Right),
+            Cell::new(format_utc_and_local_date(stop.start.time, "\n")),
+            Cell::new(format_utc_and_local_date(stop.end.time, "\n")),
+            Cell::new(stop.duration()),
+            Cell::new(format!("{}\n({},{})", "unk", stop.start.lat, stop.start.lon)),
+        ]);
     }
 
-    writeln!(w).unwrap();
+    writeln!(w, "{}", table).unwrap();
 }
 
 fn make_simplified_filename(p: &Path) -> PathBuf {
@@ -277,6 +280,21 @@ fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f32) {
 fn format_utc_date(date: OffsetDateTime) -> String {
     let mut buf = Vec::with_capacity(32);
     write_utc_date(&mut buf, date);
+    String::from_utf8(buf).unwrap()
+}
+
+fn to_local_date(date: OffsetDateTime) -> OffsetDateTime {
+    let local_offset = UtcOffset::local_offset_at(date).unwrap();
+    date.to_offset(local_offset)
+}
+
+fn format_utc_and_local_date(date: OffsetDateTime, sep: &str) -> String {
+    let LOCAL_FMT = format_description::parse("[year]-[month]-[day] [hour repr:24]:[minute]:[second][end] (local time)").unwrap();
+    let mut buf = Vec::with_capacity(64);
+    write_utc_date(&mut buf, date);
+    write!(buf, "{}", sep).unwrap();
+    let d = to_local_date(date);
+    d.format_into(&mut buf, &LOCAL_FMT).unwrap();
     String::from_utf8(buf).unwrap()
 }
 

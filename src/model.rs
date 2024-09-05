@@ -123,6 +123,10 @@ impl Stop {
     pub fn time_in_seconds(&self) -> f32 {
         (self.end.time - self.start.time).as_seconds_f32()
     }
+
+    pub fn duration(&self) -> Duration {
+        self.end.time - self.start.time
+    }
 }
 
 impl MergedGpx {

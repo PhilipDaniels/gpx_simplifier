@@ -117,6 +117,10 @@ fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
         m.points.append(&mut f.points);
     }
 
+    // If we got the files in a wacky order, ensure we
+    // sort all the points by ascending time.
+    m.points.sort_by_key(|p| p.time);
+
     println!("Joined {} files", input_files.len());
 
     m

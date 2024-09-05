@@ -3,13 +3,19 @@
 //! the Sections determined we can calculate a lot of
 //! other metrics fairly easily.
 
-use std::{fs::File, io::{BufWriter, Write}};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
 
 use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, ContentArrangement, Table};
 use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
 
-use crate::{formatting::format_utc_date, model::{MergedGpx, TrackPoint}};
+use crate::{
+    formatting::format_utc_date,
+    model::{MergedGpx, TrackPoint},
+};
 
 /// Calculates speed in kmh from metres and seconds.
 pub fn speed_kmh(metres: f64, seconds: f64) -> f64 {
@@ -234,7 +240,7 @@ pub fn detect_sections(
     let ext_trackpoints = calculate_enriched_trackpoints(gpx);
     write_to_csv(gpx, &ext_trackpoints);
 
-    sections
+    calculate_sections(gpx, &ext_trackpoints)
 }
 
 /// Writes a tabular text report to the writer 'w', which can be stdout
@@ -387,27 +393,53 @@ fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
     let mut writer = csv::Writer::from_path(p).unwrap();
 
     // Header. 4 fields from the original point, then the extended info.
-    writer.write_record(vec![
-        "Time", "Lat", "Lon", "Ele",
-        "exDistanceDeltaMetres", "exCumMetres", "exSpeed", "exCumDuration",
-        "exEleDeltaMetres", "exCumAscentMetres", "exCumDescentMetres"
-    ]).unwrap();
+    writer
+        .write_record(vec![
+            "Time",
+            "Lat",
+            "Lon",
+            "Ele",
+            "exDistanceDeltaMetres",
+            "exCumMetres",
+            "exSpeed",
+            "exCumDuration",
+            "exEleDeltaMetres",
+            "exCumAscentMetres",
+            "exCumDescentMetres",
+        ])
+        .unwrap();
 
     // TrackPoints.
     for idx in 0..gpx.points.len() {
         // 4 fields from the original point
-        writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
+        writer
+            .write_field(format_utc_date(gpx.points[idx].time))
+            .unwrap();
         writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
         writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
         // Then the extended info
-        writer.write_field(ext_trackpoints[idx].distance_delta_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_distance_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].speed_kmh.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_duration.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].ele_delta_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_ascent_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_descent_metres.to_string()).unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].distance_delta_metres.to_string())
+            .unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].cum_distance_metres.to_string())
+            .unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].speed_kmh.to_string())
+            .unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].cum_duration.to_string())
+            .unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].ele_delta_metres.to_string())
+            .unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].cum_ascent_metres.to_string())
+            .unwrap();
+        writer
+            .write_field(ext_trackpoints[idx].cum_descent_metres.to_string())
+            .unwrap();
         // Terminator.
         writer.write_record(None::<&[u8]>).unwrap();
     }
@@ -415,14 +447,127 @@ fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
     writer.flush().unwrap();
 }
 
-/*
-/// You are determined to be stopped if your speed drops below MIN_SPEED km/h and does not
-/// go above 'resume_speed' until at least 'min_stop_time' minutes have passed.
-fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> Vec<Stop> {
-    const MIN_SPEED: f32 = 0.1;
-    let resume_speed = resume_speed as f32;
-    let min_stop_time = min_stop_time as f32 * 60.0; // convert to seconds
+/// Split the GPX into consecutive Sections, which are of type Moving
+/// or Stopped.
+fn calculate_sections(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) -> SectionList {
+    let mut sections = SectionList::default();
 
+    // You are considered "Stopped" if your speed drops below this.
+    // So that means a dead-stop, or possibly just walking slowly around.
+    let stopped_speed_kmh: f64 = 3.0;
+
+    // You are considered to be "Moving Again" the first time your
+    // speed goes above this. This is above a walking speed, so you
+    // are probably riding again.
+    let resume_speed_kmh: f64 = 10.0;
+
+    // We want to eliminate tiny Sections caused by noisy data, for
+    // example these can occur when just starting off again.
+    // So set the minimum length of a section, in seconds.
+    let min_section_duration_seconds: f64 = 120.0;
+
+    // Note that we need to deal with the slightly bizarre situation where you turn
+    // the GPS on and then don't go anywhere for a while - so your first Section
+    // may be a Stopped Section!
+
+    // We can get everything we need to create a Section if we have the
+    // index of the first and last TrackPoints for that Section.
+    let mut start_idx = 0;
+    while let Some(end_idx) = get_section_bounds(gpx, ext_trackpoints, start_idx) {
+        sections.push(make_section(gpx, ext_trackpoints, start_idx, end_idx));
+        // The next section shares an index/TrackPoint with this one.
+        start_idx = end_idx;
+    }
+
+    sections
+}
+
+fn get_section_bounds(
+    gpx: &MergedGpx,
+    ext_trackpoints: &[ExtendedTrackPointInfo],
+    start_idx: usize,
+) -> Option<usize> {
+    if start_idx >= gpx.points.len() {
+        return None;
+    }
+
+    // Do we start over or under the stopped_speed_kmh?
+    
+    todo!()
+}
+
+fn make_section(
+    gpx: &MergedGpx,
+    ext_trackpoints: &[ExtendedTrackPointInfo],
+    start_idx: usize,
+    end_idx: usize,
+) -> Section {
+    assert!(end_idx > start_idx);
+
+    let start = SectionBound {
+        index: start_idx,
+        point: gpx.points[start_idx].clone(),
+        distance_metres: ext_trackpoints[start_idx].cum_distance_metres,
+    };
+
+    let end = SectionBound {
+        index: end_idx,
+        point: gpx.points[end_idx].clone(),
+        distance_metres: ext_trackpoints[end_idx].cum_distance_metres,
+    };
+
+    assert!(end.distance_metres >= start.distance_metres);
+    assert!(end.index == end_idx);
+    assert!(end.point.time > start.point.time);
+    assert!(start.index == start_idx);
+
+    // Can't do this easily with min_by_key because you need to enumerate()
+    // to get the index, plus floats are PartialOrd only.
+    let mut min_idx = start_idx;
+    let mut max_idx = start_idx;
+    for i in start_idx..=end_idx {
+        if gpx.points[i].ele < gpx.points[min_idx].ele {
+            min_idx = i;
+        } else if gpx.points[i].ele > gpx.points[max_idx].ele {
+            max_idx = i;
+        }
+    }
+
+    let min_elevation = ElevationPoint {
+        point: gpx.points[min_idx].clone(),
+        distance_metres: ext_trackpoints[min_idx].cum_distance_metres,
+        location: Default::default(),
+    };
+
+    let max_elevation = ElevationPoint {
+        point: gpx.points[max_idx].clone(),
+        distance_metres: ext_trackpoints[max_idx].cum_distance_metres,
+        location: Default::default(),
+    };
+
+    assert!(max_elevation.point.ele >= min_elevation.point.ele);
+
+    let ascent_metres =
+        ext_trackpoints[end_idx].cum_ascent_metres - ext_trackpoints[start_idx].cum_ascent_metres;
+    assert!(ascent_metres >= 0.0);
+
+    let descent_metres =
+        ext_trackpoints[end_idx].cum_descent_metres - ext_trackpoints[start_idx].cum_descent_metres;
+    assert!(descent_metres >= 0.0);
+
+    Section {
+        section_type: SectionType::Moving,
+        start,
+        end,
+        min_elevation,
+        max_elevation,
+        ascent_metres,
+        descent_metres,
+    }
+}
+
+/*
+fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> Vec<Stop> {
     let mut iter = points.iter().enumerate();
 
     // Skip the first point, it always has speed 0.
@@ -449,5 +594,3 @@ fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> V
     stops
 }
 */
-
-

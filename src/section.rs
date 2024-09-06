@@ -6,6 +6,7 @@
 use std::{
     fs::File,
     io::{BufWriter, Write},
+    ops::Index,
 };
 
 use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, ContentArrangement, Table};
@@ -120,6 +121,14 @@ impl Section {
 #[derive(Default)]
 pub struct SectionList(Vec<Section>);
 
+impl Index<usize> for SectionList {
+    type Output = Section;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
 impl SectionList {
     fn first_point(&self) -> &TrackPoint {
         &self.0[0].start.point
@@ -131,6 +140,10 @@ impl SectionList {
 
     pub fn push(&mut self, section: Section) {
         self.0.push(section);
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
     /// Returns the start time of the first Section.
@@ -353,10 +366,14 @@ fn calculate_enriched_trackpoints(gpx: &MergedGpx) -> Vec<ExtendedTrackPointInfo
         // distances are wrong - a lot wrong.
         let distance_delta_metres = p1.geodesic_distance(&p2);
         cum_distance_metres += distance_delta_metres;
+        assert!(distance_delta_metres >= 0.0);
+        assert!(cum_distance_metres >= 0.0);
 
         // Speed. Based on the distance we just calculated.
         let time_delta = gpx.points[idx].time - gpx.points[idx - 1].time;
         let speed_kmh = speed_kmh_from_duration(distance_delta_metres, time_delta);
+        assert!(time_delta.is_positive());
+        assert!(speed_kmh >= 0.0);
 
         // Ascent and descent.
         let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
@@ -365,9 +382,12 @@ fn calculate_enriched_trackpoints(gpx: &MergedGpx) -> Vec<ExtendedTrackPointInfo
         } else {
             cum_descent_metres += ele_delta_metres.abs();
         }
+        assert!(cum_ascent_metres >= 0.0);
+        assert!(cum_descent_metres >= 0.0);
 
         // How long it took to get here.
         let cum_duration = gpx.points[idx].time - start_time;
+        assert!(cum_duration.is_positive());
 
         ext_infos.push(ExtendedTrackPointInfo {
             distance_delta_metres,
@@ -381,6 +401,8 @@ fn calculate_enriched_trackpoints(gpx: &MergedGpx) -> Vec<ExtendedTrackPointInfo
 
         p1 = p2;
     }
+
+    assert_eq!(gpx.points.len(), ext_infos.len());
 
     ext_infos
 }
@@ -450,50 +472,243 @@ fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
 /// Split the GPX into consecutive Sections, which are of type Moving
 /// or Stopped.
 fn calculate_sections(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) -> SectionList {
+    assert!(gpx.points.len() == ext_trackpoints.len());
+
     let mut sections = SectionList::default();
 
-    // You are considered "Stopped" if your speed drops below this.
-    // So that means a dead-stop, or possibly just walking slowly around.
-    let stopped_speed_kmh: f64 = 3.0;
+    let params = SectionParameters {
+        stopped_speed_kmh: 0.001,
+        resume_speed_kmh: 10.0,
+        min_section_duration_seconds: 120.0, // Info controls! Do we care?
+    };
 
-    // You are considered to be "Moving Again" the first time your
-    // speed goes above this. This is above a walking speed, so you
-    // are probably riding again.
-    let resume_speed_kmh: f64 = 10.0;
+    // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
+    // that you are actually in a Stopped section. However, it's not impossible,
+    // see Note 2 for why.
 
-    // We want to eliminate tiny Sections caused by noisy data, for
-    // example these can occur when just starting off again.
-    // So set the minimum length of a section, in seconds.
-    let min_section_duration_seconds: f64 = 120.0;
-
-    // Note that we need to deal with the slightly bizarre situation where you turn
+    // Note 2: We need to deal with the slightly bizarre situation where you turn
     // the GPS on and then don't go anywhere for a while - so your first Section
     // may be a Stopped Section!
 
     // We can get everything we need to create a Section if we have the
     // index of the first and last TrackPoints for that Section.
     let mut start_idx = 0;
-    while let Some(end_idx) = get_section_bounds(gpx, ext_trackpoints, start_idx) {
-        sections.push(make_section(gpx, ext_trackpoints, start_idx, end_idx));
+    while let Some((end_idx, section_type)) =
+        get_section_end(gpx, ext_trackpoints, start_idx, &params)
+    {
+        sections.push(make_section(
+            gpx,
+            ext_trackpoints,
+            start_idx,
+            end_idx,
+            section_type,
+        ));
+
         // The next section shares an index/TrackPoint with this one.
         start_idx = end_idx;
+    }
+
+    // Should include all TrackPoints and start/end indexes overlap.
+    assert_eq!(sections[0].start.index, 0);
+    assert_eq!(sections[sections.len() - 1].end.index, gpx.points.len() - 1);
+    for idx in 0..sections.len() - 1 {
+        assert_eq!(sections[idx].end.index, sections[idx + 1].start.index);
     }
 
     sections
 }
 
-fn get_section_bounds(
+struct SectionParameters {
+    /// You are considered "Stopped" if your speed drops below this.
+    /// So that means a dead-stop.
+    stopped_speed_kmh: f64,
+
+    // You are considered to be "Moving Again" the first time your
+    // speed goes above this. This is above a walking speed, so you
+    // are probably riding again.
+    resume_speed_kmh: f64,
+
+    /// We want to eliminate tiny Sections caused by noisy data, for
+    /// example these can occur when just starting off again.
+    /// So set the minimum length of a section, in seconds.
+    min_section_duration_seconds: f64,
+}
+
+fn get_section_end(
     gpx: &MergedGpx,
     ext_trackpoints: &[ExtendedTrackPointInfo],
     start_idx: usize,
-) -> Option<usize> {
-    if start_idx >= gpx.points.len() {
+    params: &SectionParameters,
+) -> Option<(usize, SectionType)> {
+    // Get this out into a variable to avoid off-by-one errors (hopefully).
+    let last_valid_idx = gpx.points.len() - 1;
+
+    // Termination condition, we reached the end of the TrackPoints.
+    if start_idx == last_valid_idx {
         return None;
     }
 
-    // Do we start over or under the stopped_speed_kmh?
-    
-    todo!()
+    // This assert exists so the check above can be '==' instead of '>='.
+    // More likely to catch off-by-one bugs this way.
+    assert!(start_idx < last_valid_idx);
+
+    // We have said that a Section must be at least this long, so we need to
+    // advance this far as a minimum.
+    let end_idx = advance_for_duration(
+        gpx,
+        start_idx,
+        last_valid_idx,
+        params.min_section_duration_seconds,
+    );
+    assert!(end_idx <= last_valid_idx);
+    assert!(end_idx > start_idx);
+    // This is not necessarily true in the case where we exhaust all the TrackPoints.
+    //assert!((gpx.points[end_idx].time - gpx.points[start_idx].time).as_seconds_f64() >= params.min_section_duration_seconds);
+    assert!((gpx.points[end_idx].time - gpx.points[start_idx].time).is_positive());
+
+    // Scan the TrackPoints we just got to determine the SectionType.
+    let section_type = if ext_trackpoints[start_idx..=end_idx] // TODO: Off-by-one on start_idx + 1?
+        .iter()
+        .any(|p| p.speed_kmh > params.resume_speed_kmh)
+    {
+        SectionType::Moving
+    } else {
+        SectionType::Stopped
+    };
+
+    // It's possible we have consumed all the TrackPoints.
+    if end_idx == last_valid_idx {
+        return Some((end_idx, section_type));
+    }
+
+    // We now need to look ahead to find the end of this Section. How we scan
+    // depends on the SectionType. It's possible that these functions will
+    // consume all or only some of the remaining trackpoints.
+    let end_index = match section_type {
+        SectionType::Moving => {
+            find_stop_index(
+                gpx,
+                ext_trackpoints,
+                end_idx, // Start the scan from the current end that we just found.
+                last_valid_idx,
+                params,
+            )
+        }
+        SectionType::Stopped => {
+            find_resume_index(
+                ext_trackpoints,
+                end_idx, // Start the scan from the current end that we just found.
+                last_valid_idx,
+                params.resume_speed_kmh,
+            )
+        }
+    };
+
+    assert!(end_idx <= last_valid_idx);
+    assert!(end_idx > start_idx);
+    return Some((end_index, section_type));
+}
+
+/// Find the next Stopped point.
+/// A Moving section is ended when we stop. This occurs when we drop below the
+/// 'stopped_speed_kmh' and do not attain 'resume_speed_kmh' for at least
+/// 'min_section_duration_seconds'
+fn find_stop_index(
+    gpx: &MergedGpx,
+    ext_trackpoints: &[ExtendedTrackPointInfo],
+    start_idx: usize,
+    last_valid_idx: usize,
+    params: &SectionParameters,
+) -> usize {
+    let mut end_idx = start_idx + 1;
+
+    while end_idx <= last_valid_idx {
+        // Find the first time we drop below 'stopped_speed_kmh'
+        while end_idx <= last_valid_idx
+            && ext_trackpoints[end_idx].speed_kmh > params.stopped_speed_kmh
+        {
+            end_idx += 1;
+        }
+
+        // It's possible we exhausted all the TrackPoints - we were in a moving
+        // Section that went right to the end of the track. Note that the line
+        // above which increments end_index means that it is possible that
+        // end_index is GREATER than last_valid_index at this point.
+        if end_idx >= last_valid_idx {
+            return last_valid_idx;
+        }
+
+        // Now take note of this point and scan forward for attaining 'resume_speed_kmh'.
+        let possible_stop_idx = end_idx;
+        let possible_stop_time = gpx.points[possible_stop_idx].time;
+        while end_idx <= last_valid_idx
+            && ext_trackpoints[end_idx].speed_kmh < params.resume_speed_kmh
+        {
+            end_idx += 1;
+        }
+
+        // Same logic as above.
+        if end_idx >= last_valid_idx {
+            return last_valid_idx;
+        }
+
+        // Is that a valid length of stop? If so, the point found above is a valid
+        // end for this current section (which is a Moving Section, remember).
+        let stop_duration = gpx.points[end_idx].time - possible_stop_time;
+        if stop_duration.as_seconds_f64() >= params.min_section_duration_seconds {
+            return possible_stop_idx;
+        }
+
+        // If that's not a valid stop (because it's too short),
+        // we need to continue searching. Start again from the
+        // point we have already reached.
+        end_idx += 1;
+    }
+
+    // If we get here then we exhausted all the TrackPoints.
+    last_valid_idx
+}
+
+/// A Stopped section is ended when we find the first TrackPoint
+/// with a speed above the resumption threshold.
+fn find_resume_index(
+    ext_trackpoints: &[ExtendedTrackPointInfo],
+    start_idx: usize,
+    last_valid_idx: usize,
+    resume_speed_kmh: f64,
+) -> usize {
+    let mut end_index = start_idx + 1;
+
+    while end_index <= last_valid_idx {
+        if ext_trackpoints[end_index].speed_kmh > resume_speed_kmh {
+            return end_index;
+        }
+        end_index += 1;
+    }
+
+    // If we get here then we exhausted all the TrackPoints.
+    last_valid_idx
+}
+
+fn advance_for_duration(
+    gpx: &MergedGpx,
+    start_idx: usize,
+    last_valid_idx: usize,
+    min_section_duration_seconds: f64,
+) -> usize {
+    let start_time = gpx.points[start_idx].time;
+    let mut end_index = start_idx + 1;
+
+    while end_index <= last_valid_idx {
+        let delta_time = gpx.points[end_index].time - start_time;
+        if delta_time.as_seconds_f64() >= min_section_duration_seconds {
+            return end_index;
+        }
+        end_index += 1;
+    }
+
+    // If we get here then we exhausted all the TrackPoints.
+    last_valid_idx
 }
 
 fn make_section(
@@ -501,6 +716,7 @@ fn make_section(
     ext_trackpoints: &[ExtendedTrackPointInfo],
     start_idx: usize,
     end_idx: usize,
+    section_type: SectionType,
 ) -> Section {
     assert!(end_idx > start_idx);
 
@@ -517,12 +733,13 @@ fn make_section(
     };
 
     assert!(end.distance_metres >= start.distance_metres);
-    assert!(end.index == end_idx);
+    assert_eq!(end.index, end_idx);
     assert!(end.point.time > start.point.time);
-    assert!(start.index == start_idx);
+    assert_eq!(start.index, start_idx);
 
     // Can't do this easily with min_by_key because you need to enumerate()
-    // to get the index, plus floats are PartialOrd only.
+    // to get the index, plus floats are PartialOrd only. In any case, a
+    // simple loop lets us calculate both min and max at the same time.
     let mut min_idx = start_idx;
     let mut max_idx = start_idx;
     for i in start_idx..=end_idx {
@@ -556,7 +773,7 @@ fn make_section(
     assert!(descent_metres >= 0.0);
 
     Section {
-        section_type: SectionType::Moving,
+        section_type,
         start,
         end,
         min_elevation,
@@ -565,32 +782,3 @@ fn make_section(
         descent_metres,
     }
 }
-
-/*
-fn detect_stops(points: &[TrackPoint], resume_speed: u8, min_stop_time: u8) -> Vec<Stop> {
-    let mut iter = points.iter().enumerate();
-
-    // Skip the first point, it always has speed 0.
-    iter.next();
-
-    let mut stops = Vec::new();
-
-    while let Some((start_idx, start_point)) = iter.find(|(_, p)| p.speed_kmh < MIN_SPEED) {
-        // Find the next point that has a speed of at least resume_speed, i.e. we started riding again.
-        if let Some((end_idx, end_point)) = iter.find(|(_, p)| p.speed_kmh > resume_speed) {
-            if (end_point.time - start_point.time).as_seconds_f32() > min_stop_time {
-                let stop = Stop {
-                    start: start_point.clone(),
-                    start_idx,
-                    end: end_point.clone(),
-                    end_idx
-                };
-
-                stops.push(stop);
-            }
-        }
-    }
-
-    stops
-}
-*/

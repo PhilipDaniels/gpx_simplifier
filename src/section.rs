@@ -3,18 +3,21 @@
 //! the Sections determined we can calculate a lot of
 //! other metrics fairly easily.
 
+use core::{fmt, slice};
 use std::{
-    fs::File,
-    io::{BufWriter, Write},
+    io::Write,
     ops::Index,
 };
 
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, ContentArrangement, Table};
+use comfy_table::{
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, CellAlignment, ContentArrangement,
+    Table,
+};
 use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    formatting::format_utc_date,
+    formatting::{format_local_date, format_utc_and_local_date, format_utc_date},
     model::{MergedGpx, TrackPoint},
 };
 
@@ -26,47 +29,6 @@ pub fn speed_kmh(metres: f64, seconds: f64) -> f64 {
 /// Calculates speed in kmh from metres and a Duration.
 pub fn speed_kmh_from_duration(metres: f64, time: Duration) -> f64 {
     speed_kmh(metres, time.as_seconds_f64())
-}
-
-/// The type of a Section.
-#[derive(Debug)]
-pub enum SectionType {
-    Moving,
-    Stopped,
-}
-
-/// Represents an end of a Section - either the start
-/// or the end.
-#[derive(Debug)]
-pub struct SectionBound {
-    /// The index into the original trackpoint array
-    /// for which this SectionBound was calculated.
-    pub index: usize,
-
-    // A clone of the corresponding trackpoint. This
-    /// includes the lat-lon, elevation and time.
-    pub point: TrackPoint,
-
-    /// The cumulative distance that was travelled along
-    /// the original track to reach this point.
-    pub distance_metres: f64,
-}
-
-/// Represents a elevation point of interest (typically
-/// we are interested in min and max elevations and where
-/// they occurred.)
-#[derive(Debug)]
-pub struct ElevationPoint {
-    /// A clone of the corresponding trackpoint. This
-    /// includes the lat-lon, elevation and time.
-    pub point: TrackPoint,
-
-    /// The cumulative distance that was travelled along
-    /// the original track to reach this point.
-    pub distance_metres: f64,
-
-    /// Geo-coded location of the point.
-    pub location: String,
 }
 
 /// Represents a section from a GPX track. The section can represent
@@ -94,6 +56,69 @@ pub struct Section {
 
     /// The total descent in metres during this Section.
     pub descent_metres: f64,
+
+    /// The cumulative ascent in metres to the end of this Section.
+    pub cum_ascent_metres: f64,
+
+    /// The cumulative descent in metres to the end of this Section.
+    pub cum_descent_metres: f64,
+}
+
+/// The type of a Section.
+#[derive(Debug)]
+pub enum SectionType {
+    Moving,
+    Stopped,
+}
+
+impl fmt::Display for SectionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SectionType::Moving => write!(f, "Moving"),
+            SectionType::Stopped => write!(f, "Stopped"),
+        }
+    }
+}
+
+/// Represents an end of a Section - either the start
+/// or the end.
+#[derive(Debug)]
+pub struct SectionBound {
+    /// The index into the original trackpoint array
+    /// for which this SectionBound was calculated.
+    pub index: usize,
+
+    // A clone of the corresponding trackpoint. This
+    /// includes the lat-lon, elevation and time.
+    pub point: TrackPoint,
+
+    /// The cumulative distance that was travelled along
+    /// the original track to reach this point.
+    pub cum_distance_metres: f64,
+}
+
+/// Represents a elevation point of interest (typically
+/// we are interested in min and max elevations and where
+/// they occurred.)
+#[derive(Debug)]
+pub struct ElevationPoint {
+    /// A clone of the corresponding trackpoint. This
+    /// includes the lat-lon, elevation and time.
+    pub point: TrackPoint,
+
+    /// The cumulative distance that was travelled along
+    /// the original track to reach this point.
+    pub cum_distance_metres: f64,
+
+    /// Geo-coded location of the point.
+    pub location: String,
+}
+
+impl ElevationPoint {
+    /// Returns the cumulative distance to the point.
+    pub fn cum_distance_km(&self) -> f64 {
+        self.cum_distance_metres / 1000.0
+    }
 }
 
 impl Section {
@@ -102,14 +127,19 @@ impl Section {
         self.end.point.time - self.start.point.time
     }
 
-    /// Returns the distance of the section, in metres.
+    /// Returns the distance (length) of the section, in metres.
     pub fn distance_metres(&self) -> f64 {
-        self.end.distance_metres - self.start.distance_metres
+        self.end.cum_distance_metres - self.start.cum_distance_metres
     }
 
     /// Returns the distance of the section, in km.
     pub fn distance_km(&self) -> f64 {
         self.distance_metres() / 1000.0
+    }
+
+    /// Returns the cumulative distance to the end of the section.
+    pub fn cum_distance_km(&self) -> f64 {
+        self.end.cum_distance_metres / 1000.0
     }
 
     /// Returns the average speed of the section, in kmh.
@@ -130,6 +160,11 @@ impl Index<usize> for SectionList {
 }
 
 impl SectionList {
+    // TODO: Implement Iterator properly.
+    fn iter(&self) -> slice::Iter<Section> {
+        self.0.iter()
+    }
+
     fn first_point(&self) -> &TrackPoint {
         &self.0[0].start.point
     }
@@ -258,6 +293,7 @@ pub fn detect_sections(
 
 /// Writes a tabular text report to the writer 'w', which can be stdout
 /// and/or a file writer.
+#[rustfmt::skip]
 pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
     let mut table = Table::new();
 
@@ -271,17 +307,61 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
             "Section",
             "Start",
             "End",
-            "Section\nDistance",
             "Duration",
-            "Speed",
-            "Cumulative\nDistance",
+            "Avg Speed\n(km/h)",
+            "Distance (km)\nCum. Distance",
+            "Ascent (m)\nCum. Ascent",
+            "Descent\nCum. Descent",
             "Location",
-            "Ascent\nCum. Ascent",
-            "Descent\nCum.Descent",
             "Min Elevation",
             "Max Elevation",
         ])
         .set_content_arrangement(ContentArrangement::Dynamic);
+
+    let mut section_number = 1;
+    for section in sections.iter() {
+        table.add_row(vec![
+            Cell::new(format!("{section_number}\n{}", section.section_type)).set_alignment(CellAlignment::Right),
+            Cell::new(format_utc_and_local_date(section.start.point.time, "\n")),
+            Cell::new(format_utc_and_local_date(section.end.point.time, "\n")),
+            Cell::new(section.duration()),
+            match section.section_type {
+                SectionType::Moving => Cell::new(format!("{:.2}", section.average_speed_kmh())),
+                SectionType::Stopped => Cell::new(""),
+            },
+            match section.section_type {
+                SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.distance_km(), section.cum_distance_km())),
+                SectionType::Stopped => Cell::new(""),
+            },
+            match section.section_type {
+                SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.ascent_metres, section.cum_ascent_metres)),
+                SectionType::Stopped => Cell::new(""),
+            },
+            match section.section_type {
+                SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.descent_metres, section.cum_descent_metres)),
+                SectionType::Stopped => Cell::new(""),
+            },
+            Cell::new("unk"),
+            match section.section_type {
+                SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
+                    section.min_elevation.point.ele,
+                    section.min_elevation.cum_distance_km(),
+                    format_local_date(section.min_elevation.point.time)
+                    )),
+                SectionType::Stopped => Cell::new(""),
+            },
+            match section.section_type {
+                SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
+                    section.max_elevation.point.ele,
+                    section.max_elevation.cum_distance_km(),
+                    format_local_date(section.max_elevation.point.time)
+                    )),
+                SectionType::Stopped => Cell::new(""),
+            },
+        ]);
+
+        section_number += 1;
+    }
 
     writeln!(w, "{}", table).unwrap();
 }
@@ -309,26 +389,6 @@ fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
     writeln!(w, "Max elevation: {} m, at {:.2} km, {}",
         max_ele.ele, max_ele.cumulative_distance_metres / 1000.0, format_utc_date(max_ele.time)
         ).unwrap();
-    writeln!(w).unwrap();
-
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec!["Stop", "Start", "End", "Length", "Location"])
-        .set_content_arrangement(ContentArrangement::Dynamic);
-
-    for (idx, stop) in stops.iter().enumerate() {
-        table.add_row(vec![
-            Cell::new(idx + 1).set_alignment(CellAlignment::Right),
-            Cell::new(format_utc_and_local_date(stop.start.time, "\n")),
-            Cell::new(format_utc_and_local_date(stop.end.time, "\n")),
-            Cell::new(stop.duration()),
-            Cell::new(format!("{}\n({},{})", "unk", stop.start.lat, stop.start.lon)),
-        ]);
-    }
-
-    writeln!(w, "{}", table).unwrap();
-}
  */
 
 #[derive(Debug, Default)]
@@ -409,6 +469,7 @@ fn calculate_enriched_trackpoints(gpx: &MergedGpx) -> Vec<ExtendedTrackPointInfo
 
 /// Writes the trackpoints and the extended information to a CSV file,
 /// very handy for debugging.
+#[rustfmt::skip]
 fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
     let mut p = gpx.filename.clone();
     p.set_extension("trackpoints.csv");
@@ -434,34 +495,18 @@ fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
     // TrackPoints.
     for idx in 0..gpx.points.len() {
         // 4 fields from the original point
-        writer
-            .write_field(format_utc_date(gpx.points[idx].time))
-            .unwrap();
+        writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
         writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
         writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
         // Then the extended info
-        writer
-            .write_field(ext_trackpoints[idx].distance_delta_metres.to_string())
-            .unwrap();
-        writer
-            .write_field(ext_trackpoints[idx].cum_distance_metres.to_string())
-            .unwrap();
-        writer
-            .write_field(ext_trackpoints[idx].speed_kmh.to_string())
-            .unwrap();
-        writer
-            .write_field(ext_trackpoints[idx].cum_duration.to_string())
-            .unwrap();
-        writer
-            .write_field(ext_trackpoints[idx].ele_delta_metres.to_string())
-            .unwrap();
-        writer
-            .write_field(ext_trackpoints[idx].cum_ascent_metres.to_string())
-            .unwrap();
-        writer
-            .write_field(ext_trackpoints[idx].cum_descent_metres.to_string())
-            .unwrap();
+        writer.write_field(ext_trackpoints[idx].distance_delta_metres.to_string()).unwrap();
+        writer.write_field(ext_trackpoints[idx].cum_distance_metres.to_string()).unwrap();
+        writer.write_field(ext_trackpoints[idx].speed_kmh.to_string()).unwrap();
+        writer.write_field(ext_trackpoints[idx].cum_duration.to_string()).unwrap();
+        writer.write_field(ext_trackpoints[idx].ele_delta_metres.to_string()).unwrap();
+        writer.write_field(ext_trackpoints[idx].cum_ascent_metres.to_string()).unwrap();
+        writer.write_field(ext_trackpoints[idx].cum_descent_metres.to_string()).unwrap();
         // Terminator.
         writer.write_record(None::<&[u8]>).unwrap();
     }
@@ -477,9 +522,9 @@ fn calculate_sections(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo
     let mut sections = SectionList::default();
 
     let params = SectionParameters {
-        stopped_speed_kmh: 0.001,
+        stopped_speed_kmh: 0.01,
         resume_speed_kmh: 10.0,
-        min_section_duration_seconds: 120.0, // Info controls! Do we care?
+        min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
     };
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
@@ -723,16 +768,16 @@ fn make_section(
     let start = SectionBound {
         index: start_idx,
         point: gpx.points[start_idx].clone(),
-        distance_metres: ext_trackpoints[start_idx].cum_distance_metres,
+        cum_distance_metres: ext_trackpoints[start_idx].cum_distance_metres,
     };
 
     let end = SectionBound {
         index: end_idx,
         point: gpx.points[end_idx].clone(),
-        distance_metres: ext_trackpoints[end_idx].cum_distance_metres,
+        cum_distance_metres: ext_trackpoints[end_idx].cum_distance_metres,
     };
 
-    assert!(end.distance_metres >= start.distance_metres);
+    assert!(end.cum_distance_metres >= start.cum_distance_metres);
     assert_eq!(end.index, end_idx);
     assert!(end.point.time > start.point.time);
     assert_eq!(start.index, start_idx);
@@ -752,13 +797,13 @@ fn make_section(
 
     let min_elevation = ElevationPoint {
         point: gpx.points[min_idx].clone(),
-        distance_metres: ext_trackpoints[min_idx].cum_distance_metres,
+        cum_distance_metres: ext_trackpoints[min_idx].cum_distance_metres,
         location: Default::default(),
     };
 
     let max_elevation = ElevationPoint {
         point: gpx.points[max_idx].clone(),
-        distance_metres: ext_trackpoints[max_idx].cum_distance_metres,
+        cum_distance_metres: ext_trackpoints[max_idx].cum_distance_metres,
         location: Default::default(),
     };
 
@@ -780,5 +825,7 @@ fn make_section(
         max_elevation,
         ascent_metres,
         descent_metres,
+        cum_ascent_metres: ext_trackpoints[end_idx].cum_ascent_metres,
+        cum_descent_metres: ext_trackpoints[end_idx].cum_descent_metres
     }
 }

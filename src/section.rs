@@ -18,7 +18,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     formatting::{format_local_date, format_utc_and_local_date, format_utc_date},
-    model::{MergedGpx, TrackPoint},
+    model::{EnrichedGpx, MergedGpx, TrackPoint},
 };
 
 /// Calculates speed in kmh from metres and seconds.
@@ -95,6 +95,9 @@ pub struct SectionBound {
     /// The cumulative distance that was travelled along
     /// the original track to reach this point.
     pub cum_distance_metres: f64,
+
+    /// Geocoded location of this point.
+    pub location: String,
 }
 
 /// Represents a elevation point of interest (typically
@@ -275,20 +278,57 @@ impl SectionList {
 ///
 /// All non-Stopped sections are considered Moving sections.
 pub fn detect_sections(
-    gpx: &MergedGpx,
+    gpx: &EnrichedGpx,
     resume_speed: f64,
     min_stop_time_seconds: f64,
 ) -> SectionList {
-    let mut sections = Default::default();
     if gpx.points.len() < 2 {
         eprintln!("Warning: gpx {:?} does not have any points", gpx.filename);
-        return sections;
+        return Default::default();
     }
 
-    let ext_trackpoints = calculate_enriched_trackpoints(gpx);
-    write_to_csv(gpx, &ext_trackpoints);
+    let mut sections = SectionList::default();
 
-    calculate_sections(gpx, &ext_trackpoints)
+    let params = SectionParameters {
+        stopped_speed_kmh: 0.01,
+        resume_speed_kmh: 10.0,
+        min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
+    };
+
+    // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
+    // that you are actually in a Stopped section. However, it's not impossible,
+    // see Note 2 for why.
+
+    // Note 2: We need to deal with the slightly bizarre situation where you turn
+    // the GPS on and then don't go anywhere for a while - so your first Section
+    // may be a Stopped Section!
+
+    // We can get everything we need to create a Section if we have the
+    // index of the first and last TrackPoints for that Section.
+    // let mut start_idx = 0;
+    // while let Some((end_idx, section_type)) =
+    //     get_section_end(gpx, ext_trackpoints, start_idx, &params)
+    // {
+    //     sections.push(make_section(
+    //         gpx,
+    //         ext_trackpoints,
+    //         start_idx,
+    //         end_idx,
+    //         section_type,
+    //     ));
+
+    //     // The next section shares an index/TrackPoint with this one.
+    //     start_idx = end_idx;
+    // }
+
+    // Should include all TrackPoints and start/end indexes overlap.
+    assert_eq!(sections[0].start.index, 0);
+    assert_eq!(sections[sections.len() - 1].end.index, gpx.points.len() - 1);
+    for idx in 0..sections.len() - 1 {
+        assert_eq!(sections[idx].end.index, sections[idx + 1].start.index);
+    }
+
+    sections
 }
 
 /// Writes a tabular text report to the writer 'w', which can be stdout
@@ -305,13 +345,13 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
         .apply_modifier(UTF8_ROUND_CORNERS)
         .set_header(vec![
             "Section",
-            "Start",
-            "End",
+            "Start Time",
+            "End Time",
             "Duration",
             "Avg Speed\n(km/h)",
             "Distance (km)\nCum. Distance",
             "Ascent (m)\nCum. Ascent",
-            "Descent\nCum. Descent",
+            "Descent (m)\nCum. Descent",
             "Location",
             "Min Elevation",
             "Max Elevation",
@@ -321,7 +361,12 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
     let mut section_number = 1;
     for section in sections.iter() {
         table.add_row(vec![
-            Cell::new(format!("{section_number}\n{}", section.section_type)).set_alignment(CellAlignment::Right),
+            Cell::new(format!("{} - {}\nTP {}-{}",
+                section_number,
+                section.section_type,
+                section.start.index,
+                section.end.index,
+                )).set_alignment(CellAlignment::Right),
             Cell::new(format_utc_and_local_date(section.start.point.time, "\n")),
             Cell::new(format_utc_and_local_date(section.end.point.time, "\n")),
             Cell::new(section.duration()),
@@ -341,7 +386,21 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
                 SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.descent_metres, section.cum_descent_metres)),
                 SectionType::Stopped => Cell::new(""),
             },
-            Cell::new("unk"),
+            match section.section_type {
+                SectionType::Moving => {
+                    if section_number == 1 {
+                        // The start control.
+                        Cell::new(&section.start.location)
+                    } else if section_number == sections.len() {
+                        // The finish control.
+                        Cell::new(&section.end.location)
+                    } else {
+                        // Irrelevant, see the Stopped location instead.
+                        Cell::new("")
+                    }
+                },
+                SectionType::Stopped => Cell::new(&section.start.location),
+            },
             match section.section_type {
                 SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
                     section.min_elevation.point.ele,
@@ -362,6 +421,9 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
 
         section_number += 1;
     }
+
+    table.add_row(vec![""]);
+    table.add_row(vec!["Summary", "aaa", "kkk"]);
 
     writeln!(w, "{}", table).unwrap();
 }
@@ -402,18 +464,8 @@ struct ExtendedTrackPointInfo {
     cum_descent_metres: f64,
 }
 
-/// Calculate a set of enriched TrackPoint information (distances, speed, climb)
-/// in a Vec whose indexes are parallel (1-1) with the indexes in gpx.points.
-fn calculate_enriched_trackpoints(gpx: &MergedGpx) -> Vec<ExtendedTrackPointInfo> {
-    // Push a dummy first element so that the indices in ext_info[]
-    // match 1-1 with the indices into gpx.points[].
-    let mut ext_infos = Vec::new();
-    ext_infos.push(ExtendedTrackPointInfo::default());
-
-    // Cumulative figures.
-    let mut cum_distance_metres = 0.0;
-    let mut cum_ascent_metres = 0.0;
-    let mut cum_descent_metres = 0.0;
+/// Calculate a set of enriched TrackPoint information (distances, speed, climb).
+pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let start_time = gpx.points[0].time;
 
     let mut p1 = point!(x: gpx.points[0].lon, y: gpx.points[0].lat);
@@ -424,53 +476,42 @@ fn calculate_enriched_trackpoints(gpx: &MergedGpx) -> Vec<ExtendedTrackPointInfo
         // Distance.
         // n.b. x=lon, y=lat. If you do it the other way round the
         // distances are wrong - a lot wrong.
-        let distance_delta_metres = p1.geodesic_distance(&p2);
-        cum_distance_metres += distance_delta_metres;
-        assert!(distance_delta_metres >= 0.0);
-        assert!(cum_distance_metres >= 0.0);
+        gpx.points[idx].delta_metres = p1.geodesic_distance(&p2);
+        assert!(gpx.points[idx].delta_metres >= 0.0);
+
+        gpx.points[idx].cum_metres = gpx.points[idx-1].cum_metres + gpx.points[idx].delta_metres;
+        assert!(gpx.points[idx].cum_metres >= 0.0);
 
         // Speed. Based on the distance we just calculated.
         let time_delta = gpx.points[idx].time - gpx.points[idx - 1].time;
-        let speed_kmh = speed_kmh_from_duration(distance_delta_metres, time_delta);
         assert!(time_delta.is_positive());
-        assert!(speed_kmh >= 0.0);
+        gpx.points[idx].speed_kmh = speed_kmh_from_duration(gpx.points[idx].delta_metres, time_delta);
+        assert!(gpx.points[idx].speed_kmh >= 0.0);
+
+        // How long it took to get here.
+        gpx.points[idx].duration = gpx.points[idx].time - start_time;
+        assert!(gpx.points[idx].duration.is_positive());
 
         // Ascent and descent.
         let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
+        gpx.points[idx].ele_delta_metres = ele_delta_metres;
+
         if ele_delta_metres > 0.0 {
-            cum_ascent_metres += ele_delta_metres;
+            gpx.points[idx].cum_ascent_metres = gpx.points[idx - 1].cum_ascent_metres + ele_delta_metres;
+            assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
         } else {
-            cum_descent_metres += ele_delta_metres.abs();
+            gpx.points[idx].cum_descent_metres = gpx.points[idx - 1].cum_descent_metres + ele_delta_metres.abs();
+            assert!(gpx.points[idx].cum_descent_metres >= 0.0);    
         }
-        assert!(cum_ascent_metres >= 0.0);
-        assert!(cum_descent_metres >= 0.0);
-
-        // How long it took to get here.
-        let cum_duration = gpx.points[idx].time - start_time;
-        assert!(cum_duration.is_positive());
-
-        ext_infos.push(ExtendedTrackPointInfo {
-            distance_delta_metres,
-            cum_distance_metres,
-            speed_kmh,
-            cum_duration,
-            ele_delta_metres,
-            cum_ascent_metres,
-            cum_descent_metres,
-        });
 
         p1 = p2;
     }
-
-    assert_eq!(gpx.points.len(), ext_infos.len());
-
-    ext_infos
 }
 
 /// Writes the trackpoints and the extended information to a CSV file,
 /// very handy for debugging.
 #[rustfmt::skip]
-fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
+pub fn write_enriched_trackpoints_to_csv(gpx: &EnrichedGpx) {
     let mut p = gpx.filename.clone();
     p.set_extension("trackpoints.csv");
     let mut writer = csv::Writer::from_path(p).unwrap();
@@ -478,89 +519,42 @@ fn write_to_csv(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) {
     // Header. 4 fields from the original point, then the extended info.
     writer
         .write_record(vec![
+            "TP Num",
             "Time",
             "Lat",
             "Lon",
-            "Ele",
-            "exDistanceDeltaMetres",
-            "exCumMetres",
-            "exSpeed",
-            "exCumDuration",
-            "exEleDeltaMetres",
-            "exCumAscentMetres",
-            "exCumDescentMetres",
+            "Elevation (m)",
+            "Delta (m)",
+            "Cum Distance (m)",
+            "Speed (kmh)",
+            "Cum Duration",
+            "Elevation Delta (m)",
+            "Cum Ascent (m)",
+            "Cum Descent (m)",
+            "Location"
         ])
         .unwrap();
 
     // TrackPoints.
     for idx in 0..gpx.points.len() {
-        // 4 fields from the original point
+        writer.write_field(idx.to_string()).unwrap();
         writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
         writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
         writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
-        // Then the extended info
-        writer.write_field(ext_trackpoints[idx].distance_delta_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_distance_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].speed_kmh.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_duration.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].ele_delta_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_ascent_metres.to_string()).unwrap();
-        writer.write_field(ext_trackpoints[idx].cum_descent_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].cum_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].duration.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].cum_ascent_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].cum_descent_metres.to_string()).unwrap();
+        writer.write_field(&gpx.points[idx].location).unwrap();
         // Terminator.
         writer.write_record(None::<&[u8]>).unwrap();
     }
 
     writer.flush().unwrap();
-}
-
-/// Split the GPX into consecutive Sections, which are of type Moving
-/// or Stopped.
-fn calculate_sections(gpx: &MergedGpx, ext_trackpoints: &[ExtendedTrackPointInfo]) -> SectionList {
-    assert!(gpx.points.len() == ext_trackpoints.len());
-
-    let mut sections = SectionList::default();
-
-    let params = SectionParameters {
-        stopped_speed_kmh: 0.01,
-        resume_speed_kmh: 10.0,
-        min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
-    };
-
-    // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
-    // that you are actually in a Stopped section. However, it's not impossible,
-    // see Note 2 for why.
-
-    // Note 2: We need to deal with the slightly bizarre situation where you turn
-    // the GPS on and then don't go anywhere for a while - so your first Section
-    // may be a Stopped Section!
-
-    // We can get everything we need to create a Section if we have the
-    // index of the first and last TrackPoints for that Section.
-    let mut start_idx = 0;
-    while let Some((end_idx, section_type)) =
-        get_section_end(gpx, ext_trackpoints, start_idx, &params)
-    {
-        sections.push(make_section(
-            gpx,
-            ext_trackpoints,
-            start_idx,
-            end_idx,
-            section_type,
-        ));
-
-        // The next section shares an index/TrackPoint with this one.
-        start_idx = end_idx;
-    }
-
-    // Should include all TrackPoints and start/end indexes overlap.
-    assert_eq!(sections[0].start.index, 0);
-    assert_eq!(sections[sections.len() - 1].end.index, gpx.points.len() - 1);
-    for idx in 0..sections.len() - 1 {
-        assert_eq!(sections[idx].end.index, sections[idx + 1].start.index);
-    }
-
-    sections
 }
 
 struct SectionParameters {
@@ -612,7 +606,7 @@ fn get_section_end(
     assert!((gpx.points[end_idx].time - gpx.points[start_idx].time).is_positive());
 
     // Scan the TrackPoints we just got to determine the SectionType.
-    let section_type = if ext_trackpoints[start_idx..=end_idx] // TODO: Off-by-one on start_idx + 1?
+    let section_type = if ext_trackpoints[start_idx..=end_idx]
         .iter()
         .any(|p| p.speed_kmh > params.resume_speed_kmh)
     {
@@ -769,12 +763,14 @@ fn make_section(
         index: start_idx,
         point: gpx.points[start_idx].clone(),
         cum_distance_metres: ext_trackpoints[start_idx].cum_distance_metres,
+        location: Default::default(),
     };
 
     let end = SectionBound {
         index: end_idx,
         point: gpx.points[end_idx].clone(),
         cum_distance_metres: ext_trackpoints[end_idx].cum_distance_metres,
+        location: Default::default(),
     };
 
     assert!(end.cum_distance_metres >= start.cum_distance_metres);

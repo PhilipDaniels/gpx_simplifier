@@ -1,9 +1,9 @@
 use args::parse_args;
 use formatting::format_utc_date;
 use geo::{coord, LineString, SimplifyIdx};
-use model::{Gpx, MergedGpx, TrackPoint};
+use model::{EnrichedGpx, EnrichedTrackPoint, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
-use section::{detect_sections, write_section_report};
+use section::{detect_sections, enrich_trackpoints, write_enriched_trackpoints_to_csv, write_section_report};
 use std::collections::HashSet;
 use std::io::Write;
 use std::{
@@ -46,6 +46,15 @@ fn main() {
         gpxs = vec![join_input_files(gpxs)];
     }
 
+    // Always enrich the TrackPoints. Keeps the flow simple and though
+    // it is one of the most expensive operations, it's still quick enough -
+    // yay Rust!
+    let mut gpxs: Vec<_> = gpxs.into_iter().map(|gpx| EnrichedGpx::from(gpx)).collect();
+    for gpx in &mut gpxs {
+        enrich_trackpoints(gpx);
+        write_enriched_trackpoints_to_csv(gpx);
+    }
+
     // Skip any files if the output already exists. It's wasteful to do this
     // after the load and parse and join, but it keeps the logic simpler.
     gpxs.retain(|gpx| {
@@ -86,20 +95,20 @@ fn main() {
     if let Some(metres) = args.metres {
         let epsilon = metres_to_epsilon(metres);
 
-        for merged_gpx in &mut gpxs {
-            let start_count = merged_gpx.points.len();
-            reduce_trackpoints_by_rdp(&mut merged_gpx.points, epsilon);
+        for gpx in &mut gpxs {
+            let start_count = gpx.points.len();
+            reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
             println!(
                 "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
-                merged_gpx.points.len(),
-                merged_gpx.filename
+                gpx.points.len(),
+                gpx.filename
             );
         }
     }
 
-    for merged_gpx in gpxs {
-        let output_filename = make_simplified_filename(&merged_gpx.filename);
-        write_simplified_gpx_file(&output_filename, &merged_gpx);
+    for gpx in gpxs {
+        let output_filename = make_simplified_filename(&gpx.filename);
+        write_simplified_gpx_file(&output_filename, &gpx);
     }
 }
 
@@ -161,8 +170,8 @@ fn metres_to_epsilon(metres: u16) -> f64 {
 /// 31358           20      636 (2.0%, 83Kb)    Ok - within a few metres of the road
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
-fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f64) {
-    let line_string: LineString<f64> = points
+fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: f64) {
+    let line_string: LineString<_> = points
         .iter()
         .map(|p| coord! { x: p.lon, y: p.lat })
         .collect();
@@ -186,7 +195,7 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
     doc
 }
 
-fn write_simplified_gpx_file(output_file: &Path, gpx: &MergedGpx) {
+fn write_simplified_gpx_file(output_file: &Path, gpx: &EnrichedGpx) {
     const HDR: &str = include_str!("header.txt");
     print!("Writing file {:?}", &output_file);
 
@@ -200,8 +209,8 @@ fn write_simplified_gpx_file(output_file: &Path, gpx: &MergedGpx) {
     writeln!(w, "    <type>{}</type>", gpx.track_type).unwrap();
     writeln!(w, "    <trkseg>").unwrap();
     for tp in &gpx.points {
-        writeln!(w, "      <trkpt lat=\"{}\" lon=\"{}\">", tp.lat, tp.lon).unwrap();
-        writeln!(w, "        <ele>{}</ele>", tp.ele).unwrap();
+        writeln!(w, "      <trkpt lat=\"{:.6}\" lon=\"{:.6}\">", tp.lat, tp.lon).unwrap();
+        writeln!(w, "        <ele>{:.1}</ele>", tp.ele).unwrap();
         writeln!(w, "        <time>{}</time>", format_utc_date(tp.time)).unwrap();
         writeln!(w, "      </trkpt>").unwrap();
     }

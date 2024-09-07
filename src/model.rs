@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 
 #[derive(Debug, Deserialize)]
 pub struct Gpx {
@@ -91,60 +91,74 @@ pub struct MergedGpx {
     pub points: Vec<TrackPoint>,
 }
 
-impl MergedGpx {
-    // pub fn start_time(&self) -> OffsetDateTime {
-    //     self.points[0].time
-    // }
 
-    // pub fn end_time(&self) -> OffsetDateTime {
-    //     self.last_point().time
-    // }
+#[derive(Debug)]
+pub struct EnrichedGpx {
+    pub filename: PathBuf,
+    pub metadata_time: OffsetDateTime,
+    pub track_name: String,
+    pub track_type: String,
+    pub points: Vec<EnrichedTrackPoint>,
+}
 
-    // pub fn total_time(&self) -> Duration {
-    //     self.end_time() - self.start_time()
-    // }
+/// A TrackPoint with lots of extra stuff calculated. We need the extras
+/// to find the sections.
+#[derive(Debug)]
+pub struct EnrichedTrackPoint {
+    /// The latitude, read from the "lat" attribute.
+    pub lat: f64,
+    /// The longitude, read from the "lon" attribute.
+    pub lon: f64,
+    /// The elevation, as read from the <ele> tag.
+    pub ele: f64,
+    /// The time as read from the <time> tag.
+    pub time: OffsetDateTime,
+    /// The distance between this trackpoint and the previous one.
+    pub delta_metres: f64,
+    /// The distance to this trackpoint from the beginning of the track.
+    pub cum_metres: f64,
+    /// The instantaneous speed at this point.
+    pub speed_kmh: f64,
+    /// The elapsed time between the beginning of the track and this point.
+    pub duration: Duration,
+    /// The change in elevation between this trackpoint and the previous one.
+    pub ele_delta_metres: f64,
+    /// The cumulative ascent between the beginning of the track and this point.
+    pub cum_ascent_metres: f64,
+    /// The cumulative descent between the beginning of the track and this point.
+    pub cum_descent_metres: f64,
+    /// The location (reverse geo-coded based on lat-lon)
+    pub location: String,
 
-    // pub fn distance_metres(&self) -> f32 {
-    //     self.last_point().cumulative_distance_metres
-    // }
+}
 
-    // pub fn distance_km(&self) -> f32 {
-    //     self.distance_metres() / 1000.0
-    // }
+impl From<TrackPoint> for EnrichedTrackPoint {
+    fn from(value: TrackPoint) -> Self {
+        Self {
+            lat: value.lat,
+            lon: value.lon,
+            ele: value.ele,
+            time: value.time,
+            delta_metres: 0.0,
+            cum_metres: 0.0,
+            speed_kmh: 0.0,
+            duration: Duration::ZERO,
+            ele_delta_metres: 0.0,
+            cum_ascent_metres: 0.0,
+            cum_descent_metres: 0.0,
+            location: Default::default()
+        }
+    }
+}
 
-    // fn last_point(&self) -> &TrackPoint {
-    //     &self.points[self.points.len() - 1]
-    // }
-
-    // pub fn min_elevation(&self) -> &TrackPoint {
-    //     let mut min = &self.points[0];
-
-    //     for p in &self.points {
-    //         if p.ele < min.ele {
-    //             min = &p
-    //         }
-    //     }
-        
-    //     min
-    // }
-
-    // pub fn max_elevation(&self) -> &TrackPoint {
-    //     let mut max = &self.points[0];
-
-    //     for p in &self.points {
-    //         if p.ele > max.ele {
-    //             max = &p
-    //         }
-    //     }
-        
-    //     max
-    // }
-
-    // pub fn total_ascent_metres(&self) -> f32 {
-    //     self.last_point().cumulative_ascent_metres
-    // }
-
-    // pub fn total_descent_metres(&self) -> f32 {
-    //     self.last_point().cumulative_descent_metres
-    // }
+impl From<MergedGpx> for EnrichedGpx {
+    fn from(value: MergedGpx) -> Self {
+        Self {
+            filename: value.filename,
+            metadata_time: value.metadata_time,
+            track_name: value.track_name,
+            track_type: value.track_type,
+            points: value.points.into_iter().map(Into::into).collect()
+        }
+    }
 }

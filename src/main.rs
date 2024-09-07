@@ -78,7 +78,7 @@ fn main() {
                 min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
             };
 
-            //let sections = detect_sections(&gpx, params);
+            let sections = detect_sections(&gpx, params);
 
             // let mut writer = BufWriter::new(File::create(&p).unwrap());
             // write_section_report(&mut writer, &sections);

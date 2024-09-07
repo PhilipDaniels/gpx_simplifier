@@ -7,7 +7,7 @@ use time::{Duration, OffsetDateTime};
 pub struct Gpx {
     #[serde(skip)]
     pub filename: PathBuf,
-    
+
     pub metadata: Metadata,
 
     #[serde(rename = "trk")]
@@ -91,7 +91,6 @@ pub struct MergedGpx {
     pub points: Vec<TrackPoint>,
 }
 
-
 #[derive(Debug)]
 pub struct EnrichedGpx {
     pub filename: PathBuf,
@@ -105,6 +104,8 @@ pub struct EnrichedGpx {
 /// to find the sections.
 #[derive(Debug)]
 pub struct EnrichedTrackPoint {
+    /// The index of the original trackpoint we used to create this value.
+    pub index: usize,
     /// The latitude, read from the "lat" attribute.
     pub lat: f64,
     /// The longitude, read from the "lon" attribute.
@@ -131,12 +132,12 @@ pub struct EnrichedTrackPoint {
     pub cum_descent_metres: f64,
     /// The location (reverse geo-coded based on lat-lon)
     pub location: String,
-
 }
 
-impl From<TrackPoint> for EnrichedTrackPoint {
-    fn from(value: TrackPoint) -> Self {
+impl EnrichedTrackPoint {
+    fn new(index: usize, value: TrackPoint) -> Self {
         Self {
+            index,
             lat: value.lat,
             lon: value.lon,
             ele: value.ele,
@@ -149,7 +150,7 @@ impl From<TrackPoint> for EnrichedTrackPoint {
             ele_delta_metres: 0.0,
             cum_ascent_metres: 0.0,
             cum_descent_metres: 0.0,
-            location: Default::default()
+            location: Default::default(),
         }
     }
 }
@@ -161,7 +162,12 @@ impl From<MergedGpx> for EnrichedGpx {
             metadata_time: value.metadata_time,
             track_name: value.track_name,
             track_type: value.track_type,
-            points: value.points.into_iter().map(Into::into).collect()
+            points: value
+                .points
+                .into_iter()
+                .enumerate()
+                .map(|(idx, tp)| EnrichedTrackPoint::new(idx, tp))
+                .collect(),
         }
     }
 }

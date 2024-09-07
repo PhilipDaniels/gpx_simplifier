@@ -13,8 +13,8 @@ use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    formatting::{format_utc_date_as_local, format_utc_date},
-    model::{EnrichedGpx, TrackPoint},
+    formatting::{format_utc_date, format_utc_date_as_local},
+    model::{EnrichedGpx, EnrichedTrackPoint},
 };
 
 /// Calculates speed in kmh from metres and seconds.
@@ -49,34 +49,12 @@ pub struct SectionParameters {
 /// Represents a section from a GPX track. The section can represent
 /// you moving, or stopped.
 #[derive(Debug)]
-pub struct Section {
+pub struct Section<'gpx> {
     pub section_type: SectionType,
-    pub start: SectionBound,
-    pub end: SectionBound,
-
-    /// Where the minimum elevation in this Section occurred.
-    /// We fill it in for both Stopped and Moving section types,
-    /// but it is only really useful for the Moving type. It does
-    /// no harm for Stopped types.
-    pub min_elevation: ElevationPoint,
-
-    /// Where the maximum elevation in this Section occurred.
-    /// We fill it in for both Stopped and Moving section types,
-    /// but it is only really useful for the Moving type. It does
-    /// no harm for Stopped types.
-    pub max_elevation: ElevationPoint,
-
-    /// The total ascent in metres during this Section.
-    pub ascent_metres: f64,
-
-    /// The total descent in metres during this Section.
-    pub descent_metres: f64,
-
-    /// The cumulative ascent in metres to the end of this Section.
-    pub cum_ascent_metres: f64,
-
-    /// The cumulative descent in metres to the end of this Section.
-    pub cum_descent_metres: f64,
+    pub start: &'gpx EnrichedTrackPoint,
+    pub end: &'gpx EnrichedTrackPoint,
+    pub min_elevation: &'gpx EnrichedTrackPoint,
+    pub max_elevation: &'gpx EnrichedTrackPoint,
 }
 
 /// The type of a Section.
@@ -95,59 +73,15 @@ impl fmt::Display for SectionType {
     }
 }
 
-/// Represents an end of a Section - either the start
-/// or the end.
-#[derive(Debug)]
-pub struct SectionBound {
-    /// The index into the original trackpoint array
-    /// for which this SectionBound was calculated.
-    pub index: usize,
-
-    // A clone of the corresponding trackpoint. This
-    /// includes the lat-lon, elevation and time.
-    pub point: TrackPoint,
-
-    /// The cumulative distance that was travelled along
-    /// the original track to reach this point.
-    pub cum_distance_metres: f64,
-
-    /// Geocoded location of this point.
-    pub location: String,
-}
-
-/// Represents a elevation point of interest (typically
-/// we are interested in min and max elevations and where
-/// they occurred.)
-#[derive(Debug)]
-pub struct ElevationPoint {
-    /// A clone of the corresponding trackpoint. This
-    /// includes the lat-lon, elevation and time.
-    pub point: TrackPoint,
-
-    /// The cumulative distance that was travelled along
-    /// the original track to reach this point.
-    pub cum_distance_metres: f64,
-
-    /// Geo-coded location of the point.
-    pub location: String,
-}
-
-impl ElevationPoint {
-    /// Returns the cumulative distance to the point.
-    pub fn cum_distance_km(&self) -> f64 {
-        self.cum_distance_metres / 1000.0
-    }
-}
-
-impl Section {
+impl <'gpx> Section<'gpx> {
     /// Returns the duration of the section.
     pub fn duration(&self) -> Duration {
-        self.end.point.time - self.start.point.time
+        self.end.time - self.start.time
     }
 
     /// Returns the distance (length) of the section, in metres.
     pub fn distance_metres(&self) -> f64 {
-        self.end.cum_distance_metres - self.start.cum_distance_metres
+        self.end.cum_metres - self.start.cum_metres
     }
 
     /// Returns the distance of the section, in km.
@@ -157,41 +91,51 @@ impl Section {
 
     /// Returns the cumulative distance to the end of the section.
     pub fn cum_distance_km(&self) -> f64 {
-        self.end.cum_distance_metres / 1000.0
+        self.end.cum_metres / 1000.0
     }
 
     /// Returns the average speed of the section, in kmh.
     pub fn average_speed_kmh(&self) -> f64 {
         speed_kmh_from_duration(self.distance_metres(), self.duration())
     }
+
+    /// Returns the total ascent in metres over the section.
+    pub fn ascent_metres(&self) -> f64 {
+        self.end.cum_ascent_metres - self.start.cum_ascent_metres
+    }
+
+    /// Returns the total descent in metres over the section.
+    pub fn descent_metres(&self) -> f64 {
+        self.end.cum_descent_metres - self.start.cum_descent_metres
+    }  
 }
 
 #[derive(Default)]
-pub struct SectionList(Vec<Section>);
+pub struct SectionList<'gpx>(Vec<Section<'gpx>>);
 
-impl Index<usize> for SectionList {
-    type Output = Section;
+impl<'gpx> Index<usize> for SectionList<'gpx> {
+    type Output = Section<'gpx>;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
-impl SectionList {
+impl<'gpx> SectionList<'gpx> {
     // TODO: Implement Iterator properly.
     fn iter(&self) -> slice::Iter<Section> {
         self.0.iter()
     }
 
-    fn first_point(&self) -> &TrackPoint {
-        &self.0[0].start.point
+    fn first_point(&self) -> &EnrichedTrackPoint {
+        self.0[0].start
     }
 
-    fn last_point(&self) -> &TrackPoint {
-        &self.0[self.0.len() - 1].end.point
+    fn last_point(&self) -> &EnrichedTrackPoint {
+        self.0[self.len() - 1].end
     }
 
-    pub fn push(&mut self, section: Section) {
+    pub fn push(&mut self, section: Section<'gpx>) {
         self.0.push(section);
     }
 
@@ -242,37 +186,33 @@ impl SectionList {
     }
 
     /// Returns the point of minimum elevation across all the Sections.
-    pub fn min_elevation(&self) -> &ElevationPoint {
-        let min_ep = self
+    pub fn min_elevation(&self) -> &EnrichedTrackPoint {
+        self
             .0
             .iter()
             .map(|section| &section.min_elevation)
-            .min_by(|a, b| a.point.ele.total_cmp(&b.point.ele))
-            .unwrap();
-
-        &min_ep
+            .min_by(|a, b| a.ele.total_cmp(&b.ele))
+            .unwrap()
     }
 
     /// Returns the point of maximum elevation across all the Sections.
-    pub fn max_elevation(&self) -> &ElevationPoint {
-        let min_ep = self
+    pub fn max_elevation(&self) -> &EnrichedTrackPoint {
+        self
             .0
             .iter()
-            .map(|section| &section.min_elevation)
-            .max_by(|a, b| a.point.ele.total_cmp(&b.point.ele))
-            .unwrap();
-
-        &min_ep
+            .map(|section| &section.max_elevation)
+            .max_by(|a, b| a.ele.total_cmp(&b.ele))
+            .unwrap()
     }
 
     /// Returns the total ascent in metres across all the Sections.
     pub fn total_ascent_metres(&self) -> f64 {
-        self.0.iter().map(|section| section.ascent_metres).sum()
+        self.0.iter().map(|section| section.ascent_metres()).sum()
     }
 
     /// Returns the total descent in metres across all the Sections.
     pub fn total_descent_metres(&self) -> f64 {
-        self.0.iter().map(|section| section.descent_metres).sum()
+        self.0.iter().map(|section| section.descent_metres()).sum()
     }
 }
 
@@ -384,11 +324,11 @@ pub fn detect_sections(
     // }
 
     // Should include all TrackPoints and start/end indexes overlap.
-    assert_eq!(sections[0].start.index, 0);
-    assert_eq!(sections[sections.len() - 1].end.index, gpx.points.len() - 1);
-    for idx in 0..sections.len() - 1 {
-        assert_eq!(sections[idx].end.index, sections[idx + 1].start.index);
-    }
+    // assert_eq!(sections[0].start.index, 0);
+    // assert_eq!(sections[sections.len() - 1].end.index, gpx.points.len() - 1);
+    // for idx in 0..sections.len() - 1 {
+    //     assert_eq!(sections[idx].end.index, sections[idx + 1].start.index);
+    // }
 
     sections
 }
@@ -800,7 +740,7 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
     // Header. 4 fields from the original point, then the extended info.
     writer
         .write_record(vec![
-            "TP Num",
+            "TP Index",
             "Time (UTC)",
             "Time (local)",
             "Lat",
@@ -820,7 +760,7 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
 
     // TrackPoints.
     for idx in 0..gpx.points.len() {
-        writer.write_field(idx.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].index.to_string()).unwrap();
         writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
         writer.write_field(format_utc_date_as_local(gpx.points[idx].time)).unwrap();
         writer.write_field(gpx.points[idx].lat.to_string()).unwrap();

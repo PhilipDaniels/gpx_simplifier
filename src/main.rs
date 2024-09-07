@@ -1,14 +1,11 @@
 use args::parse_args;
-use formatting::format_utc_date;
-use geo::{coord, LineString, SimplifyIdx};
-use model::{EnrichedGpx, EnrichedTrackPoint, Gpx, MergedGpx};
+use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
-use section::{detect_sections, enrich_trackpoints, write_enriched_trackpoints_to_csv, write_section_report};
-use std::collections::HashSet;
-use std::io::Write;
+use section::{
+    enrich_trackpoints, write_enriched_trackpoints_to_csv,
+};
 use std::{
-    fs::{read_dir, File},
-    io::BufWriter,
+    fs::read_dir,
     path::{Path, PathBuf},
 };
 
@@ -16,6 +13,7 @@ mod args;
 mod formatting;
 mod model;
 mod section;
+mod simplification;
 
 fn main() {
     let args = parse_args();
@@ -46,38 +44,36 @@ fn main() {
         gpxs = vec![join_input_files(gpxs)];
     }
 
-    // Always enrich the TrackPoints. Keeps the flow simple and though
-    // it is one of the most expensive operations, it's still quick enough -
-    // yay Rust!
-    let mut gpxs: Vec<_> = gpxs.into_iter().map(|gpx| EnrichedGpx::from(gpx)).collect();
-    for gpx in &mut gpxs {
-        enrich_trackpoints(gpx);
-        write_enriched_trackpoints_to_csv(gpx);
-    }
+    for gpx in gpxs.into_iter() {
+        let trackpoints_filename = make_trackpoints_filename(&gpx.filename);
+        let sections_filename = make_sections_filename(&gpx.filename);
+        let simplified_filename = make_sections_filename(&gpx.filename);
 
-    // Skip any files if the output already exists. It's wasteful to do this
-    // after the load and parse and join, but it keeps the logic simpler.
-    gpxs.retain(|gpx| {
-        let output_filename = make_simplified_filename(&gpx.filename);
-        if output_filename.exists() {
-            println!(
-                "Skipping {:?} because the output file already exists",
-                &gpx.filename
-            );
-            false
-        } else {
-            true
+        if trackpoints_filename.exists()
+            && sections_filename.exists()
+            && simplified_filename.exists()
+        {
+            continue;
         }
-    });
 
-    // If we are detecting stops (really Sections now), then do that on
-    // the original file, for more precision. Though whether it matters
-    // much in practice is debatable - it only really makes a difference
-    // if your 'metres' input to RDP is largish.
-    if args.detect_stops {
-        for gpx in &mut gpxs {
+        // Always enrich the TrackPoints. Keeps the flow simple and though
+        // it is one of the most expensive operations, it's still quick enough -
+        // yay Rust!
+        let mut gpx = EnrichedGpx::from(gpx);
+        enrich_trackpoints(&mut gpx);
+
+        if !trackpoints_filename.exists() {
+            write_enriched_trackpoints_to_csv(&trackpoints_filename, &gpx);
+        }
+
+        /*
+        // // If we are detecting stops (really Sections now), then do that on
+        // the original file, for more precision. Though whether it matters
+        // much in practice is debatable - it only really makes a difference
+        // if your 'metres' input to RDP is largish.
+        if args.detect_stops {
             let sections = detect_sections(
-                gpx,
+                &gpx,
                 args.resume_speed as f64,
                 args.min_stop_time as f64 * 60.0,
             );
@@ -89,26 +85,27 @@ fn main() {
             let mut writer = BufWriter::new(File::create(&p).unwrap());
             write_section_report(&mut writer, &sections);
         }
-    }
+        */
 
-    // Simplify if necessary.
-    if let Some(metres) = args.metres {
-        let epsilon = metres_to_epsilon(metres);
+        /*
+        // Always do simplification last because it mutates the track,
+        // reducing its accuracy.
+        if !simplified_filename.exists() {
+            if let Some(metres) = args.metres {
+                let epsilon = metres_to_epsilon(metres);
 
-        for gpx in &mut gpxs {
-            let start_count = gpx.points.len();
-            reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
-            println!(
-                "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
-                gpx.points.len(),
-                gpx.filename
-            );
+                let start_count = gpx.points.len();
+                reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
+                println!(
+                    "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
+                    gpx.points.len(),
+                    gpx.filename
+                );
+            }
+
+            write_simplified_gpx_file(&simplified_filename, &gpx);
         }
-    }
-
-    for gpx in gpxs {
-        let output_filename = make_simplified_filename(&gpx.filename);
-        write_simplified_gpx_file(&output_filename, &gpx);
+        */
     }
 }
 
@@ -124,7 +121,12 @@ fn make_sections_filename(p: &Path) -> PathBuf {
     p
 }
 
-/// TODO: This is awful, does a clone of the first element.
+fn make_trackpoints_filename(p: &Path) -> PathBuf {
+    let mut p = p.to_owned();
+    p.set_extension("trackpoints.csv");
+    p
+}
+
 fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
     let required_capacity: usize = input_files.iter().map(|f| f.points.len()).sum();
     let mut m = input_files[0].clone();
@@ -144,47 +146,6 @@ fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
     m
 }
 
-/// We take input from the user in "metres of accuracy".
-/// The 'geo' implementation of RDP requires an epsilon
-/// which is relative to the coordinate scale in use.
-/// Since we are using lat-lon, we need to convert metres
-/// using the following relation: 1 degree of latitude = 111,111 metres
-fn metres_to_epsilon(metres: u16) -> f64 {
-    metres as f64 / 111111.0
-}
-
-/// Feed the points into the GEO crate so we can use its implementation
-/// of https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
-///
-/// These measurements are based on a 200km track from a Garmin Edge 1040,
-/// which records 1 trackpoint every second. The original file is 11.5Mb, that
-/// includes a lot of extension data such as heartrate which this program also
-/// strips out. The percentages shown below are based solely on point counts.
-///
-/// The Audax UK DIY upload form allows a max file size of 1.25Mb.
-///
-/// Input Points    Metres  Output Points       Quality
-/// 31358           1       4374 (13%, 563Kb)   Near-perfect map to the road
-/// 31358           5       1484 (4.7%, 192Kb)  Very close map to the road, mainly stays within the road lines
-/// 31358           10      978 (3.1%, 127Kb)   OK - good enough for submission
-/// 31358           20      636 (2.0%, 83Kb)    Ok - within a few metres of the road
-/// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
-/// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
-fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: f64) {
-    let line_string: LineString<_> = points
-        .iter()
-        .map(|p| coord! { x: p.lon, y: p.lat })
-        .collect();
-    let indices_to_keep: HashSet<usize> = HashSet::from_iter(line_string.simplify_idx(&epsilon));
-
-    let mut n = 0;
-    points.retain(|_| {
-        let keep = indices_to_keep.contains(&n);
-        n += 1;
-        keep
-    });
-}
-
 /// The serde/quick-xml deserialization integration does a "good enough" job of parsing
 /// the XML file. We also tag on the original filename as it's handy to track this
 /// through the program for when we come to the point of writing output.
@@ -193,34 +154,6 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
     let mut doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
     doc.filename = input_file.to_owned();
     doc
-}
-
-fn write_simplified_gpx_file(output_file: &Path, gpx: &EnrichedGpx) {
-    const HDR: &str = include_str!("header.txt");
-    print!("Writing file {:?}", &output_file);
-
-    let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
-    writeln!(w, "{}", HDR).unwrap();
-    writeln!(w, "  <metadata>").unwrap();
-    writeln!(w, "    <time>{}</time>", format_utc_date(gpx.metadata_time)).unwrap();
-    writeln!(w, "  </metadata>").unwrap();
-    writeln!(w, "  <trk>").unwrap();
-    writeln!(w, "    <name>{}</name>", gpx.track_name).unwrap();
-    writeln!(w, "    <type>{}</type>", gpx.track_type).unwrap();
-    writeln!(w, "    <trkseg>").unwrap();
-    for tp in &gpx.points {
-        writeln!(w, "      <trkpt lat=\"{:.6}\" lon=\"{:.6}\">", tp.lat, tp.lon).unwrap();
-        writeln!(w, "        <ele>{:.1}</ele>", tp.ele).unwrap();
-        writeln!(w, "        <time>{}</time>", format_utc_date(tp.time)).unwrap();
-        writeln!(w, "      </trkpt>").unwrap();
-    }
-    writeln!(w, "    </trkseg>").unwrap();
-    writeln!(w, "  </trk>").unwrap();
-    writeln!(w, "</gpx>").unwrap();
-
-    w.flush().unwrap();
-    let metadata = std::fs::metadata(output_file).unwrap();
-    println!(", {}Kb", metadata.len() / 1024);
 }
 
 /// Get a list of all files in the exe_dir that have the ".gpx" extension.

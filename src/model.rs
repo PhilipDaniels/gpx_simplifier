@@ -113,6 +113,8 @@ pub struct EnrichedTrackPoint {
     pub ele: f64,
     /// The time as read from the <time> tag.
     pub time: OffsetDateTime,
+    /// The amount of time between this trackpoint and the previous one.
+    pub delta_time: Duration,
     /// The distance between this trackpoint and the previous one.
     pub delta_metres: f64,
     /// The distance to this trackpoint from the beginning of the track.
@@ -139,6 +141,7 @@ impl From<TrackPoint> for EnrichedTrackPoint {
             lon: value.lon,
             ele: value.ele,
             time: value.time,
+            delta_time: Duration::ZERO,
             delta_metres: 0.0,
             cum_metres: 0.0,
             speed_kmh: 0.0,

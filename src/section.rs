@@ -6,7 +6,7 @@
 use core::{fmt, slice};
 use std::{
     io::Write,
-    ops::Index,
+    ops::Index, path::Path,
 };
 
 use comfy_table::{
@@ -467,6 +467,8 @@ struct ExtendedTrackPointInfo {
 /// Calculate a set of enriched TrackPoint information (distances, speed, climb).
 pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let start_time = gpx.points[0].time;
+    let mut cum_ascent_metres = 0.0;
+    let mut cum_descent_metres = 0.0;
 
     let mut p1 = point!(x: gpx.points[0].lon, y: gpx.points[0].lat);
 
@@ -482,10 +484,13 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
         gpx.points[idx].cum_metres = gpx.points[idx-1].cum_metres + gpx.points[idx].delta_metres;
         assert!(gpx.points[idx].cum_metres >= 0.0);
 
+        // Time delta. Don't really need this stored, but is handy to spot
+        // points that took more than usual when scanning the CSV.
+        gpx.points[idx].delta_time = gpx.points[idx].time - gpx.points[idx - 1].time;
+        assert!(gpx.points[idx].delta_time.is_positive());
+
         // Speed. Based on the distance we just calculated.
-        let time_delta = gpx.points[idx].time - gpx.points[idx - 1].time;
-        assert!(time_delta.is_positive());
-        gpx.points[idx].speed_kmh = speed_kmh_from_duration(gpx.points[idx].delta_metres, time_delta);
+        gpx.points[idx].speed_kmh = speed_kmh_from_duration(gpx.points[idx].delta_metres, gpx.points[idx].delta_time);
         assert!(gpx.points[idx].speed_kmh >= 0.0);
 
         // How long it took to get here.
@@ -495,12 +500,14 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
         // Ascent and descent.
         let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
         gpx.points[idx].ele_delta_metres = ele_delta_metres;
-
+        
         if ele_delta_metres > 0.0 {
-            gpx.points[idx].cum_ascent_metres = gpx.points[idx - 1].cum_ascent_metres + ele_delta_metres;
+            cum_ascent_metres += ele_delta_metres;
+            gpx.points[idx].cum_ascent_metres = cum_ascent_metres;
             assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
         } else {
-            gpx.points[idx].cum_descent_metres = gpx.points[idx - 1].cum_descent_metres + ele_delta_metres.abs();
+            cum_descent_metres += ele_delta_metres.abs();
+            gpx.points[idx].cum_descent_metres = cum_descent_metres;
             assert!(gpx.points[idx].cum_descent_metres >= 0.0);    
         }
 
@@ -511,9 +518,7 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 /// Writes the trackpoints and the extended information to a CSV file,
 /// very handy for debugging.
 #[rustfmt::skip]
-pub fn write_enriched_trackpoints_to_csv(gpx: &EnrichedGpx) {
-    let mut p = gpx.filename.clone();
-    p.set_extension("trackpoints.csv");
+pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
     let mut writer = csv::Writer::from_path(p).unwrap();
 
     // Header. 4 fields from the original point, then the extended info.
@@ -526,6 +531,7 @@ pub fn write_enriched_trackpoints_to_csv(gpx: &EnrichedGpx) {
             "Elevation (m)",
             "Delta (m)",
             "Cum Distance (m)",
+            "Time Delta",
             "Speed (kmh)",
             "Cum Duration",
             "Elevation Delta (m)",
@@ -544,6 +550,7 @@ pub fn write_enriched_trackpoints_to_csv(gpx: &EnrichedGpx) {
         writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
         writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
         writer.write_field(gpx.points[idx].cum_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].delta_time.to_string()).unwrap();
         writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
         writer.write_field(gpx.points[idx].duration.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();

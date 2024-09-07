@@ -1,40 +1,45 @@
-use std::io::Write;
+use std::{io::Write, sync::LazyLock};
 
-use time::{format_description::{self, well_known}, OffsetDateTime, UtcOffset};
+use time::{format_description::{self, well_known, BorrowedFormatItem}, OffsetDateTime, UtcOffset};
 
-pub fn format_utc_date(date: OffsetDateTime) -> String {
-    let mut buf = Vec::with_capacity(32);
-    write_utc_date(&mut buf, date);
+static LOCAL_TIME_FORMAT: LazyLock<Vec<BorrowedFormatItem>> = LazyLock::new(|| {
+    format_description::parse("[year]-[month]-[day] [hour repr:24]:[minute]:[second]").unwrap()
+});
+
+/// Convert 'utc_date' to a local date by applying the current local offset of the
+/// user at the specified time.
+/// TODO: It would be better to determine the offset to apply based on the
+/// lat-lon of the trackpoint. We need a time-zone database to do that.
+pub fn to_local_date(utc_date: OffsetDateTime) -> OffsetDateTime {
+    assert!(utc_date.offset().is_utc());
+
+    let local_offset = UtcOffset::local_offset_at(utc_date).unwrap();
+    utc_date.to_offset(local_offset)
+}
+
+/// Formats 'utc_date' into a string like "2024-09-01T05:10:44Z".
+/// This is the format that GPX files contain.
+pub fn format_utc_date(utc_date: OffsetDateTime) -> String {
+    assert!(utc_date.offset().is_utc());
+
+    let mut buf = Vec::with_capacity(20);
+    utc_date.format_into(& mut buf, &well_known::Rfc3339).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
-pub fn format_local_date(date: OffsetDateTime) -> String {
-    // TODO: Remove duplication in these methods.
-    let local_fmt = format_description::parse("[year]-[month]-[day] [hour repr:24]:[minute]:[second]").unwrap();
-    let mut buf = Vec::with_capacity(32);
-    let date = to_local_date(date);
-    date.format_into(&mut buf, &local_fmt).unwrap();
+/// Converts 'utc_date' to a local date and then formats it into
+/// a string like "2024-09-01 05:10:44Z".
+pub fn format_utc_date_as_local(utc_date: OffsetDateTime) -> String {
+    assert!(utc_date.offset().is_utc());
+
+    let mut buf = Vec::with_capacity(20);
+    let date = to_local_date(utc_date);
+    date.format_into(&mut buf, &LOCAL_TIME_FORMAT).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
-pub fn to_local_date(date: OffsetDateTime) -> OffsetDateTime {
-    let local_offset = UtcOffset::local_offset_at(date).unwrap();
-    date.to_offset(local_offset)
-}
+pub fn write_utc_date<W: Write>(w: &mut W, utc_date: OffsetDateTime) {
+    assert!(utc_date.offset().is_utc());
 
-pub fn format_utc_and_local_date(date: OffsetDateTime, sep: &str) -> String {
-    let local_fmt = format_description::parse("[year]-[month]-[day] [hour repr:24]:[minute]:[second]").unwrap();
-    let mut buf = Vec::with_capacity(64);
-    write_utc_date(&mut buf, date);
-    write!(buf, "{}", sep).unwrap();
-    let d = to_local_date(date);
-    d.format_into(&mut buf, &local_fmt).unwrap();
-    String::from_utf8(buf).unwrap()
+    utc_date.format_into(w, &well_known::Rfc3339).unwrap();
 }
-
-pub fn write_utc_date<W: Write>(w: &mut W, date: OffsetDateTime) {
-    date.format_into(w, &well_known::Rfc3339).unwrap();
-}
-
-// TODO: Local timezone conversions could be done by looking at
-// lat-lon to determine the appropriate timezone.

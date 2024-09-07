@@ -17,7 +17,7 @@ use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    formatting::{format_local_date, format_utc_and_local_date, format_utc_date},
+    formatting::{format_utc_date_as_local, format_utc_date},
     model::{EnrichedGpx, MergedGpx, TrackPoint},
 };
 
@@ -367,8 +367,10 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
                 section.start.index,
                 section.end.index,
                 )).set_alignment(CellAlignment::Right),
-            Cell::new(format_utc_and_local_date(section.start.point.time, "\n")),
-            Cell::new(format_utc_and_local_date(section.end.point.time, "\n")),
+            // Cell::new(format_utc_and_local_date(section.start.point.time, "\n")),
+            // Cell::new(format_utc_and_local_date(section.end.point.time, "\n")),
+            Cell::new(""), // temp
+            Cell::new(""), // temp
             Cell::new(section.duration()),
             match section.section_type {
                 SectionType::Moving => Cell::new(format!("{:.2}", section.average_speed_kmh())),
@@ -405,7 +407,7 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
                 SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
                     section.min_elevation.point.ele,
                     section.min_elevation.cum_distance_km(),
-                    format_local_date(section.min_elevation.point.time)
+                    format_utc_date_as_local(section.min_elevation.point.time)
                     )),
                 SectionType::Stopped => Cell::new(""),
             },
@@ -413,7 +415,7 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
                 SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
                     section.max_elevation.point.ele,
                     section.max_elevation.cum_distance_km(),
-                    format_local_date(section.max_elevation.point.time)
+                    format_utc_date_as_local(section.max_elevation.point.time)
                     )),
                 SectionType::Stopped => Cell::new(""),
             },
@@ -503,13 +505,14 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
         
         if ele_delta_metres > 0.0 {
             cum_ascent_metres += ele_delta_metres;
-            gpx.points[idx].cum_ascent_metres = cum_ascent_metres;
-            assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
         } else {
             cum_descent_metres += ele_delta_metres.abs();
-            gpx.points[idx].cum_descent_metres = cum_descent_metres;
-            assert!(gpx.points[idx].cum_descent_metres >= 0.0);    
         }
+
+        gpx.points[idx].cum_ascent_metres = cum_ascent_metres;
+        assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
+        gpx.points[idx].cum_descent_metres = cum_descent_metres;
+        assert!(gpx.points[idx].cum_descent_metres >= 0.0);    
 
         p1 = p2;
     }
@@ -525,15 +528,16 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
     writer
         .write_record(vec![
             "TP Num",
-            "Time",
+            "Time (UTC)",
+            "Time (local)",
             "Lat",
             "Lon",
             "Elevation (m)",
-            "Delta (m)",
-            "Cum Distance (m)",
+            "Distance Delta (m)",
+            "Cum. Distance (m)",
             "Time Delta",
+            "Cum. Duration",
             "Speed (kmh)",
-            "Cum Duration",
             "Elevation Delta (m)",
             "Cum Ascent (m)",
             "Cum Descent (m)",
@@ -545,14 +549,15 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
     for idx in 0..gpx.points.len() {
         writer.write_field(idx.to_string()).unwrap();
         writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
+        writer.write_field(format_utc_date_as_local(gpx.points[idx].time)).unwrap();
         writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
         writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
         writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
         writer.write_field(gpx.points[idx].cum_metres.to_string()).unwrap();
         writer.write_field(gpx.points[idx].delta_time.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
         writer.write_field(gpx.points[idx].duration.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();
         writer.write_field(gpx.points[idx].cum_ascent_metres.to_string()).unwrap();
         writer.write_field(gpx.points[idx].cum_descent_metres.to_string()).unwrap();

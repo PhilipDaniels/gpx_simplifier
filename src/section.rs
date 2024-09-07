@@ -54,7 +54,7 @@ pub struct Section<'gpx> {
 }
 
 /// The type of a Section.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SectionType {
     Moving,
     Stopped,
@@ -596,106 +596,117 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
     writer.flush().unwrap();
 }
 
-/*
-/// Writes a tabular text report to the writer 'w', which can be stdout
-/// and/or a file writer.
 #[rustfmt::skip]
-pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
-    let mut table = Table::new();
+pub fn write_sections_csv(p: &Path, sections: &SectionList) {
+    let mut writer = csv::Writer::from_path(p).unwrap();
 
-    // Location needs to be the start location for everything but
-    // the last section, in which case it is is the end location.
-
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec![
-            "Section",
-            "Start Time",
-            "End Time",
+    // Header. 4 fields from the original point, then the extended info.
+    writer
+        .write_record(vec![
+            "Num",
+            "Type",
+            "TP Start",
+            "TP End",
+            "Start Time (UTC)",
+            "Start Time (local)",
+            "End Time (UTC)",
+            "End Time (local)",
             "Duration",
-            "Avg Speed\n(km/h)",
-            "Distance (km)\nCum. Distance",
-            "Ascent (m)\nCum. Ascent",
-            "Descent (m)\nCum. Descent",
-            "Location",
-            "Min Elevation",
-            "Max Elevation",
+            "Running Duration",
+            "Distance (km)",
+            "Running Distance (km)",
+            "Avg Speed (kmh)",
+            "Running Avg Speed (kmh)",
+            "Ascent (m)",
+            "Running Ascent (m)",
+            "Descent (m)",
+            "Running Descent (m)",
+            "Min Ele (m)",
+            "Min Ele Distance (m)",
+            "Min Ele Time (local)",
+            "Max Ele (m)",
+            "Max Ele Distance (m)",
+            "Max Ele Time (local)",
+            "Lat",
+            "Lon",
+            "Location"
         ])
-        .set_content_arrangement(ContentArrangement::Dynamic);
+        .unwrap();
 
-    let mut section_number = 1;
-    for section in sections.iter() {
-        table.add_row(vec![
-            Cell::new(format!("{} - {}\nTP {}-{}",
-                section_number,
-                section.section_type,
-                section.start.index,
-                section.end.index,
-                )).set_alignment(CellAlignment::Right),
-            // Cell::new(format_utc_and_local_date(section.start.point.time, "\n")),
-            // Cell::new(format_utc_and_local_date(section.end.point.time, "\n")),
-            Cell::new(""), // temp
-            Cell::new(""), // temp
-            Cell::new(section.duration()),
-            match section.section_type {
-                SectionType::Moving => Cell::new(format!("{:.2}", section.average_speed_kmh())),
-                SectionType::Stopped => Cell::new(""),
-            },
-            match section.section_type {
-                SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.distance_km(), section.cum_distance_km())),
-                SectionType::Stopped => Cell::new(""),
-            },
-            match section.section_type {
-                SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.ascent_metres, section.cum_ascent_metres)),
-                SectionType::Stopped => Cell::new(""),
-            },
-            match section.section_type {
-                SectionType::Moving => Cell::new(format!("{:.2}\n{:.2}", section.descent_metres, section.cum_descent_metres)),
-                SectionType::Stopped => Cell::new(""),
-            },
-            match section.section_type {
-                SectionType::Moving => {
-                    if section_number == 1 {
-                        // The start control.
-                        Cell::new(&section.start.location)
-                    } else if section_number == sections.len() {
-                        // The finish control.
-                        Cell::new(&section.end.location)
-                    } else {
-                        // Irrelevant, see the Stopped location instead.
-                        Cell::new("")
-                    }
-                },
-                SectionType::Stopped => Cell::new(&section.start.location),
-            },
-            match section.section_type {
-                SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
-                    section.min_elevation.point.ele,
-                    section.min_elevation.cum_distance_km(),
-                    format_utc_date_as_local(section.min_elevation.point.time)
-                    )),
-                SectionType::Stopped => Cell::new(""),
-            },
-            match section.section_type {
-                SectionType::Moving => Cell::new(format!("{:.2} m at {:.2} km\n{}",
-                    section.max_elevation.point.ele,
-                    section.max_elevation.cum_distance_km(),
-                    format_utc_date_as_local(section.max_elevation.point.time)
-                    )),
-                SectionType::Stopped => Cell::new(""),
-            },
-        ]);
+    for (idx, section) in sections.iter().enumerate() {
+        writer.write_field((idx + 1).to_string()).unwrap();
+        writer.write_field(section.section_type.to_string()).unwrap();
+        writer.write_field(section.start.index.to_string()).unwrap();
+        writer.write_field(section.end.index.to_string()).unwrap();
+        writer.write_field(format_utc_date(section.start.time)).unwrap();
+        writer.write_field(format_utc_date_as_local(section.start.time)).unwrap();
+        writer.write_field(format_utc_date(section.end.time)).unwrap();
+        writer.write_field(format_utc_date_as_local(section.end.time)).unwrap();
+        writer.write_field(section.duration().to_string()).unwrap();
+        writer.write_field("TODO").unwrap();
+        if section.section_type == SectionType::Moving {
+            writer.write_field(format!("{:.2}", section.distance_km())).unwrap();
+            writer.write_field(format!("{:.2}", section.cum_distance_km())).unwrap();
+            writer.write_field(format!("{:.2}", section.average_speed_kmh())).unwrap();
+        } else {
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+        }
+        writer.write_field("TODO").unwrap();
+        if section.section_type == SectionType::Moving {
+            writer.write_field(format!("{:.2}", section.ascent_metres())).unwrap();
+            writer.write_field(format!("{:.2}", section.end.cum_ascent_metres)).unwrap();
+            writer.write_field(format!("{:.2}", section.descent_metres())).unwrap();
+            writer.write_field(format!("{:.2}", section.end.cum_descent_metres)).unwrap();
+        } else {
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+        }
+        // Always write min elevation, so we have an elevation for a Stopped section as well.
+        writer.write_field(format!("{:.2}", section.min_elevation.ele)).unwrap();
+        writer.write_field(format!("{:.2}", section.min_elevation.cum_metres / 1000.0)).unwrap();
+        writer.write_field(format_utc_date_as_local(section.min_elevation.time)).unwrap();
+        if section.section_type == SectionType::Moving {
+            writer.write_field(format!("{:.2}", section.max_elevation.ele)).unwrap();
+            writer.write_field(format!("{:.2}", section.max_elevation.cum_metres / 1000.0)).unwrap();
+            writer.write_field(format_utc_date_as_local(section.max_elevation.time)).unwrap();
+   
+        } else {
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+            writer.write_field("").unwrap();
+        }
+        writer.write_field(format!("{:.6}", section.start.lat)).unwrap();
+        writer.write_field(format!("{:.6}", section.start.lon)).unwrap();
 
-        section_number += 1;
+        if section.section_type == SectionType::Moving {
+            if idx == 0 {
+                // The start control.
+                writer.write_field(&section.start.location).unwrap();
+            } else if idx == sections.len() - 1 {
+                // The finish control.
+                writer.write_field(&section.end.location).unwrap();
+            } else {
+                // Irrelevant, see the Stopped location instead.
+                writer.write_field("").unwrap();
+            }
+        } else {
+            writer.write_field(&section.start.location).unwrap();
+        }
+        // Terminator.
+        writer.write_record(None::<&[u8]>).unwrap();
     }
 
-    table.add_row(vec![""]);
-    table.add_row(vec!["Summary", "aaa", "kkk"]);
+    // Now write a summary.
+    writer.write_record(None::<&[u8]>).unwrap();
+    writer.write_record(None::<&[u8]>).unwrap();
+    writer.write_record(vec!["Summary"]).unwrap();
 
-    writeln!(w, "{}", table).unwrap();
+    writer.flush().unwrap();
 }
- */
 
 /*
 THIS IS THE ORIGINAL FN

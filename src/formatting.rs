@@ -1,4 +1,4 @@
-use std::{io::Write, sync::LazyLock};
+use std::sync::LazyLock;
 
 use time::{format_description::{self, well_known, BorrowedFormatItem}, OffsetDateTime, UtcOffset};
 
@@ -36,10 +36,4 @@ pub fn format_utc_date_as_local(utc_date: OffsetDateTime) -> String {
     let date = to_local_date(utc_date);
     date.format_into(&mut buf, &LOCAL_TIME_FORMAT).unwrap();
     String::from_utf8(buf).unwrap()
-}
-
-pub fn write_utc_date<W: Write>(w: &mut W, utc_date: OffsetDateTime) {
-    assert!(utc_date.offset().is_utc());
-
-    utc_date.format_into(w, &well_known::Rfc3339).unwrap();
 }

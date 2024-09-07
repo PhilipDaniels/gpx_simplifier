@@ -2,7 +2,7 @@ use args::parse_args;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
 use section::{
-    detect_sections, enrich_trackpoints, write_enriched_trackpoints_to_csv, SectionParameters,
+    detect_sections, enrich_trackpoints, write_enriched_trackpoints_to_csv, write_sections_csv, SectionParameters
 };
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use std::{
@@ -79,9 +79,7 @@ fn main() {
             };
 
             let sections = detect_sections(&gpx, params);
-
-            // let mut writer = BufWriter::new(File::create(&p).unwrap());
-            // write_section_report(&mut writer, &sections);
+            write_sections_csv(&sections_filename, &sections);
         }
 
         // Always do simplification last because it mutates the track,

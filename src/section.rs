@@ -9,16 +9,12 @@ use std::{
     ops::Index, path::Path,
 };
 
-use comfy_table::{
-    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, CellAlignment, ContentArrangement,
-    Table,
-};
 use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
 
 use crate::{
     formatting::{format_utc_date_as_local, format_utc_date},
-    model::{EnrichedGpx, MergedGpx, TrackPoint},
+    model::{EnrichedGpx, TrackPoint},
 };
 
 /// Calculates speed in kmh from metres and seconds.
@@ -30,6 +26,25 @@ pub fn speed_kmh(metres: f64, seconds: f64) -> f64 {
 pub fn speed_kmh_from_duration(metres: f64, time: Duration) -> f64 {
     speed_kmh(metres, time.as_seconds_f64())
 }
+
+/// These are the parameters that control the 'Section-finding'
+/// algorithm.
+pub struct SectionParameters {
+    /// You are considered "Stopped" if your speed drops below this.
+    /// So that means a dead-stop.
+    pub stopped_speed_kmh: f64,
+
+    // You are considered to be "Moving Again" the first time your
+    // speed goes above this. This is above a walking speed, so you
+    // are probably riding again.
+    pub resume_speed_kmh: f64,
+
+    /// We want to eliminate tiny Sections caused by noisy data, for
+    /// example these can occur when just starting off again.
+    /// So set the minimum length of a section, in seconds.
+    pub min_section_duration_seconds: f64,
+}
+
 
 /// Represents a section from a GPX track. The section can represent
 /// you moving, or stopped.
@@ -261,6 +276,58 @@ impl SectionList {
     }
 }
 
+/// Calculate a set of enriched TrackPoint information (distances, speed, climb).
+pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
+    let start_time = gpx.points[0].time;
+    let mut cum_ascent_metres = 0.0;
+    let mut cum_descent_metres = 0.0;
+
+    let mut p1 = point!(x: gpx.points[0].lon, y: gpx.points[0].lat);
+
+    for idx in 1..gpx.points.len() {
+        let p2 = point!(x: gpx.points[idx].lon, y: gpx.points[idx].lat);
+
+        // Distance.
+        // n.b. x=lon, y=lat. If you do it the other way round the
+        // distances are wrong - a lot wrong.
+        gpx.points[idx].delta_metres = p1.geodesic_distance(&p2);
+        assert!(gpx.points[idx].delta_metres >= 0.0);
+
+        gpx.points[idx].cum_metres = gpx.points[idx-1].cum_metres + gpx.points[idx].delta_metres;
+        assert!(gpx.points[idx].cum_metres >= 0.0);
+
+        // Time delta. Don't really need this stored, but is handy to spot
+        // points that took more than usual when scanning the CSV.
+        gpx.points[idx].delta_time = gpx.points[idx].time - gpx.points[idx - 1].time;
+        assert!(gpx.points[idx].delta_time.is_positive());
+
+        // Speed. Based on the distance we just calculated.
+        gpx.points[idx].speed_kmh = speed_kmh_from_duration(gpx.points[idx].delta_metres, gpx.points[idx].delta_time);
+        assert!(gpx.points[idx].speed_kmh >= 0.0);
+
+        // How long it took to get here.
+        gpx.points[idx].duration = gpx.points[idx].time - start_time;
+        assert!(gpx.points[idx].duration.is_positive());
+
+        // Ascent and descent.
+        let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
+        gpx.points[idx].ele_delta_metres = ele_delta_metres;
+        
+        if ele_delta_metres > 0.0 {
+            cum_ascent_metres += ele_delta_metres;
+        } else {
+            cum_descent_metres += ele_delta_metres.abs();
+        }
+
+        gpx.points[idx].cum_ascent_metres = cum_ascent_metres;
+        assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
+        gpx.points[idx].cum_descent_metres = cum_descent_metres;
+        assert!(gpx.points[idx].cum_descent_metres >= 0.0);    
+
+        p1 = p2;
+    }
+}
+
 /// Detects the sections in the GPX and returns them as a list.
 ///
 /// Invariants: the first section starts at TrackPoint 0
@@ -279,8 +346,7 @@ impl SectionList {
 /// All non-Stopped sections are considered Moving sections.
 pub fn detect_sections(
     gpx: &EnrichedGpx,
-    resume_speed: f64,
-    min_stop_time_seconds: f64,
+    params: SectionParameters
 ) -> SectionList {
     if gpx.points.len() < 2 {
         eprintln!("Warning: gpx {:?} does not have any points", gpx.filename);
@@ -289,11 +355,7 @@ pub fn detect_sections(
 
     let mut sections = SectionList::default();
 
-    let params = SectionParameters {
-        stopped_speed_kmh: 0.01,
-        resume_speed_kmh: 10.0,
-        min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
-    };
+
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
     // that you are actually in a Stopped section. However, it's not impossible,
@@ -331,6 +393,7 @@ pub fn detect_sections(
     sections
 }
 
+/*
 /// Writes a tabular text report to the writer 'w', which can be stdout
 /// and/or a file writer.
 #[rustfmt::skip]
@@ -429,6 +492,7 @@ pub fn write_section_report<W: Write>(w: &mut W, sections: &SectionList) {
 
     writeln!(w, "{}", table).unwrap();
 }
+ */
 
 /*
 fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
@@ -455,136 +519,12 @@ fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
         ).unwrap();
  */
 
-#[derive(Debug, Default)]
-struct ExtendedTrackPointInfo {
-    distance_delta_metres: f64,
-    cum_distance_metres: f64,
-    speed_kmh: f64,
-    cum_duration: Duration,
-    ele_delta_metres: f64,
-    cum_ascent_metres: f64,
-    cum_descent_metres: f64,
-}
 
-/// Calculate a set of enriched TrackPoint information (distances, speed, climb).
-pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
-    let start_time = gpx.points[0].time;
-    let mut cum_ascent_metres = 0.0;
-    let mut cum_descent_metres = 0.0;
 
-    let mut p1 = point!(x: gpx.points[0].lon, y: gpx.points[0].lat);
 
-    for idx in 1..gpx.points.len() {
-        let p2 = point!(x: gpx.points[idx].lon, y: gpx.points[idx].lat);
 
-        // Distance.
-        // n.b. x=lon, y=lat. If you do it the other way round the
-        // distances are wrong - a lot wrong.
-        gpx.points[idx].delta_metres = p1.geodesic_distance(&p2);
-        assert!(gpx.points[idx].delta_metres >= 0.0);
 
-        gpx.points[idx].cum_metres = gpx.points[idx-1].cum_metres + gpx.points[idx].delta_metres;
-        assert!(gpx.points[idx].cum_metres >= 0.0);
-
-        // Time delta. Don't really need this stored, but is handy to spot
-        // points that took more than usual when scanning the CSV.
-        gpx.points[idx].delta_time = gpx.points[idx].time - gpx.points[idx - 1].time;
-        assert!(gpx.points[idx].delta_time.is_positive());
-
-        // Speed. Based on the distance we just calculated.
-        gpx.points[idx].speed_kmh = speed_kmh_from_duration(gpx.points[idx].delta_metres, gpx.points[idx].delta_time);
-        assert!(gpx.points[idx].speed_kmh >= 0.0);
-
-        // How long it took to get here.
-        gpx.points[idx].duration = gpx.points[idx].time - start_time;
-        assert!(gpx.points[idx].duration.is_positive());
-
-        // Ascent and descent.
-        let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
-        gpx.points[idx].ele_delta_metres = ele_delta_metres;
-        
-        if ele_delta_metres > 0.0 {
-            cum_ascent_metres += ele_delta_metres;
-        } else {
-            cum_descent_metres += ele_delta_metres.abs();
-        }
-
-        gpx.points[idx].cum_ascent_metres = cum_ascent_metres;
-        assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
-        gpx.points[idx].cum_descent_metres = cum_descent_metres;
-        assert!(gpx.points[idx].cum_descent_metres >= 0.0);    
-
-        p1 = p2;
-    }
-}
-
-/// Writes the trackpoints and the extended information to a CSV file,
-/// very handy for debugging.
-#[rustfmt::skip]
-pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
-    let mut writer = csv::Writer::from_path(p).unwrap();
-
-    // Header. 4 fields from the original point, then the extended info.
-    writer
-        .write_record(vec![
-            "TP Num",
-            "Time (UTC)",
-            "Time (local)",
-            "Lat",
-            "Lon",
-            "Elevation (m)",
-            "Distance Delta (m)",
-            "Cum. Distance (m)",
-            "Time Delta",
-            "Cum. Duration",
-            "Speed (kmh)",
-            "Elevation Delta (m)",
-            "Cum Ascent (m)",
-            "Cum Descent (m)",
-            "Location"
-        ])
-        .unwrap();
-
-    // TrackPoints.
-    for idx in 0..gpx.points.len() {
-        writer.write_field(idx.to_string()).unwrap();
-        writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
-        writer.write_field(format_utc_date_as_local(gpx.points[idx].time)).unwrap();
-        writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].cum_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].delta_time.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].duration.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].cum_ascent_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].cum_descent_metres.to_string()).unwrap();
-        writer.write_field(&gpx.points[idx].location).unwrap();
-        // Terminator.
-        writer.write_record(None::<&[u8]>).unwrap();
-    }
-
-    writer.flush().unwrap();
-}
-
-struct SectionParameters {
-    /// You are considered "Stopped" if your speed drops below this.
-    /// So that means a dead-stop.
-    stopped_speed_kmh: f64,
-
-    // You are considered to be "Moving Again" the first time your
-    // speed goes above this. This is above a walking speed, so you
-    // are probably riding again.
-    resume_speed_kmh: f64,
-
-    /// We want to eliminate tiny Sections caused by noisy data, for
-    /// example these can occur when just starting off again.
-    /// So set the minimum length of a section, in seconds.
-    min_section_duration_seconds: f64,
-}
-
+/*
 fn get_section_end(
     gpx: &MergedGpx,
     ext_trackpoints: &[ExtendedTrackPointInfo],
@@ -659,7 +599,9 @@ fn get_section_end(
     assert!(end_idx > start_idx);
     return Some((end_index, section_type));
 }
+*/
 
+/*
 /// Find the next Stopped point.
 /// A Moving section is ended when we stop. This occurs when we drop below the
 /// 'stopped_speed_kmh' and do not attain 'resume_speed_kmh' for at least
@@ -719,7 +661,9 @@ fn find_stop_index(
     // If we get here then we exhausted all the TrackPoints.
     last_valid_idx
 }
+*/
 
+/*
 /// A Stopped section is ended when we find the first TrackPoint
 /// with a speed above the resumption threshold.
 fn find_resume_index(
@@ -740,7 +684,9 @@ fn find_resume_index(
     // If we get here then we exhausted all the TrackPoints.
     last_valid_idx
 }
+*/
 
+/*
 fn advance_for_duration(
     gpx: &MergedGpx,
     start_idx: usize,
@@ -761,7 +707,9 @@ fn advance_for_duration(
     // If we get here then we exhausted all the TrackPoints.
     last_valid_idx
 }
+*/
 
+/*
 fn make_section(
     gpx: &MergedGpx,
     ext_trackpoints: &[ExtendedTrackPointInfo],
@@ -836,4 +784,60 @@ fn make_section(
         cum_ascent_metres: ext_trackpoints[end_idx].cum_ascent_metres,
         cum_descent_metres: ext_trackpoints[end_idx].cum_descent_metres
     }
+}
+*/
+
+
+
+
+
+/// Writes the trackpoints and the extended information to a CSV file,
+/// very handy for debugging.
+#[rustfmt::skip]
+pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
+    let mut writer = csv::Writer::from_path(p).unwrap();
+
+    // Header. 4 fields from the original point, then the extended info.
+    writer
+        .write_record(vec![
+            "TP Num",
+            "Time (UTC)",
+            "Time (local)",
+            "Lat",
+            "Lon",
+            "Elevation (m)",
+            "Distance Delta (m)",
+            "Cum. Distance (m)",
+            "Time Delta",
+            "Cum. Duration",
+            "Speed (kmh)",
+            "Elevation Delta (m)",
+            "Cum Ascent (m)",
+            "Cum Descent (m)",
+            "Location"
+        ])
+        .unwrap();
+
+    // TrackPoints.
+    for idx in 0..gpx.points.len() {
+        writer.write_field(idx.to_string()).unwrap();
+        writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
+        writer.write_field(format_utc_date_as_local(gpx.points[idx].time)).unwrap();
+        writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].cum_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].delta_time.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].duration.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].cum_ascent_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].cum_descent_metres.to_string()).unwrap();
+        writer.write_field(&gpx.points[idx].location).unwrap();
+        // Terminator.
+        writer.write_record(None::<&[u8]>).unwrap();
+    }
+
+    writer.flush().unwrap();
 }

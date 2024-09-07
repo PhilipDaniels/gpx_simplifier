@@ -2,8 +2,9 @@ use args::parse_args;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
 use section::{
-    enrich_trackpoints, write_enriched_trackpoints_to_csv,
+    detect_sections, enrich_trackpoints, write_enriched_trackpoints_to_csv, SectionParameters,
 };
+use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use std::{
     fs::read_dir,
     path::{Path, PathBuf},
@@ -47,7 +48,7 @@ fn main() {
     for gpx in gpxs.into_iter() {
         let trackpoints_filename = make_trackpoints_filename(&gpx.filename);
         let sections_filename = make_sections_filename(&gpx.filename);
-        let simplified_filename = make_sections_filename(&gpx.filename);
+        let simplified_filename = make_simplified_filename(&gpx.filename);
 
         if trackpoints_filename.exists()
             && sections_filename.exists()
@@ -66,28 +67,23 @@ fn main() {
             write_enriched_trackpoints_to_csv(&trackpoints_filename, &gpx);
         }
 
-        /*
         // // If we are detecting stops (really Sections now), then do that on
         // the original file, for more precision. Though whether it matters
         // much in practice is debatable - it only really makes a difference
         // if your 'metres' input to RDP is largish.
         if args.detect_stops {
-            let sections = detect_sections(
-                &gpx,
-                args.resume_speed as f64,
-                args.min_stop_time as f64 * 60.0,
-            );
+            let params = SectionParameters {
+                stopped_speed_kmh: 0.01,
+                resume_speed_kmh: 10.0,
+                min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
+            };
 
-            let mut io = std::io::stdout().lock();
-            write_section_report(&mut io, &sections);
+            //let sections = detect_sections(&gpx, params);
 
-            let p = make_sections_filename(&gpx.filename);
-            let mut writer = BufWriter::new(File::create(&p).unwrap());
-            write_section_report(&mut writer, &sections);
+            // let mut writer = BufWriter::new(File::create(&p).unwrap());
+            // write_section_report(&mut writer, &sections);
         }
-        */
 
-        /*
         // Always do simplification last because it mutates the track,
         // reducing its accuracy.
         if !simplified_filename.exists() {
@@ -101,11 +97,10 @@ fn main() {
                     gpx.points.len(),
                     gpx.filename
                 );
-            }
 
-            write_simplified_gpx_file(&simplified_filename, &gpx);
+                write_simplified_gpx_file(&simplified_filename, &gpx);
+            }
         }
-        */
     }
 }
 
@@ -117,7 +112,7 @@ fn make_simplified_filename(p: &Path) -> PathBuf {
 
 fn make_sections_filename(p: &Path) -> PathBuf {
     let mut p = p.to_owned();
-    p.set_extension("sections.txt");
+    p.set_extension("sections.csv");
     p
 }
 

@@ -28,7 +28,7 @@ pub fn format_utc_date(utc_date: OffsetDateTime) -> String {
 }
 
 /// Converts 'utc_date' to a local date and then formats it into
-/// a string like "2024-09-01 05:10:44Z".
+/// a string like "2024-09-01 05:10:44".
 pub fn format_utc_date_as_local(utc_date: OffsetDateTime) -> String {
     assert!(utc_date.offset().is_utc());
 

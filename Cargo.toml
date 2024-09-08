@@ -8,5 +8,6 @@ clap = { version = "4.5.11", features = ["derive", "cargo"] }
 csv = "1.3.0"
 geo = "0.28.0"
 quick-xml = { version = "0.36.0", features = ["serialize"] }
+rust_xlsxwriter = "0.75.0"
 serde = { version = "1.0.204", features = ["derive"] }
 time = { version = "0.3.36", features = ["serde", "formatting", "parsing", "local-offset"] }

@@ -1,9 +1,8 @@
 use args::parse_args;
+use excel::write_summary_file;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
-use section::{
-    detect_sections, enrich_trackpoints, write_enriched_trackpoints_to_csv, write_sections_csv, SectionParameters
-};
+use section::{detect_sections, enrich_trackpoints, SectionParameters};
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use std::{
     fs::read_dir,
@@ -11,6 +10,7 @@ use std::{
 };
 
 mod args;
+mod excel;
 mod formatting;
 mod model;
 mod section;
@@ -46,14 +46,10 @@ fn main() {
     }
 
     for gpx in gpxs.into_iter() {
-        let trackpoints_filename = make_trackpoints_filename(&gpx.filename);
-        let sections_filename = make_sections_filename(&gpx.filename);
+        let summary_filename = make_summary_filename(&gpx.filename);
         let simplified_filename = make_simplified_filename(&gpx.filename);
 
-        if trackpoints_filename.exists()
-            && sections_filename.exists()
-            && simplified_filename.exists()
-        {
+        if summary_filename.exists() && simplified_filename.exists() {
             continue;
         }
 
@@ -62,10 +58,6 @@ fn main() {
         // yay Rust!
         let mut gpx = EnrichedGpx::from(gpx);
         enrich_trackpoints(&mut gpx);
-
-        if !trackpoints_filename.exists() {
-            write_enriched_trackpoints_to_csv(&trackpoints_filename, &gpx);
-        }
 
         // // If we are detecting stops (really Sections now), then do that on
         // the original file, for more precision. Though whether it matters
@@ -79,7 +71,7 @@ fn main() {
             };
 
             let sections = detect_sections(&gpx, params);
-            write_sections_csv(&sections_filename, &sections);
+            write_summary_file(&summary_filename, &gpx, &sections).unwrap();
         }
 
         // Always do simplification last because it mutates the track,
@@ -108,15 +100,9 @@ fn make_simplified_filename(p: &Path) -> PathBuf {
     p
 }
 
-fn make_sections_filename(p: &Path) -> PathBuf {
+fn make_summary_filename(p: &Path) -> PathBuf {
     let mut p = p.to_owned();
-    p.set_extension("sections.csv");
-    p
-}
-
-fn make_trackpoints_filename(p: &Path) -> PathBuf {
-    let mut p = p.to_owned();
-    p.set_extension("trackpoints.csv");
+    p.set_extension("summary.xlsx");
     p
 }
 

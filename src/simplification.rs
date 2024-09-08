@@ -75,5 +75,5 @@ pub fn write_simplified_gpx_file(output_file: &Path, gpx: &EnrichedGpx) {
 
     w.flush().unwrap();
     let metadata = std::fs::metadata(output_file).unwrap();
-    println!(", {}Kb", metadata.len() / 1024);
+    println!(", {} Kb", metadata.len() / 1024);
 }

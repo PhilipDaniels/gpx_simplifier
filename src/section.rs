@@ -707,29 +707,3 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
 
     writer.flush().unwrap();
 }
-
-/*
-THIS IS THE ORIGINAL FN
-fn write_stop_report<W: Write>(w: &mut W, gpx: &MergedGpx, stops: &[Stop]) {
-    let stopped_time: Duration = stops.iter().map(|s| s.duration()).sum();
-    let moving_time = gpx.total_time() - stopped_time;
-    let min_ele = gpx.min_elevation();
-    let max_ele = gpx.max_elevation();
-
-    writeln!(w, "Distance     : {:.2} km", gpx.distance_km()).unwrap();
-    writeln!(w, "Start time   : {}", format_utc_date(gpx.start_time())).unwrap();
-    writeln!(w, "End time     : {}", format_utc_date(gpx.end_time())).unwrap();
-    writeln!(w, "Total time   : {}", gpx.total_time()).unwrap();
-    writeln!(w, "Moving time  : {}", moving_time).unwrap();
-    writeln!(w, "Stopped time : {}", stopped_time).unwrap();
-    writeln!(w, "Moving speed : {:.2} km/h", calc_speed_kmh(gpx.distance_metres(), moving_time.as_seconds_f32())).unwrap();
-    writeln!(w, "Overall speed: {:.2} km/h", calc_speed_kmh(gpx.distance_metres(), gpx.total_time().as_seconds_f32())).unwrap();
-    writeln!(w, "Total ascent : {:.2} m", gpx.total_ascent_metres()).unwrap();
-    writeln!(w, "Total descent: {:.2} m", gpx.total_descent_metres()).unwrap();
-    writeln!(w, "Min elevation: {} m, at {:.2} km, {}",
-        min_ele.ele, min_ele.cumulative_distance_metres / 1000.0, format_utc_date(min_ele.time)
-        ).unwrap();
-    writeln!(w, "Max elevation: {} m, at {:.2} km, {}",
-        max_ele.ele, max_ele.cumulative_distance_metres / 1000.0, format_utc_date(max_ele.time)
-        ).unwrap();
- */

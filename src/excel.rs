@@ -50,23 +50,24 @@ fn write_trackpoints(
     write_minor_header(ws, (1, 3), "Delta")?;
     write_minor_header(ws, (1, 4), "Running")?;
 
-    write_minor_header_merged(ws, (0, 5), (0, 7), "Location")?;
+    write_minor_header_merged(ws, (0, 5), (0, 8), "Location")?;
     write_minor_header(ws, (1, 5), "Lat")?;
     write_minor_header(ws, (1, 6), "Lon")?;
-    write_minor_header(ws, (1, 7), "Description")?;
+    write_minor_header(ws, (1, 7), "Map")?;
+    write_minor_header(ws, (1, 8), "Description")?;
 
-    write_minor_header_merged(ws, (0, 8), (0, 11), "Elevation (m)")?;
-    write_minor_header(ws, (1, 8), "Height")?;
-    write_minor_header(ws, (1, 9), "Delta")?;
-    write_minor_header(ws, (1, 10), "Running Ascent")?;
-    write_minor_header(ws, (1, 11), "Running Descent")?;
+    write_minor_header_merged(ws, (0, 9), (0, 12), "Elevation (m)")?;
+    write_minor_header(ws, (1, 9), "Height")?;
+    write_minor_header(ws, (1, 10), "Delta")?;
+    write_minor_header(ws, (1, 11), "Running Ascent")?;
+    write_minor_header(ws, (1, 12), "Running Descent")?;
 
-    write_minor_header_merged(ws, (0, 12), (0, 13), "Distance")?;
-    write_minor_header(ws, (1, 12), "Delta (m)")?;
-    write_minor_header(ws, (1, 13), "Running (km)")?;
+    write_minor_header_merged(ws, (0, 13), (0, 14), "Distance")?;
+    write_minor_header(ws, (1, 13), "Delta (m)")?;
+    write_minor_header(ws, (1, 14), "Running (km)")?;
 
-    write_minor_header_blank(ws, (0, 14))?;
-    write_minor_header(ws, (1, 14), "Speed (kmh)")?;
+    write_minor_header_blank(ws, (0, 15))?;
+    write_minor_header(ws, (1, 15), "Speed (kmh)")?;
 
     // TODO: Use row banding?
     let mut row = 2;
@@ -76,15 +77,15 @@ fn write_trackpoints(
         write_utc_date_as_local(ws, (row, 2), p.time)?;
         write_duration(ws, (row, 3), p.delta_time)?;
         write_duration(ws, (row, 4), p.running_delta_time)?;
-        write_lat_lon(ws, (row, 5), (p.lat, p.lon), Hyperlink::No)?;
-        write_location(ws, (row, 7), &p.location)?;
-        write_metres(ws, (row, 8), p.ele)?;
-        write_metres(ws, (row, 9), p.ele_delta_metres)?;
-        write_metres(ws, (row, 10), p.running_ascent_metres)?;
-        write_metres(ws, (row, 11), p.running_descent_metres)?;
-        write_metres(ws, (row, 12), p.delta_metres)?;
-        write_kilometres(ws, (row, 13), p.running_metres / 1000.0)?;
-        write_speed(ws, (row, 14), p.speed_kmh)?;
+        write_lat_lon(ws, (row, 5), (p.lat, p.lon), Hyperlink::Yes)?;
+        write_location(ws, (row, 8), &p.location)?;
+        write_metres(ws, (row, 9), p.ele)?;
+        write_metres(ws, (row, 10), p.ele_delta_metres)?;
+        write_metres(ws, (row, 11), p.running_ascent_metres)?;
+        write_metres(ws, (row, 12), p.running_descent_metres)?;
+        write_metres(ws, (row, 13), p.delta_metres)?;
+        write_kilometres(ws, (row, 14), p.running_metres / 1000.0)?;
+        write_speed(ws, (row, 15), p.speed_kmh)?;
         row += 1;
     }
 
@@ -101,16 +102,16 @@ fn write_trackpoints(
     ws.set_column_width(4, DURATION_COLUMN_WIDTH)?;
     ws.set_column_width(5, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(6, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(7, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
-    ws.set_column_width(8, STANDARD_METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(8, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
     ws.set_column_width(9, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(10, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(10, STANDARD_METRES_COLUMN_WIDTH)?;
     ws.set_column_width(11, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
-    ws.set_column_width(12, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(13, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
-    ws.set_column_width(14, SPEED_COLUMN_WIDTH)?;
+    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(14, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(15, SPEED_COLUMN_WIDTH)?;
 
-    ws.autofilter(1, 0, row - 1, 14)?;
+    ws.autofilter(1, 0, row - 1, 15)?;
     ws.set_freeze_panes(2, 0)?;
 
     Ok(())
@@ -278,7 +279,7 @@ fn duration_to_excel_date(duration: Duration) -> Result<ExcelDateTime, Box<dyn E
 
 enum Hyperlink {
     Yes,
-    No
+    No,
 }
 
 /// Writes a lat-lon pair with the lat in the first cell as specified
@@ -288,26 +289,30 @@ fn write_lat_lon(
     ws: &mut Worksheet,
     rc: (u32, u16),
     lat_lon: (f64, f64),
-    hyperlink: Hyperlink
+    hyperlink: Hyperlink,
 ) -> Result<(), Box<dyn Error>> {
     static LAT_LON_FORMAT: LazyLock<Format> =
         LazyLock::new(|| Format::new().set_num_format("#.000000"));
 
-    //let link = format!("{}{}", lat_lon.0, lat_lon.1);
+    let link = format!("https://www.google.com/maps/search/?api=1&query={},{}", lat_lon.0, lat_lon.1);
+
+    ws.write_number_with_format(rc.0, rc.1, lat_lon.0, &LAT_LON_FORMAT)?;
+    ws.write_number_with_format(rc.0, rc.1 + 1, lat_lon.1, &LAT_LON_FORMAT)?;
 
     match hyperlink {
-        Hyperlink::Yes => todo!(),
-        Hyperlink::No => ws.write_number_with_format(rc.0, rc.1, lat_lon.0, &LAT_LON_FORMAT)?
+        Hyperlink::Yes => {
+            ws.write_url_with_text(rc.0, rc.1 + 2, &*link, "Map")?;
+        }
+        Hyperlink::No => {}
     };
 
-    ws.write_number_with_format(rc.0, rc.1 + 1, lat_lon.1, &LAT_LON_FORMAT)?;
     Ok(())
 }
 
 fn write_location(
     ws: &mut Worksheet,
     rc: (u32, u16),
-    location: &str
+    location: &str,
 ) -> Result<(), Box<dyn Error>> {
     if !location.is_empty() {
         ws.write_string(rc.0, rc.1, location)?;
@@ -315,13 +320,8 @@ fn write_location(
     Ok(())
 }
 
-fn write_metres(
-    ws: &mut Worksheet,
-    rc: (u32, u16),
-    metres: f64,
-) -> Result<(), Box<dyn Error>> {
-    static METRES_FORMAT: LazyLock<Format> =
-        LazyLock::new(|| Format::new().set_num_format("0.##"));
+fn write_metres(ws: &mut Worksheet, rc: (u32, u16), metres: f64) -> Result<(), Box<dyn Error>> {
+    static METRES_FORMAT: LazyLock<Format> = LazyLock::new(|| Format::new().set_num_format("0.##"));
 
     ws.write_number_with_format(rc.0, rc.1, metres, &METRES_FORMAT)?;
     // TODO: Use conditional formatting to indicate negatives?
@@ -340,13 +340,8 @@ fn write_kilometres(
     Ok(())
 }
 
-fn write_speed(
-    ws: &mut Worksheet,
-    rc: (u32, u16),
-    speed: f64,
-) -> Result<(), Box<dyn Error>> {
-    static SPEED_FORMAT: LazyLock<Format> =
-        LazyLock::new(|| Format::new().set_num_format("0.##"));
+fn write_speed(ws: &mut Worksheet, rc: (u32, u16), speed: f64) -> Result<(), Box<dyn Error>> {
+    static SPEED_FORMAT: LazyLock<Format> = LazyLock::new(|| Format::new().set_num_format("0.##"));
 
     ws.write_number_with_format(rc.0, rc.1, speed, &SPEED_FORMAT)?;
     Ok(())

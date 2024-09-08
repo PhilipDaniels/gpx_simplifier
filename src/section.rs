@@ -77,7 +77,7 @@ impl<'gpx> Section<'gpx> {
 
     /// Returns the distance (length) of the section, in metres.
     pub fn distance_metres(&self) -> f64 {
-        self.end.cum_metres - self.start.cum_metres
+        self.end.running_metres - self.start.running_metres
     }
 
     /// Returns the distance of the section, in km.
@@ -87,7 +87,7 @@ impl<'gpx> Section<'gpx> {
 
     /// Returns the cumulative distance to the end of the section.
     pub fn cum_distance_km(&self) -> f64 {
-        self.end.cum_metres / 1000.0
+        self.end.running_metres / 1000.0
     }
 
     /// Returns the average speed of the section, in kmh.
@@ -97,12 +97,12 @@ impl<'gpx> Section<'gpx> {
 
     /// Returns the total ascent in metres over the section.
     pub fn ascent_metres(&self) -> f64 {
-        self.end.cum_ascent_metres - self.start.cum_ascent_metres
+        self.end.running_ascent_metres - self.start.running_ascent_metres
     }
 
     /// Returns the total descent in metres over the section.
     pub fn descent_metres(&self) -> f64 {
-        self.end.cum_descent_metres - self.start.cum_descent_metres
+        self.end.running_descent_metres - self.start.running_descent_metres
     }
 }
 
@@ -227,8 +227,8 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
         gpx.points[idx].delta_metres = p1.geodesic_distance(&p2);
         assert!(gpx.points[idx].delta_metres >= 0.0);
 
-        gpx.points[idx].cum_metres = gpx.points[idx - 1].cum_metres + gpx.points[idx].delta_metres;
-        assert!(gpx.points[idx].cum_metres >= 0.0);
+        gpx.points[idx].running_metres = gpx.points[idx - 1].running_metres + gpx.points[idx].delta_metres;
+        assert!(gpx.points[idx].running_metres >= 0.0);
 
         // Time delta. Don't really need this stored, but is handy to spot
         // points that took more than usual when scanning the CSV.
@@ -241,8 +241,8 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
         assert!(gpx.points[idx].speed_kmh >= 0.0);
 
         // How long it took to get here.
-        gpx.points[idx].duration = gpx.points[idx].time - start_time;
-        assert!(gpx.points[idx].duration.is_positive());
+        gpx.points[idx].running_delta_time = gpx.points[idx].time - start_time;
+        assert!(gpx.points[idx].running_delta_time.is_positive());
 
         // Ascent and descent.
         let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
@@ -254,10 +254,10 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
             cum_descent_metres += ele_delta_metres.abs();
         }
 
-        gpx.points[idx].cum_ascent_metres = cum_ascent_metres;
-        assert!(gpx.points[idx].cum_ascent_metres >= 0.0);
-        gpx.points[idx].cum_descent_metres = cum_descent_metres;
-        assert!(gpx.points[idx].cum_descent_metres >= 0.0);
+        gpx.points[idx].running_ascent_metres = cum_ascent_metres;
+        assert!(gpx.points[idx].running_ascent_metres >= 0.0);
+        gpx.points[idx].running_descent_metres = cum_descent_metres;
+        assert!(gpx.points[idx].running_descent_metres >= 0.0);
 
         p1 = p2;
     }
@@ -581,13 +581,13 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
         writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
         writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].cum_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].running_metres.to_string()).unwrap();
         writer.write_field(gpx.points[idx].delta_time.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].duration.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].running_delta_time.to_string()).unwrap();
         writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
         writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].cum_ascent_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].cum_descent_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].running_ascent_metres.to_string()).unwrap();
+        writer.write_field(gpx.points[idx].running_descent_metres.to_string()).unwrap();
         writer.write_field(&gpx.points[idx].location).unwrap();
         // Terminator.
         writer.write_record(None::<&[u8]>).unwrap();
@@ -656,9 +656,9 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
         writer.write_field("TODO").unwrap();
         if section.section_type == SectionType::Moving {
             writer.write_field(format!("{:.2}", section.ascent_metres())).unwrap();
-            writer.write_field(format!("{:.2}", section.end.cum_ascent_metres)).unwrap();
+            writer.write_field(format!("{:.2}", section.end.running_ascent_metres)).unwrap();
             writer.write_field(format!("{:.2}", section.descent_metres())).unwrap();
-            writer.write_field(format!("{:.2}", section.end.cum_descent_metres)).unwrap();
+            writer.write_field(format!("{:.2}", section.end.running_descent_metres)).unwrap();
         } else {
             writer.write_field("").unwrap();
             writer.write_field("").unwrap();
@@ -667,11 +667,11 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
         }
         // Always write min elevation, so we have an elevation for a Stopped section as well.
         writer.write_field(format!("{:.2}", section.min_elevation.ele)).unwrap();
-        writer.write_field(format!("{:.2}", section.min_elevation.cum_metres / 1000.0)).unwrap();
+        writer.write_field(format!("{:.2}", section.min_elevation.running_metres / 1000.0)).unwrap();
         writer.write_field(format_utc_date_as_local(section.min_elevation.time)).unwrap();
         if section.section_type == SectionType::Moving {
             writer.write_field(format!("{:.2}", section.max_elevation.ele)).unwrap();
-            writer.write_field(format!("{:.2}", section.max_elevation.cum_metres / 1000.0)).unwrap();
+            writer.write_field(format!("{:.2}", section.max_elevation.running_metres / 1000.0)).unwrap();
             writer.write_field(format_utc_date_as_local(section.max_elevation.time)).unwrap();
    
         } else {

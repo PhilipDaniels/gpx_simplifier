@@ -119,17 +119,17 @@ pub struct EnrichedTrackPoint {
     /// The distance between this trackpoint and the previous one.
     pub delta_metres: f64,
     /// The distance to this trackpoint from the beginning of the track.
-    pub cum_metres: f64,
+    pub running_metres: f64,
     /// The instantaneous speed at this point.
     pub speed_kmh: f64,
     /// The elapsed time between the beginning of the track and this point.
-    pub duration: Duration,
+    pub running_delta_time: Duration,
     /// The change in elevation between this trackpoint and the previous one.
     pub ele_delta_metres: f64,
-    /// The cumulative ascent between the beginning of the track and this point.
-    pub cum_ascent_metres: f64,
-    /// The cumulative descent between the beginning of the track and this point.
-    pub cum_descent_metres: f64,
+    /// The running ascent between the beginning of the track and this point.
+    pub running_ascent_metres: f64,
+    /// The running descent between the beginning of the track and this point.
+    pub running_descent_metres: f64,
     /// The location (reverse geo-coded based on lat-lon)
     pub location: String,
 }
@@ -144,12 +144,12 @@ impl EnrichedTrackPoint {
             time: value.time,
             delta_time: Duration::ZERO,
             delta_metres: 0.0,
-            cum_metres: 0.0,
+            running_metres: 0.0,
             speed_kmh: 0.0,
-            duration: Duration::ZERO,
+            running_delta_time: Duration::ZERO,
             ele_delta_metres: 0.0,
-            cum_ascent_metres: 0.0,
-            cum_descent_metres: 0.0,
+            running_ascent_metres: 0.0,
+            running_descent_metres: 0.0,
             location: Default::default(),
         }
     }

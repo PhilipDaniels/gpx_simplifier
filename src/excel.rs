@@ -8,21 +8,21 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     formatting::to_local_date,
     model::{EnrichedGpx, EnrichedTrackPoint},
-    section::SectionList,
+    stage::StageList,
 };
 
 pub fn write_summary_file<'gpx>(
     summary_filename: &Path,
     gpx: &EnrichedGpx,
-    sections: &SectionList<'gpx>,
+    stages: &StageList<'gpx>,
 ) -> Result<(), Box<dyn Error>> {
     print!("Writing file {:?}", &summary_filename);
 
     let mut workbook = Workbook::new();
 
     // This will appear as the first sheet in the workbook.
-    let summary_ws = workbook.add_worksheet();
-    summary_ws.set_name("Summary")?;
+    let stages_ws = workbook.add_worksheet();
+    stages_ws.set_name("Stages")?;
 
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();

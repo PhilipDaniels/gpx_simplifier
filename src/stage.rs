@@ -1,10 +1,10 @@
-//! Contains the functionality relating to sections.
+//! Contains the functionality relating to Stages.
 //! Detecting these is quite a bit of work. Once we get
-//! the Sections determined we can calculate a lot of
+//! the Stages determined we can calculate a lot of
 //! other metrics fairly easily.
 
 use core::{fmt, slice};
-use std::{io::Write, ops::Index, path::Path};
+use std::{ops::Index, path::Path};
 
 use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
@@ -24,9 +24,9 @@ pub fn speed_kmh_from_duration(metres: f64, time: Duration) -> f64 {
     speed_kmh(metres, time.as_seconds_f64())
 }
 
-/// These are the parameters that control the 'Section-finding'
+/// These are the parameters that control the 'Stage-finding'
 /// algorithm.
-pub struct SectionParameters {
+pub struct StageDetectionParameters {
     /// You are considered "Stopped" if your speed drops below this.
     /// So that means a dead-stop.
     pub stopped_speed_kmh: f64,
@@ -36,90 +36,91 @@ pub struct SectionParameters {
     // are probably riding again.
     pub resume_speed_kmh: f64,
 
-    /// We want to eliminate tiny Sections caused by noisy data, for
+    /// We want to eliminate tiny Stages caused by noisy data, for
     /// example these can occur when just starting off again.
-    /// So set the minimum length of a section, in seconds.
-    pub min_section_duration_seconds: f64,
+    /// So set the minimum length of a stage, in seconds.
+    pub min_duration_seconds: f64,
 }
 
-/// Represents a section from a GPX track. The section can represent
+/// Represents a stage from a GPX track. The stage can represent
 /// you moving, or stopped.
 #[derive(Debug)]
-pub struct Section<'gpx> {
-    pub section_type: SectionType,
+pub struct Stage<'gpx> {
+    pub stage_type: StageType,
     pub start: &'gpx EnrichedTrackPoint,
     pub end: &'gpx EnrichedTrackPoint,
     pub min_elevation: &'gpx EnrichedTrackPoint,
     pub max_elevation: &'gpx EnrichedTrackPoint,
 }
 
-/// The type of a Section.
+/// The type of a Stage.
 #[derive(Debug, PartialEq, Eq)]
-pub enum SectionType {
+pub enum StageType {
     Moving,
     Stopped,
 }
 
-impl fmt::Display for SectionType {
+impl fmt::Display for StageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SectionType::Moving => write!(f, "Moving"),
-            SectionType::Stopped => write!(f, "Stopped"),
+            StageType::Moving => write!(f, "Moving"),
+            StageType::Stopped => write!(f, "Stopped"),
         }
     }
 }
 
-impl<'gpx> Section<'gpx> {
-    /// Returns the duration of the section.
+impl<'gpx> Stage<'gpx> {
+    /// Returns the duration of the stage.
     pub fn duration(&self) -> Duration {
         self.end.time - self.start.time
     }
 
-    /// Returns the distance (length) of the section, in metres.
+    /// Returns the distance (length) of the stage, in metres.
     pub fn distance_metres(&self) -> f64 {
         self.end.running_metres - self.start.running_metres
     }
 
-    /// Returns the distance of the section, in km.
+    /// Returns the distance of the stage, in km.
     pub fn distance_km(&self) -> f64 {
         self.distance_metres() / 1000.0
     }
 
-    /// Returns the cumulative distance to the end of the section.
+    /// Returns the cumulative distance to the end of the stage
+    /// from the start of the entire track.
     pub fn cum_distance_km(&self) -> f64 {
         self.end.running_metres / 1000.0
     }
 
-    /// Returns the average speed of the section, in kmh.
+    /// Returns the average speed of the stage, in kmh.
     pub fn average_speed_kmh(&self) -> f64 {
         speed_kmh_from_duration(self.distance_metres(), self.duration())
     }
 
-    /// Returns the total ascent in metres over the section.
+    /// Returns the total ascent in metres over the stage.
     pub fn ascent_metres(&self) -> f64 {
         self.end.running_ascent_metres - self.start.running_ascent_metres
     }
 
-    /// Returns the total descent in metres over the section.
+    /// Returns the total descent in metres over the stage.
     pub fn descent_metres(&self) -> f64 {
         self.end.running_descent_metres - self.start.running_descent_metres
     }
 }
 
 #[derive(Default)]
-pub struct SectionList<'gpx>(Vec<Section<'gpx>>);
+pub struct StageList<'gpx>(Vec<Stage<'gpx>>);
 
-impl<'gpx> Index<usize> for SectionList<'gpx> {
-    type Output = Section<'gpx>;
+impl<'gpx> Index<usize> for StageList<'gpx> {
+    type Output = Stage<'gpx>;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
-impl<'gpx> SectionList<'gpx> {
+impl<'gpx> StageList<'gpx> {
     // TODO: Implement Iterator properly.
-    fn iter(&self) -> slice::Iter<Section> {
+    fn iter(&self) -> slice::Iter<Stage> {
         self.0.iter()
     }
 
@@ -131,82 +132,82 @@ impl<'gpx> SectionList<'gpx> {
         self.0[self.len() - 1].end
     }
 
-    pub fn push(&mut self, section: Section<'gpx>) {
-        self.0.push(section);
+    pub fn push(&mut self, stage: Stage<'gpx>) {
+        self.0.push(stage);
     }
 
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
-    /// Returns the start time of the first Section.
+    /// Returns the start time of the first Stage.
     pub fn start_time(&self) -> OffsetDateTime {
         self.first_point().time
     }
 
-    /// Returns the end time of the last Section.
+    /// Returns the end time of the last Stage.
     pub fn end_time(&self) -> OffsetDateTime {
         self.last_point().time
     }
 
     /// Returns the total duration between the start of the first
-    /// Section and the end of the last Section.
+    /// stage and the end of the last stage.
     pub fn duration(&self) -> Duration {
         self.end_time() - self.start_time()
     }
 
-    /// Returns the total time Moving across all the sections.
+    /// Returns the total time Moving across all the stages.
     pub fn total_moving_time(&self) -> Duration {
         self.duration() - self.total_stopped_time()
     }
 
-    /// Returns the total time Stopped across all the sections.
+    /// Returns the total time Stopped across all the stages.
     pub fn total_stopped_time(&self) -> Duration {
         self.0
             .iter()
-            .filter_map(|section| match section.section_type {
-                SectionType::Moving => None,
-                SectionType::Stopped => Some(section.duration()),
+            .filter_map(|stage| match stage.stage_type {
+                StageType::Moving => None,
+                StageType::Stopped => Some(stage.duration()),
             })
             .sum()
     }
 
-    /// Returns the total distance of all the Sections in metres.
+    /// Returns the total distance of all the stages in metres.
     pub fn distance_metres(&self) -> f64 {
         self.0.iter().map(|s| s.distance_metres()).sum()
     }
 
-    /// Returns the total distance of all the Sections in km.
+    /// Returns the total distance of all the stages in km.
     pub fn distance_km(&self) -> f64 {
         self.distance_metres() / 1000.0
     }
 
-    /// Returns the point of minimum elevation across all the Sections.
+    /// Returns the point of minimum elevation across all the stages.
     pub fn min_elevation(&self) -> &EnrichedTrackPoint {
         self.0
             .iter()
-            .map(|section| &section.min_elevation)
+            .map(|stage| &stage.min_elevation)
             .min_by(|a, b| a.ele.total_cmp(&b.ele))
             .unwrap()
     }
 
-    /// Returns the point of maximum elevation across all the Sections.
+    /// Returns the point of maximum elevation across all the stages.
     pub fn max_elevation(&self) -> &EnrichedTrackPoint {
         self.0
             .iter()
-            .map(|section| &section.max_elevation)
+            .map(|stage| &stage.max_elevation)
             .max_by(|a, b| a.ele.total_cmp(&b.ele))
             .unwrap()
     }
 
-    /// Returns the total ascent in metres across all the Sections.
+    /// Returns the total ascent in metres across all the stages.
     pub fn total_ascent_metres(&self) -> f64 {
-        self.0.iter().map(|section| section.ascent_metres()).sum()
+        self.0.iter().map(|stage| stage.ascent_metres()).sum()
     }
 
-    /// Returns the total descent in metres across all the Sections.
+    /// Returns the total descent in metres across all the stages.
     pub fn total_descent_metres(&self) -> f64 {
-        self.0.iter().map(|section| section.descent_metres()).sum()
+        self.0.iter().map(|stage| stage.descent_metres()).sum()
     }
 }
 
@@ -263,73 +264,73 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     }
 }
 
-/// Detects the sections in the GPX and returns them as a list.
+/// Detects the stages in the GPX and returns them as a list.
 ///
-/// Invariants: the first section starts at TrackPoint 0
-/// and goes to TrackPoint N. The next section starts at
-/// Trackpoint N and goes to TrackPoint M. The last section
+/// Invariants: the first stage starts at TrackPoint 0
+/// and goes to TrackPoint N. The next stage starts at
+/// Trackpoint N and goes to TrackPoint M. The last stage
 /// ends at the last TrackPoint.
 ///
 /// In other words, there are no gaps, all TrackPoints are in a
-/// section, and TrackPoints in the middle will be in two adjacent
-/// Sections. TrackPoints are cloned as part of this construction.
+/// stage, and TrackPoints in the middle will be in two adjacent
+/// stages. TrackPoints are cloned as part of this construction.
 ///
-/// A Section is a Stopped section if you speed drops below
+/// A Stage is a Stopped stage if you speed drops below
 /// a (very low) limit and does not go above a 'resume_speed'
 /// for a 'min_stop_time' length of time.
 ///
-/// All non-Stopped sections are considered Moving sections.
-pub fn detect_sections(gpx: &EnrichedGpx, params: SectionParameters) -> SectionList {
+/// All non-Stopped stages are considered Moving stages.
+pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> StageList {
     if gpx.points.len() < 2 {
         eprintln!("Warning: gpx {:?} does not have any points", gpx.filename);
         return Default::default();
     }
 
-    let mut sections = SectionList::default();
+    let mut stages = StageList::default();
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
-    // that you are actually in a Stopped section. However, it's not impossible,
+    // that you are actually in a Stopped stage. However, it's not impossible,
     // see Note 2 for why.
 
     // Note 2: We need to deal with the slightly bizarre situation where you turn
-    // the GPS on and then don't go anywhere for a while - so your first Section
-    // may be a Stopped Section!
+    // the GPS on and then don't go anywhere for a while - so your first stage
+    // may be a Stopped stage!
 
-    // We can get everything we need to create a Section if we have the
-    // index of the first and last TrackPoints for that Section.
+    // We can get everything we need to create a stage if we have the
+    // index of the first and last TrackPoints for that stage.
     let mut start_idx = 0;
-    while let Some(section) = get_next_section(start_idx, gpx, &params) {
-        // The next section shares an index/TrackPoint with this one.
-        start_idx = section.end.index;
-        sections.push(section);
+    while let Some(stage) = get_next_stage(start_idx, gpx, &params) {
+        // The next stage shares an index/TrackPoint with this one.
+        start_idx = stage.end.index;
+        stages.push(stage);
     }
 
     // Should include all TrackPoints and start/end indexes overlap.
     assert_eq!(
-        sections[0].start.index, 0,
+        stages[0].start.index, 0,
         "Should always start with the first point"
     );
     assert_eq!(
-        sections[sections.len() - 1].end.index,
+        stages[stages.len() - 1].end.index,
         gpx.points.len() - 1,
         "Should always end with the last point"
     );
-    for idx in 0..sections.len() - 1 {
+    for idx in 0..stages.len() - 1 {
         assert_eq!(
-            sections[idx].end.index,
-            sections[idx + 1].start.index,
-            "Section boundaries should be shared"
+            stages[idx].end.index,
+            stages[idx + 1].start.index,
+            "Stage boundaries should be shared"
         );
     }
 
-    sections
+    stages
 }
 
-fn get_next_section<'gpx>(
+fn get_next_stage<'gpx>(
     start_idx: usize,
     gpx: &'gpx EnrichedGpx,
-    params: &SectionParameters,
-) -> Option<Section<'gpx>> {
+    params: &StageDetectionParameters,
+) -> Option<Stage<'gpx>> {
     // Get this out into a variable to avoid off-by-one errors (hopefully).
     let last_valid_idx = gpx.points.len() - 1;
 
@@ -342,47 +343,47 @@ fn get_next_section<'gpx>(
     // More likely to catch off-by-one bugs this way.
     assert!(start_idx < last_valid_idx);
 
-    // We have said that a Section must be at least this long, so we need to
+    // We have said that a Stage must be at least this long, so we need to
     // advance this far as a minimum.
     let end_idx = advance_for_duration(
         gpx,
         start_idx,
         last_valid_idx,
-        params.min_section_duration_seconds,
+        params.min_duration_seconds,
     );
     assert!(end_idx <= last_valid_idx);
-    assert!(end_idx > start_idx, "Empty sections are not allowed");
+    assert!(end_idx > start_idx, "Empty stages are not allowed");
 
     if end_idx < last_valid_idx {
         // This is not necessarily true in the case where we exhaust all the TrackPoints.
         assert!(
             (gpx.points[end_idx].time - gpx.points[start_idx].time).as_seconds_f64()
-                >= params.min_section_duration_seconds
+                >= params.min_duration_seconds
         );
     } else {
         // But we can assert this weaker condition as a fallback.
         assert!((gpx.points[end_idx].time - gpx.points[start_idx].time).is_positive());
     }
 
-    // Scan the TrackPoints we just got to determine the SectionType.
-    let section_type = if gpx.points[start_idx..=end_idx]
+    // Scan the TrackPoints we just got to determine the StageType.
+    let stage_type = if gpx.points[start_idx..=end_idx]
         .iter()
         .any(|p| p.speed_kmh > params.resume_speed_kmh)
     {
-        SectionType::Moving
+        StageType::Moving
     } else {
-        SectionType::Stopped
+        StageType::Stopped
     };
 
     // If we have not consumed all the trackpoints in advance_for_duration() above,
-    // then the section might actually continue past the current end_idx. Keep going
+    // then the stage might actually continue past the current end_idx. Keep going
     // until we really find the end. It's possible that this act may consume some or
     // all of the remaining trackpoints.
     let mut end_idx = end_idx;
 
     if end_idx < last_valid_idx {
-        end_idx = match section_type {
-            SectionType::Moving => {
+        end_idx = match stage_type {
+            StageType::Moving => {
                 find_stop_index(
                     gpx,
                     end_idx, // Start the scan from the current end that we just found.
@@ -390,7 +391,7 @@ fn get_next_section<'gpx>(
                     params,
                 )
             }
-            SectionType::Stopped => {
+            StageType::Stopped => {
                 find_resume_index(
                     gpx,
                     end_idx, // Start the scan from the current end that we just found.
@@ -403,8 +404,8 @@ fn get_next_section<'gpx>(
 
     let (min_ele, max_ele) = find_min_and_max_elevation_points(gpx, start_idx, end_idx);
 
-    let section = Section {
-        section_type,
+    let stage = Stage {
+        stage_type,
         start: &gpx.points[start_idx],
         end: &gpx.points[end_idx],
         min_elevation: min_ele,
@@ -413,29 +414,29 @@ fn get_next_section<'gpx>(
 
     // Just check we created everything correctly.
     assert!(end_idx <= last_valid_idx);
-    assert_eq!(section.start.index, start_idx);
-    assert_eq!(section.end.index, end_idx);
-    assert!(section.end.index > section.start.index);
-    assert!(section.end.time > section.start.time);
+    assert_eq!(stage.start.index, start_idx);
+    assert_eq!(stage.end.index, end_idx);
+    assert!(stage.end.index > stage.start.index);
+    assert!(stage.end.time > stage.start.time);
 
-    return Some(section);
+    return Some(stage);
 }
 
 /// Scans forward through the points until we find a point
-/// that is at least 'min_section_duration_seconds' ahead
+/// that is at least 'min_duration_seconds' ahead
 /// of the start point.
 fn advance_for_duration(
     gpx: &EnrichedGpx,
     start_idx: usize,
     last_valid_idx: usize,
-    min_section_duration_seconds: f64,
+    min_duration_seconds: f64,
 ) -> usize {
     let start_time = gpx.points[start_idx].time;
     let mut end_index = start_idx + 1;
 
     while end_index <= last_valid_idx {
         let delta_time = gpx.points[end_index].time - start_time;
-        if delta_time.as_seconds_f64() >= min_section_duration_seconds {
+        if delta_time.as_seconds_f64() >= min_duration_seconds {
             return end_index;
         }
         end_index += 1;
@@ -468,14 +469,14 @@ fn find_min_and_max_elevation_points<'gpx>(
     (min, max)
 }
 
-/// A Moving section is ended when we stop. This occurs when we drop below the
+/// A Moving stage is ended when we stop. This occurs when we drop below the
 /// 'stopped_speed_kmh' and do not attain 'resume_speed_kmh' for at least
-/// 'min_section_duration_seconds'. Find the index of that point.
+/// 'min_duration_seconds'. Find the index of that point.
 fn find_stop_index(
     gpx: &EnrichedGpx,
     start_idx: usize,
     last_valid_idx: usize,
-    params: &SectionParameters,
+    params: &StageDetectionParameters,
 ) -> usize {
     let mut end_idx = start_idx + 1;
 
@@ -487,7 +488,7 @@ fn find_stop_index(
         }
 
         // It's possible we exhausted all the TrackPoints - we were in a moving
-        // Section that went right to the end of the track. Note that the line
+        // Stage that went right to the end of the track. Note that the line
         // above which increments end_index means that it is possible that
         // end_index is GREATER than last_valid_index at this point.
         if end_idx >= last_valid_idx {
@@ -507,9 +508,9 @@ fn find_stop_index(
         }
 
         // Is that a valid length of stop? If so, the point found above is a valid
-        // end for this current section (which is a Moving Section, remember).
+        // end for this current stage (which is a Moving Stage, remember).
         let stop_duration = gpx.points[end_idx].time - possible_stop_time;
-        if stop_duration.as_seconds_f64() >= params.min_section_duration_seconds {
+        if stop_duration.as_seconds_f64() >= params.min_duration_seconds {
             return possible_stop_idx;
         }
 
@@ -523,7 +524,7 @@ fn find_stop_index(
     last_valid_idx
 }
 
-/// A Stopped section is ended when we find the first TrackPoint
+/// A Stopped stage is ended when we find the first TrackPoint
 /// with a speed above the resumption threshold. Find the index
 /// of that point.
 fn find_resume_index(
@@ -597,7 +598,7 @@ pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
 }
 
 #[rustfmt::skip]
-pub fn write_sections_csv(p: &Path, sections: &SectionList) {
+pub fn write_sections_csv(p: &Path, sections: &StageList) {
     let mut writer = csv::Writer::from_path(p).unwrap();
 
     // Header. 4 fields from the original point, then the extended info.
@@ -635,7 +636,7 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
 
     for (idx, section) in sections.iter().enumerate() {
         writer.write_field((idx + 1).to_string()).unwrap();
-        writer.write_field(section.section_type.to_string()).unwrap();
+        writer.write_field(section.stage_type.to_string()).unwrap();
         writer.write_field(section.start.index.to_string()).unwrap();
         writer.write_field(section.end.index.to_string()).unwrap();
         writer.write_field(format_utc_date(section.start.time)).unwrap();
@@ -644,7 +645,7 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
         writer.write_field(format_utc_date_as_local(section.end.time)).unwrap();
         writer.write_field(section.duration().to_string()).unwrap();
         writer.write_field("TODO").unwrap();
-        if section.section_type == SectionType::Moving {
+        if section.stage_type == StageType::Moving {
             writer.write_field(format!("{:.2}", section.distance_km())).unwrap();
             writer.write_field(format!("{:.2}", section.cum_distance_km())).unwrap();
             writer.write_field(format!("{:.2}", section.average_speed_kmh())).unwrap();
@@ -654,7 +655,7 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
             writer.write_field("").unwrap();
         }
         writer.write_field("TODO").unwrap();
-        if section.section_type == SectionType::Moving {
+        if section.stage_type == StageType::Moving {
             writer.write_field(format!("{:.2}", section.ascent_metres())).unwrap();
             writer.write_field(format!("{:.2}", section.end.running_ascent_metres)).unwrap();
             writer.write_field(format!("{:.2}", section.descent_metres())).unwrap();
@@ -669,7 +670,7 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
         writer.write_field(format!("{:.2}", section.min_elevation.ele)).unwrap();
         writer.write_field(format!("{:.2}", section.min_elevation.running_metres / 1000.0)).unwrap();
         writer.write_field(format_utc_date_as_local(section.min_elevation.time)).unwrap();
-        if section.section_type == SectionType::Moving {
+        if section.stage_type == StageType::Moving {
             writer.write_field(format!("{:.2}", section.max_elevation.ele)).unwrap();
             writer.write_field(format!("{:.2}", section.max_elevation.running_metres / 1000.0)).unwrap();
             writer.write_field(format_utc_date_as_local(section.max_elevation.time)).unwrap();
@@ -682,7 +683,7 @@ pub fn write_sections_csv(p: &Path, sections: &SectionList) {
         writer.write_field(format!("{:.6}", section.start.lat)).unwrap();
         writer.write_field(format!("{:.6}", section.start.lon)).unwrap();
 
-        if section.section_type == SectionType::Moving {
+        if section.stage_type == StageType::Moving {
             if idx == 0 {
                 // The start control.
                 writer.write_field(&section.start.location).unwrap();

@@ -2,7 +2,7 @@ use args::parse_args;
 use excel::write_summary_file;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
-use section::{detect_sections, enrich_trackpoints, SectionParameters};
+use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use std::{
     fs::read_dir,
@@ -13,7 +13,7 @@ mod args;
 mod excel;
 mod formatting;
 mod model;
-mod section;
+mod stage;
 mod simplification;
 
 fn main() {
@@ -59,19 +59,19 @@ fn main() {
         let mut gpx = EnrichedGpx::from(gpx);
         enrich_trackpoints(&mut gpx);
 
-        // // If we are detecting stops (really Sections now), then do that on
+        // // If we are detecting stops (really Stages now), then do that on
         // the original file, for more precision. Though whether it matters
         // much in practice is debatable - it only really makes a difference
         // if your 'metres' input to RDP is largish.
         if args.detect_stops {
-            let params = SectionParameters {
+            let params = StageDetectionParameters {
                 stopped_speed_kmh: 0.01,
                 resume_speed_kmh: 10.0,
-                min_section_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
+                min_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
             };
 
-            let sections = detect_sections(&gpx, params);
-            write_summary_file(&summary_filename, &gpx, &sections).unwrap();
+            let stages = detect_stages(&gpx, params);
+            write_summary_file(&summary_filename, &gpx, &stages).unwrap();
         }
 
         // Always do simplification last because it mutates the track,

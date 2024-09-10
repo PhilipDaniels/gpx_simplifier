@@ -101,7 +101,7 @@ pub struct EnrichedGpx {
 }
 
 /// A TrackPoint with lots of extra stuff calculated. We need the extras
-/// to find the sections.
+/// to find the stages.
 #[derive(Debug)]
 pub struct EnrichedTrackPoint {
     /// The index of the original trackpoint we used to create this value.

@@ -546,57 +546,6 @@ fn find_resume_index(
     last_valid_idx
 }
 
-/// Writes the trackpoints and the extended information to a CSV file,
-/// very handy for debugging.
-#[rustfmt::skip]
-pub fn write_enriched_trackpoints_to_csv(p: &Path, gpx: &EnrichedGpx) {
-    let mut writer = csv::Writer::from_path(p).unwrap();
-
-    // Header. 4 fields from the original point, then the extended info.
-    writer
-        .write_record(vec![
-            "TP Index",
-            "Time (UTC)",
-            "Time (local)",
-            "Lat",
-            "Lon",
-            "Elevation (m)",
-            "Distance Delta (m)",
-            "Cum. Distance (m)",
-            "Time Delta",
-            "Cum. Duration",
-            "Speed (kmh)",
-            "Elevation Delta (m)",
-            "Cum Ascent (m)",
-            "Cum Descent (m)",
-            "Location"
-        ])
-        .unwrap();
-
-    // TrackPoints.
-    for idx in 0..gpx.points.len() {
-        writer.write_field(gpx.points[idx].index.to_string()).unwrap();
-        writer.write_field(format_utc_date(gpx.points[idx].time)).unwrap();
-        writer.write_field(format_utc_date_as_local(gpx.points[idx].time)).unwrap();
-        writer.write_field(gpx.points[idx].lat.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].lon.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].ele.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].delta_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].running_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].delta_time.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].running_delta_time.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].speed_kmh.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].ele_delta_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].running_ascent_metres.to_string()).unwrap();
-        writer.write_field(gpx.points[idx].running_descent_metres.to_string()).unwrap();
-        writer.write_field(&gpx.points[idx].location).unwrap();
-        // Terminator.
-        writer.write_record(None::<&[u8]>).unwrap();
-    }
-
-    writer.flush().unwrap();
-}
-
 #[rustfmt::skip]
 pub fn write_sections_csv(p: &Path, sections: &StageList) {
     let mut writer = csv::Writer::from_path(p).unwrap();

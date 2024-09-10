@@ -632,20 +632,20 @@ pub fn write_sections_csv(p: &Path, sections: &StageList) {
         writer.write_field(format!("{:.6}", section.start.lat)).unwrap();
         writer.write_field(format!("{:.6}", section.start.lon)).unwrap();
 
-        if section.stage_type == StageType::Moving {
-            if idx == 0 {
-                // The start control.
-                writer.write_field(&section.start.location).unwrap();
-            } else if idx == sections.len() - 1 {
-                // The finish control.
-                writer.write_field(&section.end.location).unwrap();
-            } else {
-                // Irrelevant, see the Stopped location instead.
-                writer.write_field("").unwrap();
-            }
-        } else {
-            writer.write_field(&section.start.location).unwrap();
-        }
+        // if section.stage_type == StageType::Moving {
+        //     if idx == 0 {
+        //         // The start control.
+        //         writer.write_field(&section.start.location).unwrap();
+        //     } else if idx == sections.len() - 1 {
+        //         // The finish control.
+        //         writer.write_field(&section.end.location).unwrap();
+        //     } else {
+        //         // Irrelevant, see the Stopped location instead.
+        //         writer.write_field("").unwrap();
+        //     }
+        // } else {
+        //     writer.write_field(&section.start.location).unwrap();
+        // }
         // Terminator.
         writer.write_record(None::<&[u8]>).unwrap();
     }

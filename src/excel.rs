@@ -294,7 +294,10 @@ fn write_lat_lon(
     static LAT_LON_FORMAT: LazyLock<Format> =
         LazyLock::new(|| Format::new().set_num_format("#.000000"));
 
-    let link = format!("https://www.google.com/maps/search/?api=1&query={},{}", lat_lon.0, lat_lon.1);
+    let link = format!(
+        "https://www.google.com/maps/search/?api=1&query={},{}",
+        lat_lon.0, lat_lon.1
+    );
 
     ws.write_number_with_format(rc.0, rc.1, lat_lon.0, &LAT_LON_FORMAT)?;
     ws.write_number_with_format(rc.0, rc.1 + 1, lat_lon.1, &LAT_LON_FORMAT)?;
@@ -312,11 +315,14 @@ fn write_lat_lon(
 fn write_location(
     ws: &mut Worksheet,
     rc: (u32, u16),
-    location: &str,
+    location: &Option<String>,
 ) -> Result<(), Box<dyn Error>> {
-    if !location.is_empty() {
-        ws.write_string(rc.0, rc.1, location)?;
+    if let Some(location) = location {
+        if !location.is_empty() {
+            ws.write_string(rc.0, rc.1, location)?;
+        }
     }
+
     Ok(())
 }
 

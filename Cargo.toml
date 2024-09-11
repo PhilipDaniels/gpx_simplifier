@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.11", features = ["derive", "cargo"] }
-csv = "1.3.0"
 geo = "0.28.0"
 quick-xml = { version = "0.36.0", features = ["serialize"] }
 rust_xlsxwriter = "0.75.0"

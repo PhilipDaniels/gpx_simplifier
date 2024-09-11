@@ -208,6 +208,18 @@ impl<'gpx> StageList<'gpx> {
         self.distance_metres() / 1000.0
     }
 
+    /// Returns the average moving speed over the whole track,
+    /// this excludes stopped time.
+    pub fn average_moving_speed(&self) -> f64 {
+        speed_kmh_from_duration(self.distance_metres(), self.total_moving_time())
+    }
+
+    /// Returns the overall average moving speed over the whole track,
+    /// this includes stopped time.
+    pub fn average_overall_speed(&self) -> f64 {
+        speed_kmh_from_duration(self.distance_metres(), self.duration())
+    }
+
     /// Returns the point of minimum elevation across all the stages.
     pub fn min_elevation(&self) -> &EnrichedTrackPoint {
         self.0
@@ -234,6 +246,15 @@ impl<'gpx> StageList<'gpx> {
     /// Returns the total descent in metres across all the stages.
     pub fn total_descent_metres(&self) -> f64 {
         self.0.iter().map(|stage| stage.descent_metres()).sum()
+    }
+
+    /// Returns the point of maximum speed across all the stages.
+    pub fn max_speed(&self) -> &EnrichedTrackPoint {
+        self.0
+            .iter()
+            .map(|stage| &stage.max_speed)
+            .max_by(|a, b| a.speed_kmh.total_cmp(&b.speed_kmh))
+            .unwrap()
     }
 }
 

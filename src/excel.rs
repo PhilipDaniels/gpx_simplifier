@@ -38,7 +38,7 @@ pub fn write_summary_file<'gpx>(
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
-    //write_trackpoints(&gpx.points, tp_ws)?;
+    write_trackpoints(&gpx.points, tp_ws)?;
 
     workbook.save(summary_filename).unwrap();
     let metadata = std::fs::metadata(summary_filename).unwrap();
@@ -195,61 +195,25 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
             write_kilometres(ws, &fc, (row, 12), stage.distance_km())?;
             write_kilometres(ws, &fc, (row, 13), stage.running_distance_km())?;
             fc.increment_column();
-
             write_speed(ws, &fc, (row, 14), stage.average_speed_kmh())?;
             write_speed(ws, &fc, (row, 15), stage.running_average_speed_kmh())?;
             fc.increment_column();
-
             write_metres(ws, &fc, (row, 16), stage.ascent_metres())?;
             write_metres(ws, &fc, (row, 17), stage.running_ascent_metres())?;
             fc.increment_column();
-
             write_metres(ws, &fc, (row, 18), stage.descent_metres())?;
             write_metres(ws, &fc, (row, 19), stage.running_descent_metres())?;
             fc.increment_column();
-
-            write_metres(ws, &fc, (row, 20), stage.min_elevation.ele)?;
-            write_kilometres(
-                ws,
-                &fc,
-                (row, 21),
-                stage.min_elevation.running_metres / 1000.0,
-            )?;
-            write_utc_date_as_local(ws, &fc, (row, 22), stage.min_elevation.time)?;
-            write_lat_lon(
-                ws,
-                &fc,
-                (row, 23),
-                (stage.min_elevation.lat, stage.min_elevation.lon),
-                Hyperlink::Yes,
-            )?;
+            write_elevation_data(ws, &fc, (row, 20), stage.min_elevation)?;
             fc.increment_column();
-
-            write_metres(ws, &fc, (row, 26), stage.max_elevation.ele)?;
-            write_kilometres(
-                ws,
-                &fc,
-                (row, 27),
-                stage.max_elevation.running_metres / 1000.0,
-            )?;
-            write_utc_date_as_local(ws, &fc, (row, 28), stage.max_elevation.time)?;
-            write_lat_lon(
-                ws,
-                &fc,
-                (row, 29),
-                (stage.max_elevation.lat, stage.max_elevation.lon),
-                Hyperlink::Yes,
-            )?;
+            write_elevation_data(ws, &fc, (row, 26), stage.max_elevation)?;
             fc.increment_column();
-
-            write_speed(ws, &fc, (row, 32), stage.max_speed.speed_kmh)?;
-            write_lat_lon(
-                ws,
-                &fc,
-                (row, 33),
-                (stage.max_speed.lat, stage.max_speed.lon),
-                Hyperlink::Yes,
-            )?;
+            write_max_speed_data(ws, &fc, (row, 32), stage.max_speed)?;
+        } else {
+            // Write blanks so that the banding formatting is applied.
+            for col in 12..=35 {
+                write_blank(ws, &fc, (row, col))?;
+            }
         }
 
         row += 1;
@@ -261,7 +225,7 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     // Now write an overall summary row.
     let mut fc = FormatControl::new();
     row += 2;
-    write_string(ws, &fc, (row, 0), "SUMMARY")?;
+    write_string(ws, &fc, (row, 5), "SUMMARY")?;
     fc.increment_column();
     write_utc_date(ws, &fc, (row, 6), stages.start_time())?;
     write_utc_date_as_local(ws, &fc, (row, 7), stages.start_time())?;
@@ -290,22 +254,38 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_blank(ws, &fc, (row, 18))?;
     write_metres(ws, &fc, (row, 19), stages.total_descent_metres())?;
     fc.increment_column();
-    let min = stages.min_elevation();
-    write_metres(ws, &fc, (row, 20), min.ele)?;
-    write_kilometres(ws, &fc, (row, 21), min.running_metres / 1000.0)?;
-    write_utc_date_as_local(ws, &fc, (row, 22), min.time)?;
-    write_lat_lon(ws, &fc, (row, 23), (min.lat, min.lon), Hyperlink::Yes)?;
-    let max = stages.max_elevation();
+    write_elevation_data(ws, &fc, (row, 20), stages.min_elevation())?;
     fc.increment_column();
-    write_metres(ws, &fc, (row, 26), max.ele)?;
-    write_kilometres(ws, &fc, (row, 27), max.running_metres / 1000.0)?;
-    write_utc_date_as_local(ws, &fc, (row, 28), max.time)?;
-    write_lat_lon(ws, &fc, (row, 29), (max.lat, max.lon), Hyperlink::Yes)?;
-    let max_speed = stages.max_speed();
+    write_elevation_data(ws, &fc, (row, 26), stages.max_elevation())?;
     fc.increment_column();
-    write_speed(ws, &fc, (row, 32), max_speed.speed_kmh)?;
-    write_lat_lon(ws, &fc, (row, 33), (max_speed.lat, max_speed.lon), Hyperlink::Yes)?;
+    write_max_speed_data(ws, &fc, (row, 32), stages.max_speed())?;
 
+    Ok(())
+}
+
+/// Writes an elevation data block (min or max) as found on the Stages tab.
+fn write_elevation_data(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    point: &EnrichedTrackPoint
+) -> Result<(), Box<dyn Error>> {
+    write_metres(ws, &fc, (rc.0, rc.1), point.ele)?;
+    write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
+    write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), point.time)?;
+    write_lat_lon(ws, &fc, (rc.0, rc.1 + 3), (point.lat, point.lon), Hyperlink::Yes)?;
+    Ok(())
+}
+
+/// Writes an max speed data block (min or max) as found on the Stages tab.
+fn write_max_speed_data(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    point: &EnrichedTrackPoint
+) -> Result<(), Box<dyn Error>> {
+    write_speed(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
+    write_lat_lon(ws, &fc, (rc.0, rc.1 + 1), (point.lat, point.lon), Hyperlink::Yes)?;
     Ok(())
 }
 

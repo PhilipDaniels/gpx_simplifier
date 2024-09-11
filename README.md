@@ -87,3 +87,4 @@ Or build from source using cargo.
   to derive it.
 - Include hr, temperature in the xlsx.
 - Trackpoint in-sheet hyperlink
+- Reverse geocode the stopped stages and the first and last point.

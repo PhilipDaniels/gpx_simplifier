@@ -4,15 +4,12 @@
 //! other metrics fairly easily.
 
 use core::{fmt, slice};
-use std::{ops::Index, path::Path};
+use std::ops::Index;
 
 use geo::{point, GeodesicDistance};
 use time::{Duration, OffsetDateTime};
 
-use crate::{
-    formatting::{format_utc_date, format_utc_date_as_local},
-    model::{EnrichedGpx, EnrichedTrackPoint},
-};
+use crate::model::{EnrichedGpx, EnrichedTrackPoint};
 
 /// Calculates speed in kmh from metres and seconds.
 pub fn speed_kmh(metres: f64, seconds: f64) -> f64 {

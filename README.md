@@ -81,7 +81,9 @@ Or build from source using cargo.
 
 
 # TODO
-- In the report, also show stages, not just the stops. Include
-  time and average speed over the stage (max too?). Perhaps
-  the cum avg speed, ascent and descent.
-- The current "overall" report can become the last row in the table.
+- Still need the overall report on the Stages tab.
+- Fix the stage detection.
+- Extract the extension information from the GPX - need to go back
+  to manual parsing? Use speed from the GPX in preference to trying
+  to derive it.
+- Include hr, temperature in the xlsx.

@@ -1,7 +1,8 @@
 use std::{error::Error, path::Path, sync::LazyLock};
 
 use rust_xlsxwriter::{
-    Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Workbook, Worksheet,
+    Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Table, Workbook,
+    Worksheet,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -33,7 +34,7 @@ pub fn write_summary_file<'gpx>(
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
     write_stages(stages, stages_ws)?;
-    
+
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
@@ -56,34 +57,52 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_minor_header(ws, (1, 3), "Lon")?;
     write_minor_header(ws, (1, 4), "Map")?;
     write_minor_header(ws, (1, 5), "Description")?;
+    ws.set_column_width(2, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(3, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(4, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(5, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 6), (0, 7), "Start Time")?;
     write_minor_header(ws, (1, 6), "UTC")?;
     write_minor_header(ws, (1, 7), "Local")?;
+    ws.set_column_width(6, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(7, DATE_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 8), (0, 9), "End Time")?;
     write_minor_header(ws, (1, 8), "UTC")?;
     write_minor_header(ws, (1, 9), "Local")?;
+    ws.set_column_width(8, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(9, DATE_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 10), (0, 11), "Duration")?;
     write_minor_header(ws, (1, 10), "hms")?;
     write_minor_header(ws, (1, 11), "Running")?;
+    ws.set_column_width(10, DURATION_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(11, DURATION_COLUMN_WIDTH - 2.0)?;
 
     write_minor_header_merged(ws, (0, 12), (0, 13), "Distance (km)")?;
     write_minor_header(ws, (1, 12), "Stage")?;
     write_minor_header(ws, (1, 13), "Running")?;
+    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH - 3.0)?;
 
     write_minor_header_merged(ws, (0, 14), (0, 15), "Avg Speed (kmh)")?;
     write_minor_header(ws, (1, 14), "Stage")?;
     write_minor_header(ws, (1, 15), "Running")?;
+    ws.set_column_width(14, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(15, SPEED_COLUMN_WIDTH - 6.0)?;
 
     write_minor_header_merged(ws, (0, 16), (0, 17), "Ascent (m)")?;
     write_minor_header(ws, (1, 16), "Stage")?;
     write_minor_header(ws, (1, 17), "Running")?;
+    ws.set_column_width(16, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(17, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
 
     write_minor_header_merged(ws, (0, 18), (0, 19), "Descent (m)")?;
     write_minor_header(ws, (1, 18), "Stage")?;
     write_minor_header(ws, (1, 19), "Running")?;
+    ws.set_column_width(18, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(19, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
 
     write_minor_header_merged(ws, (0, 20), (0, 25), "Minimum Elevation (m)")?;
     write_minor_header(ws, (1, 20), "Elevation")?;
@@ -92,6 +111,12 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_minor_header(ws, (1, 23), "Lat")?;
     write_minor_header(ws, (1, 24), "Lon")?;
     write_minor_header(ws, (1, 25), "Map")?;
+    ws.set_column_width(20, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(21, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(22, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(23, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(24, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(25, LINKED_LAT_LON_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 26), (0, 31), "Maximum Elevation (m)")?;
     write_minor_header(ws, (1, 26), "Elevation")?;
@@ -100,18 +125,33 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_minor_header(ws, (1, 29), "Lat")?;
     write_minor_header(ws, (1, 30), "Lon")?;
     write_minor_header(ws, (1, 31), "Map")?;
+    ws.set_column_width(26, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(27, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(28, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(29, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(30, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(31, LINKED_LAT_LON_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 32), (0, 35), "Max Speed (kmh)")?;
     write_minor_header(ws, (1, 32), "Speed")?;
     write_minor_header(ws, (1, 33), "Lat")?;
     write_minor_header(ws, (1, 34), "Lon")?;
     write_minor_header(ws, (1, 35), "Map")?;
+    ws.set_column_width(32, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(33, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
 
     let mut row = 2;
     for (idx, stage) in stages.iter().enumerate() {
         ws.write_number(row, 0, (idx + 1) as u32)?;
         ws.write_string(row, 1, stage.stage_type.to_string())?;
-        write_lat_lon(ws, (row, 2), (stage.start.lat, stage.start.lon), Hyperlink::Yes)?;
+        write_lat_lon(
+            ws,
+            (row, 2),
+            (stage.start.lat, stage.start.lon),
+            Hyperlink::Yes,
+        )?;
         write_location(ws, (row, 5), &stage.start.location)?;
         write_utc_date(ws, (row, 6), stage.start.time)?;
         write_utc_date_as_local(ws, (row, 7), stage.start.time)?;
@@ -133,60 +173,37 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
             write_metres(ws, (row, 20), stage.min_elevation.ele)?;
             write_metres(ws, (row, 21), stage.min_elevation.running_metres / 1000.0)?;
             write_utc_date_as_local(ws, (row, 22), stage.min_elevation.time)?;
-            write_lat_lon(ws, (row, 23), (stage.min_elevation.lat, stage.min_elevation.lon), Hyperlink::Yes)?;
+            write_lat_lon(
+                ws,
+                (row, 23),
+                (stage.min_elevation.lat, stage.min_elevation.lon),
+                Hyperlink::Yes,
+            )?;
 
             write_metres(ws, (row, 26), stage.max_elevation.ele)?;
             write_metres(ws, (row, 27), stage.max_elevation.running_metres / 1000.0)?;
             write_utc_date_as_local(ws, (row, 28), stage.max_elevation.time)?;
-            write_lat_lon(ws, (row, 29), (stage.max_elevation.lat, stage.max_elevation.lon), Hyperlink::Yes)?;
+            write_lat_lon(
+                ws,
+                (row, 29),
+                (stage.max_elevation.lat, stage.max_elevation.lon),
+                Hyperlink::Yes,
+            )?;
 
             write_speed(ws, (row, 32), stage.max_speed.speed_kmh)?;
-            write_lat_lon(ws, (row, 33), (stage.max_speed.lat, stage.max_speed.lon), Hyperlink::Yes)?;
+            write_lat_lon(
+                ws,
+                (row, 33),
+                (stage.max_speed.lat, stage.max_speed.lon),
+                Hyperlink::Yes,
+            )?;
         }
 
         row += 1;
     }
 
-    ws.set_column_width(2, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(3, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(4, LINKED_LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(5, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
-    ws.set_column_width(6, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(7, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(8, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(9, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(10, DURATION_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(11, DURATION_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
-    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH - 3.0)?;
-    ws.set_column_width(14, SPEED_COLUMN_WIDTH - 6.0)?;
-    ws.set_column_width(15, SPEED_COLUMN_WIDTH - 6.0)?;
-    ws.set_column_width(16, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(17, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(18, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(19, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-
-    ws.set_column_width(20, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(21, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(22, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(23, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(24, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(25, LINKED_LAT_LON_COLUMN_WIDTH)?;
-
-    ws.set_column_width(26, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(27, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(28, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(29, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(30, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(31, LINKED_LAT_LON_COLUMN_WIDTH)?;
-
-    ws.set_column_width(32, SPEED_COLUMN_WIDTH - 6.0)?;
-    ws.set_column_width(33, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
-
     ws.set_freeze_panes(2, 0)?;
-    
+
     Ok(())
 }
 
@@ -204,25 +221,40 @@ fn write_trackpoints(
     write_minor_header(ws, (1, 2), "Local")?;
     write_minor_header(ws, (1, 3), "Delta")?;
     write_minor_header(ws, (1, 4), "Running")?;
+    ws.set_column_width(1, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(2, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(3, DURATION_COLUMN_WIDTH)?;
+    ws.set_column_width(4, DURATION_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 5), (0, 8), "Location")?;
     write_minor_header(ws, (1, 5), "Lat")?;
     write_minor_header(ws, (1, 6), "Lon")?;
     write_minor_header(ws, (1, 7), "Map")?;
     write_minor_header(ws, (1, 8), "Description")?;
+    ws.set_column_width(5, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(6, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(7, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(8, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 9), (0, 12), "Elevation (m)")?;
     write_minor_header(ws, (1, 9), "Height")?;
     write_minor_header(ws, (1, 10), "Delta")?;
     write_minor_header(ws, (1, 11), "Running Ascent")?;
     write_minor_header(ws, (1, 12), "Running Descent")?;
+    ws.set_column_width(9, STANDARD_METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(10, STANDARD_METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(11, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
 
     write_minor_header_merged(ws, (0, 13), (0, 14), "Distance")?;
     write_minor_header(ws, (1, 13), "Delta (m)")?;
     write_minor_header(ws, (1, 14), "Running (km)")?;
+    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(14, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
 
     write_minor_header_blank(ws, (0, 15))?;
     write_minor_header(ws, (1, 15), "Speed (kmh)")?;
+    ws.set_column_width(15, SPEED_COLUMN_WIDTH)?;
 
     // TODO: Use row banding?
     let mut row = 2;
@@ -243,22 +275,6 @@ fn write_trackpoints(
         write_speed(ws, (row, 15), p.speed_kmh)?;
         row += 1;
     }
-
-    ws.set_column_width(1, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(2, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(3, DURATION_COLUMN_WIDTH)?;
-    ws.set_column_width(4, DURATION_COLUMN_WIDTH)?;
-    ws.set_column_width(5, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(6, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(7, LINKED_LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(8, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
-    ws.set_column_width(9, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(10, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(11, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
-    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
-    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(14, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
-    ws.set_column_width(15, SPEED_COLUMN_WIDTH)?;
 
     ws.autofilter(1, 0, row - 1, 15)?;
     ws.set_freeze_panes(2, 0)?;
@@ -484,7 +500,8 @@ fn write_lat_lon_single_cell(
         Hyperlink::Yes => {
             ws.write_url_with_text(rc.0, rc.1, &*link, text)?;
         }
-        Hyperlink::No => { ws.write_string(rc.0, rc.1, &text)?;
+        Hyperlink::No => {
+            ws.write_string(rc.0, rc.1, &text)?;
         }
     };
 
@@ -530,4 +547,49 @@ fn write_speed(ws: &mut Worksheet, rc: (u32, u16), speed: f64) -> Result<(), Box
 
     ws.write_number_with_format(rc.0, rc.1, speed, &SPEED_FORMAT)?;
     Ok(())
+}
+
+struct FormatControl {
+    current_color: Color,
+    row_alt: bool,
+}
+
+impl FormatControl {
+    fn new() -> Self {
+        Self {
+            current_color: Color::Gray,
+            row_alt: false,
+        }
+    }
+
+    fn increment_row(&mut self) {
+        self.row_alt = !self.row_alt;
+    }
+
+    fn increment_column(&mut self) {
+        if self.current_color == Color::Gray {
+            self.current_color = Color::Theme(9, 2);
+        } else {
+            self.current_color = Color::Gray;
+        }
+    }
+
+    fn speed_format(&self) -> Format {
+        let format = Format::new().set_num_format("0.##");
+        self.apply_banding(format)
+    }
+
+    fn lat_lon_format(&self) -> Format {
+        let format = Format::new().set_num_format("#.000000");
+        self.apply_banding(format)
+    }
+
+    /// Helper method.
+    fn apply_banding(&self, format: Format) -> Format {
+        let mut format = format;
+        if !self.row_alt {
+            format = format.set_background_color(self.current_color);
+        }
+        format
+    }
 }

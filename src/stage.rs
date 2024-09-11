@@ -51,6 +51,11 @@ pub struct Stage<'gpx> {
     pub end: &'gpx EnrichedTrackPoint,
     pub min_elevation: &'gpx EnrichedTrackPoint,
     pub max_elevation: &'gpx EnrichedTrackPoint,
+    pub max_speed: &'gpx EnrichedTrackPoint,
+    // The first point in the track. We could pass it into
+    // the relevant methods, but storing it works ok too.
+    // We will need this to calculate some metrics later.
+    pub track_start_point: &'gpx EnrichedTrackPoint,
 }
 
 /// The type of a Stage.
@@ -75,6 +80,12 @@ impl<'gpx> Stage<'gpx> {
         self.end.time - self.start.time
     }
 
+    /// Returns the running duration to the end of the stage from
+    /// the 'starting_track_point' (normally will be the first point in the track).
+    pub fn running_duration(&self, starting_track_point: &EnrichedTrackPoint) -> Duration {
+        self.end.time - starting_track_point.time
+    }
+
     /// Returns the distance (length) of the stage, in metres.
     pub fn distance_metres(&self) -> f64 {
         self.end.running_metres - self.start.running_metres
@@ -87,7 +98,7 @@ impl<'gpx> Stage<'gpx> {
 
     /// Returns the cumulative distance to the end of the stage
     /// from the start of the entire track.
-    pub fn cum_distance_km(&self) -> f64 {
+    pub fn running_distance_km(&self) -> f64 {
         self.end.running_metres / 1000.0
     }
 
@@ -96,14 +107,35 @@ impl<'gpx> Stage<'gpx> {
         speed_kmh_from_duration(self.distance_metres(), self.duration())
     }
 
+    /// Returns the average speed, calculated over the distance from
+    /// the start of the track to the end of the stage.
+    pub fn running_average_speed_kmh(&self, starting_track_point: &EnrichedTrackPoint) -> f64 {
+        speed_kmh_from_duration(
+            self.end.running_metres,
+            self.running_duration(starting_track_point),
+        )
+    }
+
     /// Returns the total ascent in metres over the stage.
     pub fn ascent_metres(&self) -> f64 {
         self.end.running_ascent_metres - self.start.running_ascent_metres
     }
 
+    /// Returns the total ascent to the end of the stage from
+    /// the beginning of the track.
+    pub fn running_ascent_metres(&self) -> f64 {
+        self.end.running_ascent_metres
+    }
+
     /// Returns the total descent in metres over the stage.
     pub fn descent_metres(&self) -> f64 {
         self.end.running_descent_metres - self.start.running_descent_metres
+    }
+
+    /// Returns the total descent to the end of the stage from
+    /// the beginning of the track.
+    pub fn running_descent_metres(&self) -> f64 {
+        self.end.running_descent_metres
     }
 }
 
@@ -120,15 +152,15 @@ impl<'gpx> Index<usize> for StageList<'gpx> {
 
 impl<'gpx> StageList<'gpx> {
     // TODO: Implement Iterator properly.
-    fn iter(&self) -> slice::Iter<Stage> {
+    pub fn iter(&self) -> slice::Iter<Stage> {
         self.0.iter()
     }
 
-    fn first_point(&self) -> &EnrichedTrackPoint {
+    pub fn first_point(&self) -> &EnrichedTrackPoint {
         self.0[0].start
     }
 
-    fn last_point(&self) -> &EnrichedTrackPoint {
+    pub fn last_point(&self) -> &EnrichedTrackPoint {
         self.0[self.len() - 1].end
     }
 
@@ -228,7 +260,8 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
         gpx.points[idx].delta_metres = p1.geodesic_distance(&p2);
         assert!(gpx.points[idx].delta_metres >= 0.0);
 
-        gpx.points[idx].running_metres = gpx.points[idx - 1].running_metres + gpx.points[idx].delta_metres;
+        gpx.points[idx].running_metres =
+            gpx.points[idx - 1].running_metres + gpx.points[idx].delta_metres;
         assert!(gpx.points[idx].running_metres >= 0.0);
 
         // Time delta. Don't really need this stored, but is handy to spot
@@ -345,12 +378,7 @@ fn get_next_stage<'gpx>(
 
     // We have said that a Stage must be at least this long, so we need to
     // advance this far as a minimum.
-    let end_idx = advance_for_duration(
-        gpx,
-        start_idx,
-        last_valid_idx,
-        params.min_duration_seconds,
-    );
+    let end_idx = advance_for_duration(gpx, start_idx, last_valid_idx, params.min_duration_seconds);
     assert!(end_idx <= last_valid_idx);
     assert!(end_idx > start_idx, "Empty stages are not allowed");
 
@@ -544,116 +572,4 @@ fn find_resume_index(
 
     // If we get here then we exhausted all the TrackPoints.
     last_valid_idx
-}
-
-#[rustfmt::skip]
-pub fn write_sections_csv(p: &Path, sections: &StageList) {
-    let mut writer = csv::Writer::from_path(p).unwrap();
-
-    // Header. 4 fields from the original point, then the extended info.
-    writer
-        .write_record(vec![
-            "Num",
-            "Type",
-            "TP Start",
-            "TP End",
-            "Start Time (UTC)",
-            "Start Time (local)",
-            "End Time (UTC)",
-            "End Time (local)",
-            "Duration",
-            "Running Duration",
-            "Distance (km)",
-            "Running Distance (km)",
-            "Avg Speed (kmh)",
-            "Running Avg Speed (kmh)",
-            "Ascent (m)",
-            "Running Ascent (m)",
-            "Descent (m)",
-            "Running Descent (m)",
-            "Min Ele (m)",
-            "Min Ele Distance (m)",
-            "Min Ele Time (local)",
-            "Max Ele (m)",
-            "Max Ele Distance (m)",
-            "Max Ele Time (local)",
-            "Lat",
-            "Lon",
-            "Location"
-        ])
-        .unwrap();
-
-    for (idx, section) in sections.iter().enumerate() {
-        writer.write_field((idx + 1).to_string()).unwrap();
-        writer.write_field(section.stage_type.to_string()).unwrap();
-        writer.write_field(section.start.index.to_string()).unwrap();
-        writer.write_field(section.end.index.to_string()).unwrap();
-        writer.write_field(format_utc_date(section.start.time)).unwrap();
-        writer.write_field(format_utc_date_as_local(section.start.time)).unwrap();
-        writer.write_field(format_utc_date(section.end.time)).unwrap();
-        writer.write_field(format_utc_date_as_local(section.end.time)).unwrap();
-        writer.write_field(section.duration().to_string()).unwrap();
-        writer.write_field("TODO").unwrap();
-        if section.stage_type == StageType::Moving {
-            writer.write_field(format!("{:.2}", section.distance_km())).unwrap();
-            writer.write_field(format!("{:.2}", section.cum_distance_km())).unwrap();
-            writer.write_field(format!("{:.2}", section.average_speed_kmh())).unwrap();
-        } else {
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-        }
-        writer.write_field("TODO").unwrap();
-        if section.stage_type == StageType::Moving {
-            writer.write_field(format!("{:.2}", section.ascent_metres())).unwrap();
-            writer.write_field(format!("{:.2}", section.end.running_ascent_metres)).unwrap();
-            writer.write_field(format!("{:.2}", section.descent_metres())).unwrap();
-            writer.write_field(format!("{:.2}", section.end.running_descent_metres)).unwrap();
-        } else {
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-        }
-        // Always write min elevation, so we have an elevation for a Stopped section as well.
-        writer.write_field(format!("{:.2}", section.min_elevation.ele)).unwrap();
-        writer.write_field(format!("{:.2}", section.min_elevation.running_metres / 1000.0)).unwrap();
-        writer.write_field(format_utc_date_as_local(section.min_elevation.time)).unwrap();
-        if section.stage_type == StageType::Moving {
-            writer.write_field(format!("{:.2}", section.max_elevation.ele)).unwrap();
-            writer.write_field(format!("{:.2}", section.max_elevation.running_metres / 1000.0)).unwrap();
-            writer.write_field(format_utc_date_as_local(section.max_elevation.time)).unwrap();
-   
-        } else {
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-            writer.write_field("").unwrap();
-        }
-        writer.write_field(format!("{:.6}", section.start.lat)).unwrap();
-        writer.write_field(format!("{:.6}", section.start.lon)).unwrap();
-
-        // if section.stage_type == StageType::Moving {
-        //     if idx == 0 {
-        //         // The start control.
-        //         writer.write_field(&section.start.location).unwrap();
-        //     } else if idx == sections.len() - 1 {
-        //         // The finish control.
-        //         writer.write_field(&section.end.location).unwrap();
-        //     } else {
-        //         // Irrelevant, see the Stopped location instead.
-        //         writer.write_field("").unwrap();
-        //     }
-        // } else {
-        //     writer.write_field(&section.start.location).unwrap();
-        // }
-        // Terminator.
-        writer.write_record(None::<&[u8]>).unwrap();
-    }
-
-    // Now write a summary.
-    writer.write_record(None::<&[u8]>).unwrap();
-    writer.write_record(None::<&[u8]>).unwrap();
-    writer.write_record(vec!["Summary"]).unwrap();
-
-    writer.flush().unwrap();
 }

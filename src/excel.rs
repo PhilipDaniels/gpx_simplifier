@@ -8,8 +8,17 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     formatting::to_local_date,
     model::{EnrichedGpx, EnrichedTrackPoint},
-    stage::StageList,
+    stage::{StageList, StageType},
 };
+
+const DATE_COLUMN_WIDTH: f64 = 18.0;
+const DURATION_COLUMN_WIDTH: f64 = 12.0;
+const LAT_LON_COLUMN_WIDTH: f64 = 10.0;
+const LINKED_LAT_LON_COLUMN_WIDTH: f64 = 18.0;
+const LOCATION_DESCRIPTION_COLUMN_WIDTH: f64 = 18.0;
+const STANDARD_METRES_COLUMN_WIDTH: f64 = 11.0;
+const RUNNING_KILOMETRES_COLUMN_WIDTH: f64 = 15.0;
+const SPEED_COLUMN_WIDTH: f64 = 14.0;
 
 pub fn write_summary_file<'gpx>(
     summary_filename: &Path,
@@ -23,15 +32,150 @@ pub fn write_summary_file<'gpx>(
     // This will appear as the first sheet in the workbook.
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
-
+    write_stages(stages, stages_ws)?;
+    
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
-    write_trackpoints(&gpx.points, tp_ws)?;
+    //write_trackpoints(&gpx.points, tp_ws)?;
 
     workbook.save(summary_filename).unwrap();
     let metadata = std::fs::metadata(summary_filename).unwrap();
     println!(", {} Kb", metadata.len() / 1024);
+    Ok(())
+}
+
+fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<(), Box<dyn Error>> {
+    write_minor_header_blank(ws, (0, 0))?;
+    write_minor_header(ws, (1, 0), "Stage")?;
+    write_minor_header_blank(ws, (0, 1))?;
+    write_minor_header(ws, (1, 1), "Type")?;
+
+    write_minor_header_merged(ws, (0, 2), (0, 5), "Stage Location")?;
+    write_minor_header(ws, (1, 2), "Lat")?;
+    write_minor_header(ws, (1, 3), "Lon")?;
+    write_minor_header(ws, (1, 4), "Map")?;
+    write_minor_header(ws, (1, 5), "Description")?;
+
+    write_minor_header_merged(ws, (0, 6), (0, 7), "Start Time")?;
+    write_minor_header(ws, (1, 6), "UTC")?;
+    write_minor_header(ws, (1, 7), "Local")?;
+
+    write_minor_header_merged(ws, (0, 8), (0, 9), "End Time")?;
+    write_minor_header(ws, (1, 8), "UTC")?;
+    write_minor_header(ws, (1, 9), "Local")?;
+
+    write_minor_header_merged(ws, (0, 10), (0, 11), "Duration")?;
+    write_minor_header(ws, (1, 10), "hms")?;
+    write_minor_header(ws, (1, 11), "Running")?;
+
+    write_minor_header_merged(ws, (0, 12), (0, 13), "Distance (km)")?;
+    write_minor_header(ws, (1, 12), "Stage")?;
+    write_minor_header(ws, (1, 13), "Running")?;
+
+    write_minor_header_merged(ws, (0, 14), (0, 15), "Avg Speed (kmh)")?;
+    write_minor_header(ws, (1, 14), "Stage")?;
+    write_minor_header(ws, (1, 15), "Running")?;
+
+    write_minor_header_merged(ws, (0, 16), (0, 17), "Ascent (m)")?;
+    write_minor_header(ws, (1, 16), "Stage")?;
+    write_minor_header(ws, (1, 17), "Running")?;
+
+    write_minor_header_merged(ws, (0, 18), (0, 19), "Descent (m)")?;
+    write_minor_header(ws, (1, 18), "Stage")?;
+    write_minor_header(ws, (1, 19), "Running")?;
+
+    write_minor_header_merged(ws, (0, 20), (0, 25), "Minimum Elevation (m)")?;
+    write_minor_header(ws, (1, 20), "Elevation")?;
+    write_minor_header(ws, (1, 21), "Distance (km)")?;
+    write_minor_header(ws, (1, 22), "Time (local)")?;
+    write_minor_header(ws, (1, 23), "Lat")?;
+    write_minor_header(ws, (1, 24), "Lon")?;
+    write_minor_header(ws, (1, 25), "Map")?;
+
+    write_minor_header_merged(ws, (0, 26), (0, 31), "Maximum Elevation (m)")?;
+    write_minor_header(ws, (1, 26), "Elevation")?;
+    write_minor_header(ws, (1, 27), "Distance (km)")?;
+    write_minor_header(ws, (1, 28), "Time (local)")?;
+    write_minor_header(ws, (1, 29), "Lat")?;
+    write_minor_header(ws, (1, 30), "Lon")?;
+    write_minor_header(ws, (1, 31), "Map")?;
+
+    write_minor_header_merged(ws, (0, 32), (0, 35), "Max Speed (kmh)")?;
+    write_minor_header(ws, (1, 32), "Speed")?;
+    write_minor_header(ws, (1, 33), "Lat")?;
+    write_minor_header(ws, (1, 34), "Lon")?;
+    write_minor_header(ws, (1, 35), "Map")?;
+
+    let first_track_point = stages.first_point();
+
+    let mut row = 2;
+    for (idx, stage) in stages.iter().enumerate() {
+        ws.write_number(row, 0, (idx + 1) as u32)?;
+        ws.write_string(row, 1, stage.stage_type.to_string())?;
+        write_lat_lon(ws, (row, 2), (stage.start.lat, stage.start.lon), Hyperlink::Yes)?;
+        write_location(ws, (row, 5), &stage.start.location)?;
+        write_utc_date(ws, (row, 6), stage.start.time)?;
+        write_utc_date_as_local(ws, (row, 7), stage.start.time)?;
+        write_utc_date(ws, (row, 8), stage.end.time)?;
+        write_utc_date_as_local(ws, (row, 9), stage.end.time)?;
+        write_duration(ws, (row, 10), stage.duration())?;
+        write_duration(ws, (row, 11), stage.duration())?;
+
+        if stage.stage_type == StageType::Moving {
+            write_kilometres(ws, (row, 12), stage.distance_km())?;
+            write_kilometres(ws, (row, 13), stage.running_distance_km())?;
+            write_speed(ws, (row, 14), stage.average_speed_kmh())?;
+            write_speed(ws, (row, 15), stage.running_average_speed_kmh(first_track_point))?;
+            write_speed(ws, (row, 16), stage.ascent_metres())?;
+            write_speed(ws, (row, 17), stage.running_ascent_metres())?;
+            write_speed(ws, (row, 18), stage.descent_metres())?;
+            write_speed(ws, (row, 19), stage.running_descent_metres())?;
+            write_speed(ws, (row, 20), stage.min_elevation.ele)?;
+            write_speed(ws, (row, 21), stage.min_elevation.running_metres / 1000.0)?;
+            write_utc_date_as_local(ws, (row, 22), stage.min_elevation.time)?;
+            write_lat_lon(ws, (row, 23), (stage.min_elevation.lat, stage.min_elevation.lon), Hyperlink::Yes)?;
+            write_speed(ws, (row, 26), stage.max_elevation.ele)?;
+            write_speed(ws, (row, 27), stage.max_elevation.running_metres / 1000.0)?;
+            write_utc_date_as_local(ws, (row, 28), stage.max_elevation.time)?;
+            write_lat_lon(ws, (row, 29), (stage.max_elevation.lat, stage.max_elevation.lon), Hyperlink::Yes)?;
+        }
+
+        row += 1;
+    }
+
+    ws.set_column_width(2, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(3, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(4, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(5, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
+    ws.set_column_width(6, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(7, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(8, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(9, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(10, DURATION_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(11, DURATION_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH - 3.0)?;
+    ws.set_column_width(14, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(15, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(16, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(17, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(18, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(19, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+
+    ws.set_column_width(20, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(21, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(22, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(23, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(24, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(25, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(26, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(27, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(28, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(29, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(30, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(31, LINKED_LAT_LON_COLUMN_WIDTH)?;
+
     Ok(())
 }
 
@@ -89,19 +233,13 @@ fn write_trackpoints(
         row += 1;
     }
 
-    const DATE_COLUMN_WIDTH: f64 = 18.0;
-    const DURATION_COLUMN_WIDTH: f64 = 12.0;
-    const LAT_LON_COLUMN_WIDTH: f64 = 10.0;
-    const LOCATION_DESCRIPTION_COLUMN_WIDTH: f64 = 18.0;
-    const STANDARD_METRES_COLUMN_WIDTH: f64 = 11.0;
-    const RUNNING_KILOMETRES_COLUMN_WIDTH: f64 = 15.0;
-    const SPEED_COLUMN_WIDTH: f64 = 14.0;
     ws.set_column_width(1, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(2, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(3, DURATION_COLUMN_WIDTH)?;
     ws.set_column_width(4, DURATION_COLUMN_WIDTH)?;
     ws.set_column_width(5, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(6, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(7, LINKED_LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(8, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
     ws.set_column_width(9, STANDARD_METRES_COLUMN_WIDTH)?;
     ws.set_column_width(10, STANDARD_METRES_COLUMN_WIDTH)?;
@@ -295,18 +433,48 @@ fn write_lat_lon(
         LazyLock::new(|| Format::new().set_num_format("#.000000"));
 
     let link = format!(
-        "https://www.google.com/maps/search/?api=1&query={},{}",
+        "https://www.google.com/maps/search/?api=1&query={:.6},{:.6}",
         lat_lon.0, lat_lon.1
     );
+
+    let text = format!("{:.6},{:.6}", lat_lon.0, lat_lon.1);
 
     ws.write_number_with_format(rc.0, rc.1, lat_lon.0, &LAT_LON_FORMAT)?;
     ws.write_number_with_format(rc.0, rc.1 + 1, lat_lon.1, &LAT_LON_FORMAT)?;
 
     match hyperlink {
         Hyperlink::Yes => {
-            ws.write_url_with_text(rc.0, rc.1 + 2, &*link, "Map")?;
+            ws.write_url_with_text(rc.0, rc.1 + 2, &*link, &text)?;
         }
         Hyperlink::No => {}
+    };
+
+    Ok(())
+}
+
+/// Writes a lat-lon pair into a single cell.
+/// If 'hyperlink' is yes then a hyperlink to Google Maps is written as
+/// well as the text. This function saves 2 columns of space compared
+/// to 'write_lat_lon'.
+fn write_lat_lon_single_cell(
+    ws: &mut Worksheet,
+    rc: (u32, u16),
+    lat_lon: (f64, f64),
+    hyperlink: Hyperlink,
+) -> Result<(), Box<dyn Error>> {
+    let link = format!(
+        "https://www.google.com/maps/search/?api=1&query={},{}",
+        lat_lon.0, lat_lon.1
+    );
+
+    let text = format!("{:.6},{:.6}", lat_lon.0, lat_lon.1);
+
+    match hyperlink {
+        Hyperlink::Yes => {
+            ws.write_url_with_text(rc.0, rc.1, &*link, text)?;
+        }
+        Hyperlink::No => { ws.write_string(rc.0, rc.1, &text)?;
+        }
     };
 
     Ok(())

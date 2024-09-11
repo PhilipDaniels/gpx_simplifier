@@ -82,8 +82,8 @@ impl<'gpx> Stage<'gpx> {
 
     /// Returns the running duration to the end of the stage from
     /// the 'starting_track_point' (normally will be the first point in the track).
-    pub fn running_duration(&self, starting_track_point: &EnrichedTrackPoint) -> Duration {
-        self.end.time - starting_track_point.time
+    pub fn running_duration(&self) -> Duration {
+        self.end.time - self.track_start_point.time
     }
 
     /// Returns the distance (length) of the stage, in metres.
@@ -109,11 +109,8 @@ impl<'gpx> Stage<'gpx> {
 
     /// Returns the average speed, calculated over the distance from
     /// the start of the track to the end of the stage.
-    pub fn running_average_speed_kmh(&self, starting_track_point: &EnrichedTrackPoint) -> f64 {
-        speed_kmh_from_duration(
-            self.end.running_metres,
-            self.running_duration(starting_track_point),
-        )
+    pub fn running_average_speed_kmh(&self) -> f64 {
+        speed_kmh_from_duration(self.end.running_metres, self.running_duration())
     }
 
     /// Returns the total ascent in metres over the stage.
@@ -438,6 +435,8 @@ fn get_next_stage<'gpx>(
         end: &gpx.points[end_idx],
         min_elevation: min_ele,
         max_elevation: max_ele,
+        max_speed: find_max_speed(gpx, start_idx, end_idx),
+        track_start_point: &gpx.points[0],
     };
 
     // Just check we created everything correctly.
@@ -446,6 +445,7 @@ fn get_next_stage<'gpx>(
     assert_eq!(stage.end.index, end_idx);
     assert!(stage.end.index > stage.start.index);
     assert!(stage.end.time > stage.start.time);
+    assert!(stage.start.index >= stage.track_start_point.index);
 
     return Some(stage);
 }
@@ -495,6 +495,24 @@ fn find_min_and_max_elevation_points<'gpx>(
     assert!(max.ele >= min.ele);
 
     (min, max)
+}
+
+/// Within a given range of trackpoints, finds the one with the maximum
+/// speed.
+fn find_max_speed<'gpx>(
+    gpx: &'gpx EnrichedGpx,
+    start_idx: usize,
+    end_idx: usize,
+) -> &'gpx EnrichedTrackPoint {
+    let mut max = &gpx.points[start_idx];
+
+    for tp in &gpx.points[start_idx..=end_idx] {
+        if tp.speed_kmh > max.speed_kmh {
+            max = tp;
+        }
+    }
+
+    max
 }
 
 /// A Moving stage is ended when we stop. This occurs when we drop below the

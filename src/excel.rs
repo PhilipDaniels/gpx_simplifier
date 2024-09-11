@@ -107,8 +107,6 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_minor_header(ws, (1, 34), "Lon")?;
     write_minor_header(ws, (1, 35), "Map")?;
 
-    let first_track_point = stages.first_point();
-
     let mut row = 2;
     for (idx, stage) in stages.iter().enumerate() {
         ws.write_number(row, 0, (idx + 1) as u32)?;
@@ -126,19 +124,24 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
             write_kilometres(ws, (row, 12), stage.distance_km())?;
             write_kilometres(ws, (row, 13), stage.running_distance_km())?;
             write_speed(ws, (row, 14), stage.average_speed_kmh())?;
-            write_speed(ws, (row, 15), stage.running_average_speed_kmh(first_track_point))?;
-            write_speed(ws, (row, 16), stage.ascent_metres())?;
-            write_speed(ws, (row, 17), stage.running_ascent_metres())?;
-            write_speed(ws, (row, 18), stage.descent_metres())?;
-            write_speed(ws, (row, 19), stage.running_descent_metres())?;
-            write_speed(ws, (row, 20), stage.min_elevation.ele)?;
-            write_speed(ws, (row, 21), stage.min_elevation.running_metres / 1000.0)?;
+            write_speed(ws, (row, 15), stage.running_average_speed_kmh())?;
+            write_metres(ws, (row, 16), stage.ascent_metres())?;
+            write_metres(ws, (row, 17), stage.running_ascent_metres())?;
+            write_metres(ws, (row, 18), stage.descent_metres())?;
+            write_metres(ws, (row, 19), stage.running_descent_metres())?;
+
+            write_metres(ws, (row, 20), stage.min_elevation.ele)?;
+            write_metres(ws, (row, 21), stage.min_elevation.running_metres / 1000.0)?;
             write_utc_date_as_local(ws, (row, 22), stage.min_elevation.time)?;
             write_lat_lon(ws, (row, 23), (stage.min_elevation.lat, stage.min_elevation.lon), Hyperlink::Yes)?;
-            write_speed(ws, (row, 26), stage.max_elevation.ele)?;
-            write_speed(ws, (row, 27), stage.max_elevation.running_metres / 1000.0)?;
+
+            write_metres(ws, (row, 26), stage.max_elevation.ele)?;
+            write_metres(ws, (row, 27), stage.max_elevation.running_metres / 1000.0)?;
             write_utc_date_as_local(ws, (row, 28), stage.max_elevation.time)?;
             write_lat_lon(ws, (row, 29), (stage.max_elevation.lat, stage.max_elevation.lon), Hyperlink::Yes)?;
+
+            write_speed(ws, (row, 32), stage.max_speed.speed_kmh)?;
+            write_lat_lon(ws, (row, 33), (stage.max_speed.lat, stage.max_speed.lon), Hyperlink::Yes)?;
         }
 
         row += 1;
@@ -164,18 +167,26 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     ws.set_column_width(19, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
 
     ws.set_column_width(20, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(21, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(21, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
     ws.set_column_width(22, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(23, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(24, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(25, LINKED_LAT_LON_COLUMN_WIDTH)?;
+
     ws.set_column_width(26, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(27, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(27, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
     ws.set_column_width(28, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(29, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(30, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(31, LINKED_LAT_LON_COLUMN_WIDTH)?;
 
+    ws.set_column_width(32, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(33, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
+
+    ws.set_freeze_panes(2, 0)?;
+    
     Ok(())
 }
 

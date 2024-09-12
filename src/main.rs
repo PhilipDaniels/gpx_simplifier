@@ -161,7 +161,6 @@ fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
                 if ext.to_ascii_lowercase() == "gpx" {
                     let s = s.to_string_lossy().to_ascii_lowercase();
                     if !s.ends_with(".simplified.gpx") {
-                        println!("Found GPX input file {:?}", entry.path());
                         files.push(entry.path());
                     }
                 }
@@ -170,6 +169,10 @@ fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
     }
 
     files.sort_unstable();
+    
+    for f in &files {
+        println!("Found GPX input file {:?}", f);
+    }
 
     files
 }

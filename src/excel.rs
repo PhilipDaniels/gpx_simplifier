@@ -38,7 +38,7 @@ pub fn write_summary_file<'gpx>(
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
-    //write_trackpoints(&gpx.points, tp_ws)?;
+    write_trackpoints(&gpx.points, tp_ws)?;
 
     workbook.save(summary_filename).unwrap();
     let metadata = std::fs::metadata(summary_filename).unwrap();

@@ -150,10 +150,12 @@ impl<'gpx> StageList<'gpx> {
         self.0.iter()
     }
 
+    /// Returns the first point in the first stage.
     pub fn first_point(&self) -> &EnrichedTrackPoint {
         self.0[0].start
     }
 
+    /// Returns the last point in the last stage.
     pub fn last_point(&self) -> &EnrichedTrackPoint {
         self.0[self.len() - 1].end
     }

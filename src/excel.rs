@@ -180,9 +180,10 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     ws.set_column_width(45, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 46), (0, 47), "TrackPoint")?;
+    write_header_merged(ws, &fc, (0, 46), (0, 48), "Track Points")?;
     write_header(ws, &fc, (1, 46), "First")?;
     write_header(ws, &fc, (1, 47), "Last")?;
+    write_header(ws, &fc, (1, 48), "Count")?;
 
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();
@@ -238,10 +239,21 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
             write_max_speed_data(ws, &fc, (row, 32), stage.max_speed)?;
         } else {
             // Write blanks so that the banding formatting is applied.
-            for col in 12..=35 {
+            for col in 12..=34 {
                 write_blank(ws, &fc, (row, col))?;
             }
         }
+
+        fc.increment_column();
+        // heart rate here
+
+        fc.increment_column();
+        // temp here
+
+        fc.increment_column();
+        write_trackpoint_hyperlink(ws, &fc, (row, 46), stage.start.index)?;
+        write_trackpoint_hyperlink(ws, &fc, (row, 47), stage.end.index)?;
+        write_integer(ws, &fc, (row, 48), (stage.end.index - stage.start.index + 1).try_into()?)?;
 
         row += 1;
         fc.increment_row();
@@ -286,6 +298,14 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_elevation_data(ws, &fc, (row, 26), stages.max_elevation())?;
     fc.increment_column();
     write_max_speed_data(ws, &fc, (row, 32), stages.max_speed())?;
+    fc.increment_column();
+    // Heart rate here
+    fc.increment_column();
+    // Temperature here
+    fc.increment_column();
+    write_trackpoint_hyperlink(ws, &fc, (row, 46), stages.first_point().index)?;
+    write_trackpoint_hyperlink(ws, &fc, (row, 47), stages.last_point().index)?;
+    write_integer(ws, &fc, (row, 48), (stages.last_point().index - stages.first_point().index + 1).try_into()?)?;
 
     Ok(())
 }
@@ -596,6 +616,24 @@ fn write_lat_lon(
         Hyperlink::No => {}
     };
 
+    Ok(())
+}
+
+/// Writes a hyperlink to the trackpoints sheet.
+fn write_trackpoint_hyperlink(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    trackpoint_index: usize
+) -> Result<(), Box<dyn Error>> {
+    let format = fc.integer_format().set_font_color(Color::Black);
+    let url = Url::new(format!(
+        "internal:'Track Points'!A{}",
+        trackpoint_index + 3    // allow for the heading.
+    ))
+    .set_text(trackpoint_index.to_string());
+
+    ws.write_url_with_format(rc.0, rc.1, url, &format)?;
     Ok(())
 }
 

@@ -13,13 +13,17 @@ use crate::{
 };
 
 const DATE_COLUMN_WIDTH: f64 = 18.0;
-const DURATION_COLUMN_WIDTH: f64 = 12.0;
-const LAT_LON_COLUMN_WIDTH: f64 = 10.0;
+const DURATION_COLUMN_WIDTH: f64 = 9.0;
+const LAT_LON_COLUMN_WIDTH: f64 = 9.0;
 const LINKED_LAT_LON_COLUMN_WIDTH: f64 = 18.0;
 const LOCATION_DESCRIPTION_COLUMN_WIDTH: f64 = 18.0;
-const STANDARD_METRES_COLUMN_WIDTH: f64 = 11.0;
-const RUNNING_KILOMETRES_COLUMN_WIDTH: f64 = 15.0;
-const SPEED_COLUMN_WIDTH: f64 = 14.0;
+const ELEVATION_COLUMN_WIDTH_WITH_UNITS: f64 = 12.0;
+const METRES_COLUMN_WIDTH_WITH_UNITS: f64 = 11.0;
+const METRES_COLUMN_WIDTH: f64 = 8.0;
+const KILOMETRES_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
+const KILOMETRES_COLUMN_WIDTH: f64 = 8.0;
+const SPEED_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
+const SPEED_COLUMN_WIDTH: f64 = 8.0;
 
 pub fn write_summary_file<'gpx>(
     summary_filename: &Path,
@@ -85,47 +89,47 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_header_merged(ws, &fc, (0, 10), (0, 11), "Duration")?;
     write_header(ws, &fc, (1, 10), "hms")?;
     write_header(ws, &fc, (1, 11), "Running")?;
-    ws.set_column_width(10, DURATION_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(11, DURATION_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(10, DURATION_COLUMN_WIDTH)?;
+    ws.set_column_width(11, DURATION_COLUMN_WIDTH)?;
     fc.increment_column();
 
     write_header_merged(ws, &fc, (0, 12), (0, 13), "Distance (km)")?;
     write_header(ws, &fc, (1, 12), "Stage")?;
     write_header(ws, &fc, (1, 13), "Running")?;
-    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH - 6.0)?;
-    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH - 3.0)?;
+    ws.set_column_width(12, KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(13, METRES_COLUMN_WIDTH)?;
     fc.increment_column();
 
     write_header_merged(ws, &fc, (0, 14), (0, 15), "Avg Speed (kmh)")?;
     write_header(ws, &fc, (1, 14), "Stage")?;
     write_header(ws, &fc, (1, 15), "Running")?;
-    ws.set_column_width(14, SPEED_COLUMN_WIDTH - 6.0)?;
-    ws.set_column_width(15, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(14, SPEED_COLUMN_WIDTH)?;
+    ws.set_column_width(15, SPEED_COLUMN_WIDTH)?;
     fc.increment_column();
 
     write_header_merged(ws, &fc, (0, 16), (0, 17), "Ascent (m)")?;
     write_header(ws, &fc, (1, 16), "Stage")?;
     write_header(ws, &fc, (1, 17), "Running")?;
-    ws.set_column_width(16, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(17, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(16, METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(17, METRES_COLUMN_WIDTH)?;
     fc.increment_column();
 
     write_header_merged(ws, &fc, (0, 18), (0, 19), "Descent (m)")?;
     write_header(ws, &fc, (1, 18), "Stage")?;
     write_header(ws, &fc, (1, 19), "Running")?;
-    ws.set_column_width(18, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(19, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(18, METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(19, METRES_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 20), (0, 25), "Minimum Elevation (m)")?;
-    write_header(ws, &fc, (1, 20), "Elevation")?;
+    write_header_merged(ws, &fc, (0, 20), (0, 25), "Minimum Elevation")?;
+    write_header(ws, &fc, (1, 20), "Elevation (m)")?;
     write_header(ws, &fc, (1, 21), "Distance (km)")?;
     write_header(ws, &fc, (1, 22), "Time (local)")?;
     write_header(ws, &fc, (1, 23), "Lat")?;
     write_header(ws, &fc, (1, 24), "Lon")?;
     write_header(ws, &fc, (1, 25), "Map")?;
-    ws.set_column_width(20, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(21, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(20, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(21, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(22, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(23, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(24, LAT_LON_COLUMN_WIDTH)?;
@@ -139,8 +143,8 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_header(ws, &fc, (1, 29), "Lat")?;
     write_header(ws, &fc, (1, 30), "Lon")?;
     write_header(ws, &fc, (1, 31), "Map")?;
-    ws.set_column_width(26, STANDARD_METRES_COLUMN_WIDTH - 2.0)?;
-    ws.set_column_width(27, RUNNING_KILOMETRES_COLUMN_WIDTH - 2.0)?;
+    ws.set_column_width(26, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(27, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(28, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(29, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(30, LAT_LON_COLUMN_WIDTH)?;
@@ -152,7 +156,7 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_header(ws, &fc, (1, 33), "Lat")?;
     write_header(ws, &fc, (1, 34), "Lon")?;
     write_header(ws, &fc, (1, 35), "Map")?;
-    ws.set_column_width(32, SPEED_COLUMN_WIDTH - 6.0)?;
+    ws.set_column_width(32, SPEED_COLUMN_WIDTH)?;
     ws.set_column_width(33, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
@@ -310,32 +314,6 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     Ok(())
 }
 
-/// Writes an elevation data block (min or max) as found on the Stages tab.
-fn write_elevation_data(
-    ws: &mut Worksheet,
-    fc: &FormatControl,
-    rc: (u32, u16),
-    point: &EnrichedTrackPoint
-) -> Result<(), Box<dyn Error>> {
-    write_metres(ws, &fc, (rc.0, rc.1), point.ele)?;
-    write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
-    write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), point.time)?;
-    write_lat_lon(ws, &fc, (rc.0, rc.1 + 3), (point.lat, point.lon), Hyperlink::Yes)?;
-    Ok(())
-}
-
-/// Writes an max speed data block (min or max) as found on the Stages tab.
-fn write_max_speed_data(
-    ws: &mut Worksheet,
-    fc: &FormatControl,
-    rc: (u32, u16),
-    point: &EnrichedTrackPoint
-) -> Result<(), Box<dyn Error>> {
-    write_speed(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
-    write_lat_lon(ws, &fc, (rc.0, rc.1 + 1), (point.lat, point.lon), Hyperlink::Yes)?;
-    Ok(())
-}
-
 fn write_trackpoints(
     points: &[EnrichedTrackPoint],
     ws: &mut Worksheet,
@@ -373,22 +351,22 @@ fn write_trackpoints(
     write_header(ws, &fc, (1, 10), "Delta")?;
     write_header(ws, &fc, (1, 11), "Running Ascent")?;
     write_header(ws, &fc, (1, 12), "Running Descent")?;
-    ws.set_column_width(9, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(10, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(11, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
-    ws.set_column_width(12, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(9, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(10, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(11, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(12, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     fc.increment_column();
 
     write_header_merged(ws, &fc, (0, 13), (0, 14), "Distance")?;
     write_header(ws, &fc, (1, 13), "Delta (m)")?;
     write_header(ws, &fc, (1, 14), "Running (km)")?;
-    ws.set_column_width(13, STANDARD_METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(14, RUNNING_KILOMETRES_COLUMN_WIDTH)?;
+    ws.set_column_width(13, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(14, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     fc.increment_column();
 
     write_header_blank(ws, &fc, (0, 15))?;
     write_header(ws, &fc, (1, 15), "Speed (kmh)")?;
-    ws.set_column_width(15, SPEED_COLUMN_WIDTH)?;
+    ws.set_column_width(15, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
 
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();
@@ -580,6 +558,32 @@ fn duration_to_excel_date(duration: Duration) -> Result<ExcelDateTime, Box<dyn E
     Ok(ExcelDateTime::from_hms(hours, minutes, seconds)?)
 }
 
+/// Writes an elevation data block (min or max) as found on the Stages tab.
+fn write_elevation_data(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    point: &EnrichedTrackPoint
+) -> Result<(), Box<dyn Error>> {
+    write_metres(ws, &fc, (rc.0, rc.1), point.ele)?;
+    write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
+    write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), point.time)?;
+    write_lat_lon(ws, &fc, (rc.0, rc.1 + 3), (point.lat, point.lon), Hyperlink::Yes)?;
+    Ok(())
+}
+
+/// Writes an max speed data block (min or max) as found on the Stages tab.
+fn write_max_speed_data(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    point: &EnrichedTrackPoint
+) -> Result<(), Box<dyn Error>> {
+    write_speed(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
+    write_lat_lon(ws, &fc, (rc.0, rc.1 + 1), (point.lat, point.lon), Hyperlink::Yes)?;
+    Ok(())
+}
+
 enum Hyperlink {
     Yes,
     No,
@@ -608,7 +612,7 @@ fn write_lat_lon(
                 "https://www.google.com/maps/search/?api=1&query={:.6},{:.6}",
                 lat_lon.0, lat_lon.1
             ))
-            .set_text(format!("{:.6},{:.6}", lat_lon.0, lat_lon.1));
+            .set_text(format!("{:.6}, {:.6}", lat_lon.0, lat_lon.1));
 
             // TODO: Font still blue.
             ws.write_url_with_format(rc.0, rc.1 + 2, url, &format)?;

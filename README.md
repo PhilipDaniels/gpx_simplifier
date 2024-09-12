@@ -81,10 +81,11 @@ Or build from source using cargo.
 
 
 # TODO
-- Fix the stage detection.
+- Fix the stage detection. Use distance moved as the prime metric?
 - Extract the extension information from the GPX - need to go back
   to manual parsing? Use speed from the GPX in preference to trying
   to derive it.
 - Include hr, temperature in the xlsx.
 - Trackpoint in-sheet hyperlink
 - Reverse geocode the stopped stages and the first and last point.
+- Use Rayon

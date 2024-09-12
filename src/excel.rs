@@ -38,7 +38,7 @@ pub fn write_summary_file<'gpx>(
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
-    write_trackpoints(&gpx.points, tp_ws)?;
+    //write_trackpoints(&gpx.points, tp_ws)?;
 
     workbook.save(summary_filename).unwrap();
     let metadata = std::fs::metadata(summary_filename).unwrap();
@@ -156,6 +156,33 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     ws.set_column_width(33, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    fc.increment_column();
+    
+    write_header_merged(ws, &fc, (0, 36), (0, 40), "Heart Rate")?;
+    write_header(ws, &fc, (1, 36), "Avg")?;
+    write_header(ws, &fc, (1, 37), "Max")?;
+    write_header(ws, &fc, (1, 38), "Lat")?;
+    write_header(ws, &fc, (1, 39), "Lon")?;
+    write_header(ws, &fc, (1, 40), "Map")?;
+    ws.set_column_width(39, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(39, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(40, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    fc.increment_column();
+    
+    write_header_merged(ws, &fc, (0, 41), (0, 45), "Temp °C")?;
+    write_header(ws, &fc, (1, 41), "Avg")?;
+    write_header(ws, &fc, (1, 42), "Max")?;
+    write_header(ws, &fc, (1, 43), "Lat")?;
+    write_header(ws, &fc, (1, 44), "Lon")?;
+    write_header(ws, &fc, (1, 45), "Map")?;
+    ws.set_column_width(43, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(44, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(45, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    fc.increment_column();
+
+    write_header_merged(ws, &fc, (0, 46), (0, 47), "TrackPoint")?;
+    write_header(ws, &fc, (1, 46), "First")?;
+    write_header(ws, &fc, (1, 47), "Last")?;
 
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();

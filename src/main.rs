@@ -71,6 +71,7 @@ fn main() {
             };
 
             let stages = detect_stages(&gpx, params);
+            // TODO: We can't write files in parallel.
             write_summary_file(&summary_filename, &gpx, &stages).unwrap();
         }
 
@@ -88,6 +89,7 @@ fn main() {
                     gpx.filename
                 );
 
+                // TODO: We can't write files in parallel.
                 write_simplified_gpx_file(&simplified_filename, &gpx);
             }
         }

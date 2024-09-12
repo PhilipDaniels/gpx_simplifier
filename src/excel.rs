@@ -7,6 +7,7 @@ use rust_xlsxwriter::{
 use time::{Duration, OffsetDateTime};
 
 use crate::{
+    args::{Hyperlink, TrackpointSummaryOptions},
     formatting::to_local_date,
     model::{EnrichedGpx, EnrichedTrackPoint},
     stage::{StageList, StageType},
@@ -27,6 +28,7 @@ const SPEED_COLUMN_WIDTH: f64 = 8.0;
 
 pub fn write_summary_file<'gpx>(
     summary_filename: &Path,
+    trackpoint_options: TrackpointSummaryOptions,
     gpx: &EnrichedGpx,
     stages: &StageList<'gpx>,
 ) -> Result<(), Box<dyn Error>> {
@@ -37,12 +39,17 @@ pub fn write_summary_file<'gpx>(
     // This will appear as the first sheet in the workbook.
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
-    write_stages(stages, stages_ws)?;
+    write_stages(stages_ws, trackpoint_options, stages)?;
 
     // This will appear as the second sheet in the workbook.
-    let tp_ws = workbook.add_worksheet();
-    tp_ws.set_name("Track Points")?;
-    write_trackpoints(&gpx.points, tp_ws)?;
+    match trackpoint_options {
+        TrackpointSummaryOptions::NoTrackpoints => {}
+        TrackpointSummaryOptions::Trackpoints(hyperlink) => {
+            let tp_ws = workbook.add_worksheet();
+            tp_ws.set_name("Track Points")?;
+            write_trackpoints(tp_ws, hyperlink, &gpx.points)?;
+        }
+    }
 
     workbook.save(summary_filename).unwrap();
     let metadata = std::fs::metadata(summary_filename).unwrap();
@@ -50,7 +57,11 @@ pub fn write_summary_file<'gpx>(
     Ok(())
 }
 
-fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<(), Box<dyn Error>> {
+fn write_stages<'gpx>(
+    ws: &mut Worksheet,
+    trackpoint_options: TrackpointSummaryOptions,
+    stages: &StageList<'gpx>,
+) -> Result<(), Box<dyn Error>> {
     let mut fc = FormatControl::new();
 
     write_header_blank(ws, &fc, (0, 0))?;
@@ -161,7 +172,7 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
-    
+
     write_header_merged(ws, &fc, (0, 36), (0, 40), "Heart Rate")?;
     write_header(ws, &fc, (1, 36), "Avg")?;
     write_header(ws, &fc, (1, 37), "Max")?;
@@ -172,7 +183,7 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     ws.set_column_width(39, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(40, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
-    
+
     write_header_merged(ws, &fc, (0, 41), (0, 45), "Temp °C")?;
     write_header(ws, &fc, (1, 41), "Avg")?;
     write_header(ws, &fc, (1, 42), "Max")?;
@@ -188,6 +199,16 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     write_header(ws, &fc, (1, 46), "First")?;
     write_header(ws, &fc, (1, 47), "Last")?;
     write_header(ws, &fc, (1, 48), "Count")?;
+
+    // Regarding lat-lon hyperlinks: on the summary tab we generally always
+    // write them, because they are few in number and so don't slow down Calc.
+
+    // This hyper controls whether we are making an internal link to
+    // the trackpoints tab (which may not exist, hence the check).
+    let hyperlink_to_tps = match trackpoint_options {
+        TrackpointSummaryOptions::NoTrackpoints => Hyperlink::No,
+        TrackpointSummaryOptions::Trackpoints(_) => Hyperlink::Yes,
+    };
 
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();
@@ -255,9 +276,14 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
         // temp here
 
         fc.increment_column();
-        write_trackpoint_hyperlink(ws, &fc, (row, 46), stage.start.index)?;
-        write_trackpoint_hyperlink(ws, &fc, (row, 47), stage.end.index)?;
-        write_integer(ws, &fc, (row, 48), (stage.end.index - stage.start.index + 1).try_into()?)?;
+        write_trackpoint_number(ws, &fc, (row, 46), stage.start.index, hyperlink_to_tps)?;
+        write_trackpoint_number(ws, &fc, (row, 47), stage.end.index, hyperlink_to_tps)?;
+        write_integer(
+            ws,
+            &fc,
+            (row, 48),
+            (stage.end.index - stage.start.index + 1).try_into()?,
+        )?;
 
         row += 1;
         fc.increment_row();
@@ -307,16 +333,34 @@ fn write_stages<'gpx>(stages: &StageList<'gpx>, ws: &mut Worksheet) -> Result<()
     fc.increment_column();
     // Temperature here
     fc.increment_column();
-    write_trackpoint_hyperlink(ws, &fc, (row, 46), stages.first_point().index)?;
-    write_trackpoint_hyperlink(ws, &fc, (row, 47), stages.last_point().index)?;
-    write_integer(ws, &fc, (row, 48), (stages.last_point().index - stages.first_point().index + 1).try_into()?)?;
+    write_trackpoint_number(
+        ws,
+        &fc,
+        (row, 46),
+        stages.first_point().index,
+        hyperlink_to_tps,
+    )?;
+    write_trackpoint_number(
+        ws,
+        &fc,
+        (row, 47),
+        stages.last_point().index,
+        hyperlink_to_tps,
+    )?;
+    write_integer(
+        ws,
+        &fc,
+        (row, 48),
+        (stages.last_point().index - stages.first_point().index + 1).try_into()?,
+    )?;
 
     Ok(())
 }
 
 fn write_trackpoints(
-    points: &[EnrichedTrackPoint],
     ws: &mut Worksheet,
+    hyperlink: Hyperlink,
+    points: &[EnrichedTrackPoint],
 ) -> Result<(), Box<dyn Error>> {
     let mut fc = FormatControl::new();
 
@@ -383,7 +427,7 @@ fn write_trackpoints(
         write_duration(ws, &fc, (row, 4), p.running_delta_time)?;
         fc.increment_column();
 
-        write_lat_lon(ws, &fc, (row, 5), (p.lat, p.lon), Hyperlink::Yes)?;
+        write_lat_lon(ws, &fc, (row, 5), (p.lat, p.lon), hyperlink)?;
         write_location_description(ws, &fc, (row, 8), &p.location)?;
         fc.increment_column();
 
@@ -462,7 +506,7 @@ fn write_integer(
     Ok(())
 }
 
-/// Writes an integer.
+/// Writes a string right aligned.
 fn write_string(
     ws: &mut Worksheet,
     fc: &FormatControl,
@@ -563,12 +607,18 @@ fn write_elevation_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    point: &EnrichedTrackPoint
+    point: &EnrichedTrackPoint,
 ) -> Result<(), Box<dyn Error>> {
     write_metres(ws, &fc, (rc.0, rc.1), point.ele)?;
     write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
     write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), point.time)?;
-    write_lat_lon(ws, &fc, (rc.0, rc.1 + 3), (point.lat, point.lon), Hyperlink::Yes)?;
+    write_lat_lon(
+        ws,
+        &fc,
+        (rc.0, rc.1 + 3),
+        (point.lat, point.lon),
+        Hyperlink::Yes,
+    )?;
     Ok(())
 }
 
@@ -577,16 +627,17 @@ fn write_max_speed_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    point: &EnrichedTrackPoint
+    point: &EnrichedTrackPoint,
 ) -> Result<(), Box<dyn Error>> {
     write_speed(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
-    write_lat_lon(ws, &fc, (rc.0, rc.1 + 1), (point.lat, point.lon), Hyperlink::Yes)?;
+    write_lat_lon(
+        ws,
+        &fc,
+        (rc.0, rc.1 + 1),
+        (point.lat, point.lon),
+        Hyperlink::Yes,
+    )?;
     Ok(())
-}
-
-enum Hyperlink {
-    Yes,
-    No,
 }
 
 /// Writes a lat-lon pair with the lat in the first cell as specified
@@ -605,6 +656,7 @@ fn write_lat_lon(
     ws.write_number_with_format(rc.0, rc.1 + 1, lat_lon.1, &format)?;
 
     // See https://developers.google.com/maps/documentation/urls/get-started
+    let text = format!("{:.6}, {:.6}", lat_lon.0, lat_lon.1);
 
     match hyperlink {
         Hyperlink::Yes => {
@@ -612,32 +664,46 @@ fn write_lat_lon(
                 "https://www.google.com/maps/search/?api=1&query={:.6},{:.6}",
                 lat_lon.0, lat_lon.1
             ))
-            .set_text(format!("{:.6}, {:.6}", lat_lon.0, lat_lon.1));
+            .set_text(text);
 
             // TODO: Font still blue.
+            let format = format.set_align(FormatAlign::Right);
             ws.write_url_with_format(rc.0, rc.1 + 2, url, &format)?;
         }
-        Hyperlink::No => {}
+        Hyperlink::No => {
+            // So that banding occurs.
+            write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+        }
     };
 
     Ok(())
 }
 
-/// Writes a hyperlink to the trackpoints sheet.
-fn write_trackpoint_hyperlink(
+/// Writes a hyperlink to the trackpoints sheet if necessary,
+/// otherwise just writes the index of the trackpoint.
+fn write_trackpoint_number(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    trackpoint_index: usize
+    trackpoint_index: usize,
+    hyperlink: Hyperlink,
 ) -> Result<(), Box<dyn Error>> {
-    let format = fc.integer_format().set_font_color(Color::Black);
-    let url = Url::new(format!(
-        "internal:'Track Points'!A{}",
-        trackpoint_index + 3    // allow for the heading.
-    ))
-    .set_text(trackpoint_index.to_string());
+    match hyperlink {
+        Hyperlink::Yes => {
+            let format = fc.integer_format().set_font_color(Color::Black);
+            let url = Url::new(format!(
+                "internal:'Track Points'!A{}",
+                trackpoint_index + 3 // allow for the heading.
+            ))
+            .set_text(trackpoint_index.to_string());
 
-    ws.write_url_with_format(rc.0, rc.1, url, &format)?;
+            ws.write_url_with_format(rc.0, rc.1, url, &format)?;
+        }
+        Hyperlink::No => {
+            write_integer(ws, fc, rc, trackpoint_index.try_into()?)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -759,7 +825,7 @@ impl FormatControl {
     }
 
     fn string_format(&self) -> Format {
-        let format = Format::new();
+        let format = Format::new().set_align(FormatAlign::Right);
         self.apply_banding(format)
     }
 

@@ -2,8 +2,8 @@ use args::parse_args;
 use excel::write_summary_file;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
-use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
+use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use std::{
     fs::read_dir,
     path::{Path, PathBuf},
@@ -13,8 +13,8 @@ mod args;
 mod excel;
 mod formatting;
 mod model;
-mod stage;
 mod simplification;
+mod stage;
 
 fn main() {
     let args = parse_args();
@@ -63,7 +63,7 @@ fn main() {
         // the original file, for more precision. Though whether it matters
         // much in practice is debatable - it only really makes a difference
         // if your 'metres' input to RDP is largish.
-        if args.detect_stops {
+        if args.detect_stages {
             let params = StageDetectionParameters {
                 stopped_speed_kmh: 0.01,
                 resume_speed_kmh: 10.0,
@@ -72,7 +72,8 @@ fn main() {
 
             let stages = detect_stages(&gpx, params);
             // TODO: We can't write files in parallel.
-            write_summary_file(&summary_filename, &gpx, &stages).unwrap();
+            write_summary_file(&summary_filename, args.trackpoint_options(), &gpx, &stages)
+                .unwrap();
         }
 
         // Always do simplification last because it mutates the track,

@@ -1,8 +1,8 @@
 use std::{error::Error, path::Path};
 
 use rust_xlsxwriter::{
-    Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url, Workbook,
-    Worksheet,
+    workbook, Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url,
+    Workbook, Worksheet,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -26,14 +26,12 @@ const KILOMETRES_COLUMN_WIDTH: f64 = 8.0;
 const SPEED_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
 const SPEED_COLUMN_WIDTH: f64 = 8.0;
 
-pub fn write_summary_file<'gpx>(
-    summary_filename: &Path,
+/// Builds the Workbook that is used for the summary.
+pub fn create_summary_xlsx<'gpx>(
     trackpoint_options: TrackpointSummaryOptions,
     gpx: &EnrichedGpx,
     stages: &StageList<'gpx>,
-) -> Result<(), Box<dyn Error>> {
-    print!("Writing file {:?}", &summary_filename);
-
+) -> Result<Workbook, Box<dyn Error>> {
     let mut workbook = Workbook::new();
 
     // This will appear as the first sheet in the workbook.
@@ -51,6 +49,15 @@ pub fn write_summary_file<'gpx>(
         }
     }
 
+    Ok(workbook)
+}
+
+/// Writes the summary workbook to file.
+pub fn write_summary_file<'gpx>(
+    summary_filename: &Path,
+    mut workbook: Workbook,
+) -> Result<(), Box<dyn Error>> {
+    print!("Writing file {:?}", &summary_filename);
     workbook.save(summary_filename).unwrap();
     let metadata = std::fs::metadata(summary_filename).unwrap();
     println!(", {} Kb", metadata.len() / 1024);

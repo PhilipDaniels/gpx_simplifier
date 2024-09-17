@@ -28,10 +28,9 @@ pub struct StageDetectionParameters {
     /// So that means a dead-stop.
     pub stopped_speed_kmh: f64,
 
-    // You are considered to be "Moving Again" the first time your
-    // speed goes above this. This is above a walking speed, so you
-    // are probably riding again.
-    pub resume_speed_kmh: f64,
+    // You are considered to be "Moving Again" when you have moved
+    // at least this many metres from the time you first stopped.
+    pub min_metres_to_resume: f64,
 
     /// We want to eliminate tiny Stages caused by noisy data, for
     /// example these can occur when just starting off again.
@@ -411,13 +410,20 @@ fn get_next_stage<'gpx>(
     }
 
     // Scan the TrackPoints we just got to determine the StageType.
-    let stage_type = if gpx.points[start_idx..=end_idx]
-        .iter()
-        .any(|p| p.speed_kmh > params.resume_speed_kmh)
+    // let stage_type = if gpx.points[start_idx..=end_idx]
+    //     .iter()
+    //     .any(|p| p.speed_kmh > params.resume_speed_kmh)
+    // {
+    //     StageType::Moving
+    // } else {
+    //     StageType::Stopped
+    // };
+
+    let stage_type = if gpx.points[start_idx].speed_kmh < params.stopped_speed_kmh
     {
-        StageType::Moving
-    } else {
         StageType::Stopped
+    } else {
+        StageType::Moving
     };
 
     // If we have not consumed all the trackpoints in advance_for_duration() above,
@@ -441,7 +447,7 @@ fn get_next_stage<'gpx>(
                     gpx,
                     end_idx, // Start the scan from the current end that we just found.
                     last_valid_idx,
-                    params.resume_speed_kmh,
+                    100.0, // params.resume_speed_kmh,
                 )
             }
         }
@@ -561,10 +567,14 @@ fn find_stop_index(
             return last_valid_idx;
         }
 
-        // Now take note of this point and scan forward for attaining 'resume_speed_kmh'.
-        let possible_stop_idx = end_idx;
-        let possible_stop_time = gpx.points[possible_stop_idx].time;
-        while end_idx <= last_valid_idx && gpx.points[end_idx].speed_kmh < params.resume_speed_kmh {
+        // Now take note of this point as a *possible* stop index.
+        // Scan forward until we have moved 'min_metres_to_resume'.
+        let possible_stop = &gpx.points[end_idx];
+
+        while end_idx <= last_valid_idx
+            && gpx.points[end_idx].running_metres - possible_stop.running_metres
+                < params.min_metres_to_resume
+        {
             end_idx += 1;
         }
 
@@ -575,9 +585,9 @@ fn find_stop_index(
 
         // Is that a valid length of stop? If so, the point found above is a valid
         // end for this current stage (which is a Moving Stage, remember).
-        let stop_duration = gpx.points[end_idx].time - possible_stop_time;
+        let stop_duration = gpx.points[end_idx].time - possible_stop.time;
         if stop_duration.as_seconds_f64() >= params.min_duration_seconds {
-            return possible_stop_idx;
+            return possible_stop.index;
         }
 
         // If that's not a valid stop (because it's too short),
@@ -597,12 +607,13 @@ fn find_resume_index(
     gpx: &EnrichedGpx,
     start_idx: usize,
     last_valid_idx: usize,
-    resume_speed_kmh: f64,
+    min_metres_to_resume: f64,
 ) -> usize {
     let mut end_index = start_idx + 1;
+    let start_metres = gpx.points[start_idx].running_metres;
 
     while end_index <= last_valid_idx {
-        if gpx.points[end_index].speed_kmh > resume_speed_kmh {
+        if gpx.points[end_index].running_metres - start_metres > min_metres_to_resume {
             return end_index;
         }
         end_index += 1;

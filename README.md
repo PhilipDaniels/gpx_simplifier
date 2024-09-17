@@ -87,4 +87,6 @@ Or build from source using cargo.
   to derive it.
 - Include hr, temperature in the xlsx.
 - Reverse geocode the stopped stages and the first and last point.
-- Use Rayon
+- Use Rayon - CAN'T - Time crate blows up in to_local_offset.
+- Change to use Chrono and Chrono-TZ? Probably. First need to be
+  able to reverse geocode lat-lon to timezone name.

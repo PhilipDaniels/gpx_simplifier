@@ -1,7 +1,8 @@
 use args::parse_args;
-use excel::write_summary_file;
+use excel::{create_summary_xlsx, write_summary_file};
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
+use rust_xlsxwriter::workbook;
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use std::{
@@ -66,14 +67,13 @@ fn main() {
         if args.detect_stages {
             let params = StageDetectionParameters {
                 stopped_speed_kmh: 0.01,
-                resume_speed_kmh: 10.0,
-                min_duration_seconds: 120.0, // Info controls! Do we care? TODO: This has a large effect. Maybe a bug.
+                min_metres_to_resume: 100.0,
+                min_duration_seconds: 120.0,
             };
 
             let stages = detect_stages(&gpx, params);
-            // TODO: We can't write files in parallel.
-            write_summary_file(&summary_filename, args.trackpoint_options(), &gpx, &stages)
-                .unwrap();
+            let workbook = create_summary_xlsx(args.trackpoint_options(), &gpx, &stages).unwrap();
+            write_summary_file(&summary_filename, workbook).unwrap();
         }
 
         // Always do simplification last because it mutates the track,
@@ -90,7 +90,6 @@ fn main() {
                     gpx.filename
                 );
 
-                // TODO: We can't write files in parallel.
                 write_simplified_gpx_file(&simplified_filename, &gpx);
             }
         }
@@ -169,7 +168,7 @@ fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
     }
 
     files.sort_unstable();
-    
+
     for f in &files {
         println!("Found GPX input file {:?}", f);
     }

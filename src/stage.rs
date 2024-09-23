@@ -23,6 +23,7 @@ pub fn speed_kmh_from_duration(metres: f64, time: Duration) -> f64 {
 
 /// These are the parameters that control the 'Stage-finding'
 /// algorithm.
+#[derive(Debug)]
 pub struct StageDetectionParameters {
     /// You are considered "Stopped" if your speed drops below this.
     /// So that means a dead-stop.
@@ -55,7 +56,7 @@ pub struct Stage<'gpx> {
 }
 
 /// The type of a Stage.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum StageType {
     Moving,
     Stopped,
@@ -335,6 +336,7 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
         return Default::default();
     }
 
+    dbg!(&params);
     let mut stages = StageList::default();
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
@@ -349,8 +351,8 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     // index of the first and last TrackPoints for that stage.
     let mut start_idx = 0;
     while let Some(stage) = get_next_stage(start_idx, gpx, &params) {
-        // The next stage shares an index/TrackPoint with this one.
-        start_idx = stage.end.index;
+        // TODO: Comment no longer applies: The next stage shares an index/TrackPoint with this one.
+        start_idx = stage.end.index + 1;
         stages.push(stage);
     }
 
@@ -364,13 +366,13 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
         gpx.points.len() - 1,
         "Should always end with the last point"
     );
-    for idx in 0..stages.len() - 1 {
-        assert_eq!(
-            stages[idx].end.index,
-            stages[idx + 1].start.index,
-            "Stage boundaries should be shared"
-        );
-    }
+    // for idx in 0..stages.len() - 1 {
+    //     assert_eq!(
+    //         stages[idx].end.index,
+    //         stages[idx + 1].start.index,
+    //         "Stage boundaries should be shared"
+    //     );
+    // }
 
     stages
 }
@@ -384,13 +386,9 @@ fn get_next_stage<'gpx>(
     let last_valid_idx = gpx.points.len() - 1;
 
     // Termination condition, we reached the end of the TrackPoints.
-    if start_idx == last_valid_idx {
+    if start_idx >= last_valid_idx {
         return None;
     }
-
-    // This assert exists so the check above can be '==' instead of '>='.
-    // More likely to catch off-by-one bugs this way.
-    assert!(start_idx < last_valid_idx);
 
     // We have said that a Stage must be at least this long, so we need to
     // advance this far as a minimum.
@@ -399,32 +397,21 @@ fn get_next_stage<'gpx>(
     assert!(end_idx > start_idx, "Empty stages are not allowed");
 
     if end_idx < last_valid_idx {
-        // This is not necessarily true in the case where we exhaust all the TrackPoints.
+        // All TrackPoints not exhausted yet.
+        // We can assert this strong condition.
         assert!(
             (gpx.points[end_idx].time - gpx.points[start_idx].time).as_seconds_f64()
                 >= params.min_duration_seconds
         );
     } else {
+        // All TrackPoints ARE exhausted.
         // But we can assert this weaker condition as a fallback.
         assert!((gpx.points[end_idx].time - gpx.points[start_idx].time).is_positive());
     }
 
-    // Scan the TrackPoints we just got to determine the StageType.
-    // let stage_type = if gpx.points[start_idx..=end_idx]
-    //     .iter()
-    //     .any(|p| p.speed_kmh > params.resume_speed_kmh)
-    // {
-    //     StageType::Moving
-    // } else {
-    //     StageType::Stopped
-    // };
-
-    let stage_type = if gpx.points[start_idx].speed_kmh < params.stopped_speed_kmh
-    {
-        StageType::Stopped
-    } else {
-        StageType::Moving
-    };
+    // Even just advancing for the minimum stage time should give us enough
+    // to classify this stage.
+    let stage_type = classify_stage(&gpx.points[start_idx], &gpx.points[end_idx]);
 
     // If we have not consumed all the trackpoints in advance_for_duration() above,
     // then the stage might actually continue past the current end_idx. Keep going
@@ -558,6 +545,7 @@ fn find_stop_index(
         {
             end_idx += 1;
         }
+        println!("Dropped below stopped_speed_kmh at {}", end_idx);
 
         // It's possible we exhausted all the TrackPoints - we were in a moving
         // Stage that went right to the end of the track. Note that the line
@@ -577,6 +565,7 @@ fn find_stop_index(
         {
             end_idx += 1;
         }
+        println!("  Scanned forward to {}", end_idx);
 
         // Same logic as above.
         if end_idx >= last_valid_idx {
@@ -585,9 +574,16 @@ fn find_stop_index(
 
         // Is that a valid length of stop? If so, the point found above is a valid
         // end for this current stage (which is a Moving Stage, remember).
-        let stop_duration = gpx.points[end_idx].time - possible_stop.time;
+
+        // To determine the stop time, we need to go back one index, so
+        // that we include the 'main stopped point' in the time calculation, because
+        // the GPX may include only a single point of elapsed time, 24 minutes, say.
+        let stop_duration = (gpx.points[end_idx].time - possible_stop.time) + possible_stop.delta_time;
         if stop_duration.as_seconds_f64() >= params.min_duration_seconds {
-            return possible_stop.index;
+            println!("  >>>> Found stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
+            return possible_stop.index - 1;
+        } else {
+            println!("  Rejecting stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
         }
 
         // If that's not a valid stop (because it's too short),
@@ -621,4 +617,16 @@ fn find_resume_index(
 
     // If we get here then we exhausted all the TrackPoints.
     last_valid_idx
+}
+
+/// Classifies a stage, based on the average speed within that stage.
+fn classify_stage(start_point: &EnrichedTrackPoint, last_point: &EnrichedTrackPoint) -> StageType {
+    let distance_metres = last_point.running_metres - start_point.running_metres;
+    let time = last_point.time - start_point.time;
+    let speed = speed_kmh_from_duration(distance_metres, time);
+    if speed < 5.0 {
+        StageType::Stopped
+    } else {
+        StageType::Moving
+    }
 }

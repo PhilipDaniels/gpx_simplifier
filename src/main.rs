@@ -60,15 +60,15 @@ fn main() {
         let mut gpx = EnrichedGpx::from(gpx);
         enrich_trackpoints(&mut gpx);
 
-        // // If we are detecting stops (really Stages now), then do that on
+        // If we are detecting stops (really Stages now), then do that on
         // the original file, for more precision. Though whether it matters
         // much in practice is debatable - it only really makes a difference
         // if your 'metres' input to RDP is largish.
         if args.detect_stages {
             let params = StageDetectionParameters {
-                stopped_speed_kmh: 0.01,
+                stopped_speed_kmh: 0.15,
                 min_metres_to_resume: 100.0,
-                min_duration_seconds: 120.0,
+                min_duration_seconds: args.min_stop_time as f64 * 60.0
             };
 
             let stages = detect_stages(&gpx, params);

@@ -90,3 +90,25 @@ Or build from source using cargo.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
+
+
+# PROBLEMS
+1. find_stop_index stops on the first index with speed < kmh.
+But this point is not necessarily the start of the stop, it
+may have a delta time of several minutes which means the PREVIOUS
+point is the start of the stop.
+
+2. Varying trackpoint delta times - do we need to smooth the data
+to 1 per second resolution?
+
+6779 - Spar shop
+10295 - not a ctrl, seems spurious
+17143 - Prysor SS, a 39 minute trackpoint!
+26724 - Dafydd stores, a 33 minute trackpoint
+
+M&M
+5819 is a pee stop
+11137 is the 1st control, it is 16 minutes long
+14855 is the 2nd control, it is 22 minutes long
+23841 is the 3rd control, it is 24 minutes long.
+

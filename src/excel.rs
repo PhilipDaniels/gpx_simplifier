@@ -248,7 +248,7 @@ fn write_stages<'gpx>(
         fc.increment_column();
 
         write_duration(ws, &fc, (row, 10), stage.duration())?;
-        write_duration(ws, &fc, (row, 11), stage.duration())?;
+        write_duration(ws, &fc, (row, 11), stage.running_duration())?;
         fc.increment_column();
 
         if stage.stage_type == StageType::Moving {

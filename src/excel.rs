@@ -1,7 +1,7 @@
 use std::{error::Error, path::Path};
 
 use rust_xlsxwriter::{
-    workbook, Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url,
+    Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url,
     Workbook, Worksheet,
 };
 use time::{Duration, OffsetDateTime};

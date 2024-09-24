@@ -77,7 +77,7 @@ fn main() {
             let params = StageDetectionParameters {
                 stopped_speed_kmh: 0.15,
                 min_metres_to_resume: 100.0,
-                min_duration_seconds: args.min_stop_time as f64 * 60.0
+                min_duration_seconds: args.min_stop_time as f64 * 60.0,
             };
 
             let stages = detect_stages(&gpx, params);

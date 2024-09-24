@@ -7,6 +7,7 @@ use core::{fmt, slice};
 use std::ops::Index;
 
 use geo::{point, GeodesicDistance};
+use log::{info, warn};
 use time::{Duration, OffsetDateTime};
 
 use crate::model::{EnrichedGpx, EnrichedTrackPoint};
@@ -67,6 +68,15 @@ impl fmt::Display for StageType {
         match self {
             StageType::Moving => write!(f, "Moving"),
             StageType::Stopped => write!(f, "Stopped"),
+        }
+    }
+}
+
+impl StageType {
+    fn toggle(self) -> Self {
+        match self {
+            StageType::Moving => StageType::Stopped,
+            StageType::Stopped => StageType::Moving,
         }
     }
 }
@@ -332,11 +342,15 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 /// All non-Stopped stages are considered Moving stages.
 pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> StageList {
     if gpx.points.len() < 2 {
-        eprintln!("Warning: gpx {:?} does not have any points", gpx.filename);
+        warn!("GPX {:?} does not have any points", gpx.filename);
         return Default::default();
     }
 
-    dbg!(&params);
+    info!(
+        "Detecting stages using min_stopped_speed={}, min_duration_seconds={}, min_metres_to_resume={}",
+        params.stopped_speed_kmh, params.min_duration_seconds, params.min_metres_to_resume
+    );
+
     let mut stages = StageList::default();
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
@@ -347,12 +361,26 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     // the GPS on and then don't go anywhere for a while - so your first stage
     // may be a Stopped stage!
 
-    // We can get everything we need to create a stage if we have the
-    // index of the first and last TrackPoints for that stage.
     let mut start_idx = 0;
-    while let Some(stage) = get_next_stage(start_idx, gpx, &params) {
+
+    // We will alternate stage types - Moving-Stopped-Moving-Stopped etc.
+    // But instead of assuming that we start off moving, we try and figure it out.
+    let mut stage_type = get_starting_stage_type(gpx, &params);
+    info!("Determined type of the first stage to be {}", stage_type);
+
+    while let Some(stage) = get_next_stage(stage_type, start_idx, gpx, &params) {
+        // Stages do not share points, the next stage starts on the next point.
         start_idx = stage.end.index + 1;
+
+        info!(
+            "Adding {} stage from point {} to {}, length={:.3}km, duration={}",
+            stage.stage_type, stage.start.index, stage.end.index,
+            stage.distance_km(),
+            stage.duration(),
+        );
         stages.push(stage);
+
+        stage_type = stage_type.toggle();
     }
 
     // Should include all TrackPoints and start/end indexes overlap.
@@ -360,23 +388,26 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
         stages[0].start.index, 0,
         "Should always start with the first point"
     );
+
     assert_eq!(
         stages[stages.len() - 1].end.index,
         gpx.points.len() - 1,
         "Should always end with the last point"
     );
-    // for idx in 0..stages.len() - 1 {
-    //     assert_eq!(
-    //         stages[idx].end.index,
-    //         stages[idx + 1].start.index,
-    //         "Stage boundaries should be shared"
-    //     );
-    // }
+
+    for idx in 0..stages.len() - 1 {
+        assert_eq!(
+            stages[idx].end.index + 1,
+            stages[idx + 1].start.index,
+            "The next stage should always start on the next index"
+        );
+    }
 
     stages
 }
 
 fn get_next_stage<'gpx>(
+    stage_type: StageType,
     start_idx: usize,
     gpx: &'gpx EnrichedGpx,
     params: &StageDetectionParameters,
@@ -384,11 +415,50 @@ fn get_next_stage<'gpx>(
     // Get this out into a variable to avoid off-by-one errors (hopefully).
     let last_valid_idx = gpx.points.len() - 1;
 
+    info!(
+        "Finding stage of type {} starting at index {}",
+        stage_type, start_idx
+    );
+
     // Termination condition, we reached the end of the TrackPoints.
     if start_idx >= last_valid_idx {
+        info!("All points exhausted, start_idx={start_idx}, last_valid_index={last_valid_idx}");
         return None;
     }
 
+    // A Moving stage ends on the point before the speed drops below the limit.
+    // A Stopped stage ends when we have moved 100m or more.
+    let end_idx = match stage_type {
+        StageType::Moving => {
+            find_stop_index(
+                gpx,
+                start_idx, // Start the scan from the current end that we just found.
+                last_valid_idx,
+                params,
+            )
+        }
+        StageType::Stopped => {
+            find_resume_index(
+                gpx,
+                start_idx, // Start the scan from the current end that we just found.
+                last_valid_idx,
+                100.0, // params.resume_speed_kmh,
+            )
+        }
+    };
+
+    assert!(end_idx <= last_valid_idx);
+    assert!(
+        end_idx >= start_idx,
+        "A stage must contain at least 1 TrackPoint"
+    );
+
+    info!(
+        "Stage found which goes from TrackPoint {} to {} (inclusive) and is of type {}",
+        start_idx, end_idx, stage_type
+    );
+
+    /*
     // We have said that a Stage must be at least this long, so we need to
     // advance this far as a minimum.
     let end_idx = advance_for_duration(gpx, start_idx, last_valid_idx, params.min_duration_seconds);
@@ -413,12 +483,14 @@ fn get_next_stage<'gpx>(
     // Even just advancing for the minimum stage time should give us enough
     // to classify this stage.
     let stage_type = classify_stage(&gpx.points[start_idx], &gpx.points[end_idx]);
+    */
 
+    /*
     // If we have not consumed all the trackpoints in advance_for_duration() above,
     // then the stage might actually continue past the current end_idx. Keep going
     // until we really find the end. It's possible that this act may consume some or
     // all of the remaining trackpoints.
-    let mut end_idx = end_idx;
+    //let mut end_idx = end_idx;
 
     if end_idx < last_valid_idx {
         end_idx = match stage_type {
@@ -440,6 +512,7 @@ fn get_next_stage<'gpx>(
             }
         }
     };
+    */
 
     let (min_ele, max_ele) = find_min_and_max_elevation_points(gpx, start_idx, end_idx);
 
@@ -454,11 +527,10 @@ fn get_next_stage<'gpx>(
     };
 
     // Just check we created everything correctly.
-    assert!(end_idx <= last_valid_idx);
     assert_eq!(stage.start.index, start_idx);
     assert_eq!(stage.end.index, end_idx);
-    assert!(stage.end.index > stage.start.index);
-    assert!(stage.end.time > stage.start.time);
+    assert!(stage.end.index >= stage.start.index);
+    assert!(stage.end.time >= stage.start.time);
     assert!(stage.start.index >= stage.track_start_point.index);
 
     return Some(stage);
@@ -548,47 +620,75 @@ fn find_stop_index(
         {
             end_idx += 1;
         }
-        println!("find_stop_index({start_idx}) Dropped below stopped_speed_kmh at {}", end_idx);
+
+        info!(
+            "find_stop_index(start_idx={start_idx}) Dropped below stopped_speed_kmh of {} at {}",
+            params.stopped_speed_kmh, end_idx
+        );
 
         // It's possible we exhausted all the TrackPoints - we were in a moving
         // Stage that went right to the end of the track. Note that the line
         // above which increments end_index means that it is possible that
         // end_index is GREATER than last_valid_index at this point.
         if end_idx >= last_valid_idx {
-            println!("  find_stop_index({start_idx}) (1) Returning last_valid_idx {last_valid_idx}");
+            info!(
+                "find_stop_index(start_idx={start_idx}) (1) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion"
+            );
+
             return last_valid_idx;
         }
 
-        // Now take note of this point as a *possible* stop index.
-        // Scan forward until we have moved 'min_metres_to_resume'.
-        let possible_stop = &gpx.points[end_idx];
+        // Now take note of this point as a *possible* index of the
+        // end of a moving stage.
+        let possible_end_point = &gpx.points[end_idx - 1];
 
+        // Scan forward until we have moved 'min_metres_to_resume'.
         while end_idx <= last_valid_idx
-            && gpx.points[end_idx].running_metres - possible_stop.running_metres
+            && gpx.points[end_idx].running_metres - possible_end_point.running_metres
                 < params.min_metres_to_resume
         {
             end_idx += 1;
         }
-        println!("  find_stop_index({start_idx}) Scanned forward to {}", end_idx);
+
+        info!(
+            "find_stop_index(start_idx={start_idx}) Scanned forward to index {}, which is {:.2} metres from the possible stop",
+            end_idx,
+            gpx.points[end_idx].running_metres - possible_end_point.running_metres
+        );
 
         // Same logic as above.
         if end_idx >= last_valid_idx {
-            println!("  find_stop_index({start_idx}) (2) Returning last_valid_idx {last_valid_idx}");
+            info!(
+                "find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion"
+            );
             return last_valid_idx;
         }
 
-        // Is that a valid length of stop? If so, the point found above is a valid
+        // Is that a stop of sufficient length? If so, the point found above is a valid
         // end for this current stage (which is a Moving Stage, remember).
 
-        // To determine the stop time, we need to go back one index, so
-        // that we include the 'main stopped point' in the time calculation, because
-        // the GPX may include only a single point of elapsed time, 24 minutes, say.
-        let stop_duration = (gpx.points[end_idx].time - possible_stop.time) + possible_stop.delta_time;
+        // Recall that 'possible_end_point' is 1 TrackPoint BEFORE the stop starts - stages
+        // do not share points. So you may think that we need to calculate the length
+        // of time based on the NEXT TrackPoint. However, a stop can be a single trackpoint
+        // long, with an elapsed time of say 25 minutes, and the 'time' field of the
+        // TrackPoint will be the time at the END of that 25 minute period. We need to
+        // include that 25 minutes in the calculation, so we calculate the duration based on
+        // the 'possible_end_point' as a starting point.
+        let stop_duration = gpx.points[end_idx].time - possible_end_point.time;
+
         if stop_duration.as_seconds_f64() >= params.min_duration_seconds {
-            println!("  >>>> Found stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
-            return possible_stop.index - 1;
+            info!(
+                "find_stop_index(start_idx={start_idx}) Found valid stop at index {}, duration = {}",
+                possible_end_point.index,
+                stop_duration
+            );
+            return possible_end_point.index;
         } else {
-            println!("  find_stop_index({start_idx}) Rejecting stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
+            info!(
+                "find_stop_index(start_idx={start_idx}) Rejecting stop at {} because it is too short, duration = {}",
+                possible_end_point.index,
+                stop_duration
+            );
         }
 
         // If that's not a valid stop (because it's too short),
@@ -598,7 +698,7 @@ fn find_stop_index(
     }
 
     // If we get here then we exhausted all the TrackPoints.
-    println!("  find_stop_index({start_idx}) (3) Returning last_valid_idx {last_valid_idx}");
+    info!("find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion");
     last_valid_idx
 }
 
@@ -638,4 +738,11 @@ fn classify_stage(start_point: &EnrichedTrackPoint, last_point: &EnrichedTrackPo
     } else {
         StageType::Moving
     }
+}
+
+fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters) -> StageType {
+    let start = &gpx.points[0];
+    let end_idx = std::cmp::min(100, gpx.points.len() - 1);
+    let end = &gpx.points[end_idx];
+    classify_stage(start, end)
 }

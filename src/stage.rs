@@ -7,7 +7,7 @@ use core::{fmt, slice};
 use std::ops::Index;
 
 use geo::{point, GeodesicDistance};
-use log::{info, warn};
+use log::{debug, info, warn};
 use time::{Duration, OffsetDateTime};
 
 use crate::model::{EnrichedGpx, EnrichedTrackPoint};
@@ -84,7 +84,12 @@ impl StageType {
 impl<'gpx> Stage<'gpx> {
     /// Returns the duration of the stage.
     pub fn duration(&self) -> Duration {
-        self.end.time - self.start.time
+        // We need to include the delta_time of the first TrackPoint
+        // in order for this to be accurate. e.g. consider a Stopped
+        // stage which has a point with a 25 minute delta_time. The time
+        // will be the time at the end of that 25 minute period. If
+        // we don't include delta_time we will be 25 minutes short.
+        (self.end.time - self.start.time) + self.start.delta_time
     }
 
     /// Returns the running duration to the end of the stage from
@@ -347,8 +352,11 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     }
 
     info!(
-        "Detecting stages using min_stopped_speed={}, min_duration_seconds={}, min_metres_to_resume={}",
-        params.stopped_speed_kmh, params.min_duration_seconds, params.min_metres_to_resume
+        "Detecting stages in {:?} using min_stopped_speed={}, min_duration_seconds={}, min_metres_to_resume={}",
+        gpx.filename,
+        params.stopped_speed_kmh,
+        params.min_duration_seconds,
+        params.min_metres_to_resume
     );
 
     let mut stages = StageList::default();
@@ -374,7 +382,9 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
 
         info!(
             "Adding {} stage from point {} to {}, length={:.3}km, duration={}",
-            stage.stage_type, stage.start.index, stage.end.index,
+            stage.stage_type,
+            stage.start.index,
+            stage.end.index,
             stage.distance_km(),
             stage.duration(),
         );
@@ -382,6 +392,8 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
 
         stage_type = stage_type.toggle();
     }
+
+    info!("Detection finished, found {} stages", stages.len());
 
     // Should include all TrackPoints and start/end indexes overlap.
     assert_eq!(
@@ -429,21 +441,9 @@ fn get_next_stage<'gpx>(
     // A Moving stage ends on the point before the speed drops below the limit.
     // A Stopped stage ends when we have moved 100m or more.
     let end_idx = match stage_type {
-        StageType::Moving => {
-            find_stop_index(
-                gpx,
-                start_idx, // Start the scan from the current end that we just found.
-                last_valid_idx,
-                params,
-            )
-        }
+        StageType::Moving => find_stop_index(gpx, start_idx, last_valid_idx, params),
         StageType::Stopped => {
-            find_resume_index(
-                gpx,
-                start_idx, // Start the scan from the current end that we just found.
-                last_valid_idx,
-                100.0, // params.resume_speed_kmh,
-            )
+            find_resume_index(gpx, start_idx, last_valid_idx, params.min_metres_to_resume)
         }
     };
 
@@ -451,11 +451,6 @@ fn get_next_stage<'gpx>(
     assert!(
         end_idx >= start_idx,
         "A stage must contain at least 1 TrackPoint"
-    );
-
-    info!(
-        "Stage found which goes from TrackPoint {} to {} (inclusive) and is of type {}",
-        start_idx, end_idx, stage_type
     );
 
     /*
@@ -621,7 +616,7 @@ fn find_stop_index(
             end_idx += 1;
         }
 
-        info!(
+        debug!(
             "find_stop_index(start_idx={start_idx}) Dropped below stopped_speed_kmh of {} at {}",
             params.stopped_speed_kmh, end_idx
         );
@@ -631,7 +626,7 @@ fn find_stop_index(
         // above which increments end_index means that it is possible that
         // end_index is GREATER than last_valid_index at this point.
         if end_idx >= last_valid_idx {
-            info!(
+            debug!(
                 "find_stop_index(start_idx={start_idx}) (1) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion"
             );
 
@@ -650,7 +645,7 @@ fn find_stop_index(
             end_idx += 1;
         }
 
-        info!(
+        debug!(
             "find_stop_index(start_idx={start_idx}) Scanned forward to index {}, which is {:.2} metres from the possible stop",
             end_idx,
             gpx.points[end_idx].running_metres - possible_end_point.running_metres
@@ -658,7 +653,7 @@ fn find_stop_index(
 
         // Same logic as above.
         if end_idx >= last_valid_idx {
-            info!(
+            debug!(
                 "find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion"
             );
             return last_valid_idx;
@@ -677,14 +672,14 @@ fn find_stop_index(
         let stop_duration = gpx.points[end_idx].time - possible_end_point.time;
 
         if stop_duration.as_seconds_f64() >= params.min_duration_seconds {
-            info!(
+            debug!(
                 "find_stop_index(start_idx={start_idx}) Found valid stop at index {}, duration = {}",
                 possible_end_point.index,
                 stop_duration
             );
             return possible_end_point.index;
         } else {
-            info!(
+            debug!(
                 "find_stop_index(start_idx={start_idx}) Rejecting stop at {} because it is too short, duration = {}",
                 possible_end_point.index,
                 stop_duration
@@ -698,13 +693,14 @@ fn find_stop_index(
     }
 
     // If we get here then we exhausted all the TrackPoints.
-    info!("find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion");
+    debug!("find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion");
     last_valid_idx
 }
 
-/// A Stopped stage is ended when we find the first TrackPoint
-/// with a speed above the resumption threshold. Find the index
-/// of that point.
+/// A Stopped stage is ended when we have moved at least 'min_metres_to_resume'.
+/// GPX readings can be very noisy when stopped, especially if you move the bike
+/// around or take the GPX in a shop with you, so it is better to rely on distance
+/// moved rather than speed.
 fn find_resume_index(
     gpx: &EnrichedGpx,
     start_idx: usize,
@@ -715,15 +711,17 @@ fn find_resume_index(
     let start_metres = gpx.points[start_idx].running_metres;
 
     while end_index <= last_valid_idx {
-        if gpx.points[end_index].running_metres - start_metres > min_metres_to_resume {
-            println!("find_resume_index({start_idx}) Returning end_idx {end_index}");
+        let moved_metres = gpx.points[end_index].running_metres - start_metres;
+        if moved_metres > min_metres_to_resume {
+            debug!("find_resume_index(start_idx={start_idx}) Returning end_idx={end_index} due to having moved {moved_metres:.2}m");
             return end_index;
         }
         end_index += 1;
     }
 
     // If we get here then we exhausted all the TrackPoints.
-    println!("find_resume_index({start_idx}) Returning last_valid_idx {last_valid_idx}");
+    debug!("find_resume_index(start_idx={start_idx}) Returning last_valid_idx={last_valid_idx} due to TrackPoint exhaustion");
+
     last_valid_idx
 }
 

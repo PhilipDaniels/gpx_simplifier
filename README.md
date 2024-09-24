@@ -112,3 +112,25 @@ M&M
 14855 is the 2nd control, it is 22 minutes long
 23841 is the 3rd control, it is 24 minutes long.
 
+At 23840 we find the stop, but on the next call
+we don't determine the stopped portion, we go
+straight back to moving.
+
+
+Track Points		
+First	Last	Count
+Stage 1 0	11127	11128     Moving
+Stage 2 11128	11168	41    Stopped
+Stage 3 11169	14849	3681  Moving
+Stage 4 14850	14886	37    Stopped
+Stage 5 14887	23840	8954  Moving
+Stage 6 23841	32552	8712  Moving
+
+The stop is correctly found at the end of Stage 5 and the stage type is correct.
+The problem is a stage is missing - point 23841 should be a stage in itself
+of type Stopped. ie.
+
+Stage 6 23841 23841 1     Stopped
+Stage 7 23842 32552       Moving
+
+We could find all the transitions first, then classify the stages.

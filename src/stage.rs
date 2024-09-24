@@ -351,7 +351,6 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     // index of the first and last TrackPoints for that stage.
     let mut start_idx = 0;
     while let Some(stage) = get_next_stage(start_idx, gpx, &params) {
-        // TODO: Comment no longer applies: The next stage shares an index/TrackPoint with this one.
         start_idx = stage.end.index + 1;
         stages.push(stage);
     }
@@ -393,6 +392,8 @@ fn get_next_stage<'gpx>(
     // We have said that a Stage must be at least this long, so we need to
     // advance this far as a minimum.
     let end_idx = advance_for_duration(gpx, start_idx, last_valid_idx, params.min_duration_seconds);
+    println!("detect_stages: {start_idx} - {end_idx} after advance_for_duration");
+
     assert!(end_idx <= last_valid_idx);
     assert!(end_idx > start_idx, "Empty stages are not allowed");
 
@@ -478,12 +479,14 @@ fn advance_for_duration(
     while end_index <= last_valid_idx {
         let delta_time = gpx.points[end_index].time - start_time;
         if delta_time.as_seconds_f64() >= min_duration_seconds {
+            println!("advance_for_duration({start_idx}) Returning end_index {end_index}");
             return end_index;
         }
         end_index += 1;
     }
 
     // If we get here then we exhausted all the TrackPoints.
+    println!("advance_for_duration({start_idx}) Returning last_valid_idx {last_valid_idx}");
     last_valid_idx
 }
 
@@ -545,13 +548,14 @@ fn find_stop_index(
         {
             end_idx += 1;
         }
-        println!("Dropped below stopped_speed_kmh at {}", end_idx);
+        println!("find_stop_index({start_idx}) Dropped below stopped_speed_kmh at {}", end_idx);
 
         // It's possible we exhausted all the TrackPoints - we were in a moving
         // Stage that went right to the end of the track. Note that the line
         // above which increments end_index means that it is possible that
         // end_index is GREATER than last_valid_index at this point.
         if end_idx >= last_valid_idx {
+            println!("  find_stop_index({start_idx}) (1) Returning last_valid_idx {last_valid_idx}");
             return last_valid_idx;
         }
 
@@ -565,10 +569,11 @@ fn find_stop_index(
         {
             end_idx += 1;
         }
-        println!("  Scanned forward to {}", end_idx);
+        println!("  find_stop_index({start_idx}) Scanned forward to {}", end_idx);
 
         // Same logic as above.
         if end_idx >= last_valid_idx {
+            println!("  find_stop_index({start_idx}) (2) Returning last_valid_idx {last_valid_idx}");
             return last_valid_idx;
         }
 
@@ -583,7 +588,7 @@ fn find_stop_index(
             println!("  >>>> Found stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
             return possible_stop.index - 1;
         } else {
-            println!("  Rejecting stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
+            println!("  find_stop_index({start_idx}) Rejecting stop at {}, duration = {}", possible_stop.index - 1, stop_duration);
         }
 
         // If that's not a valid stop (because it's too short),
@@ -593,6 +598,7 @@ fn find_stop_index(
     }
 
     // If we get here then we exhausted all the TrackPoints.
+    println!("  find_stop_index({start_idx}) (3) Returning last_valid_idx {last_valid_idx}");
     last_valid_idx
 }
 
@@ -610,17 +616,20 @@ fn find_resume_index(
 
     while end_index <= last_valid_idx {
         if gpx.points[end_index].running_metres - start_metres > min_metres_to_resume {
+            println!("find_resume_index({start_idx}) Returning end_idx {end_index}");
             return end_index;
         }
         end_index += 1;
     }
 
     // If we get here then we exhausted all the TrackPoints.
+    println!("find_resume_index({start_idx}) Returning last_valid_idx {last_valid_idx}");
     last_valid_idx
 }
 
 /// Classifies a stage, based on the average speed within that stage.
 fn classify_stage(start_point: &EnrichedTrackPoint, last_point: &EnrichedTrackPoint) -> StageType {
+    // TODO: Deal with 1 point stages? Need to include delta_metres?
     let distance_metres = last_point.running_metres - start_point.running_metres;
     let time = last_point.time - start_point.time;
     let speed = speed_kmh_from_duration(distance_metres, time);

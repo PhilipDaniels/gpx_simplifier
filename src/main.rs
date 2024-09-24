@@ -1,12 +1,15 @@
 use args::parse_args;
+use clap::builder::styling::AnsiColor;
+use env_logger::Builder;
 use excel::{create_summary_xlsx, write_summary_file};
+use log::info;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
-use rust_xlsxwriter::workbook;
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use std::{
     fs::read_dir,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -17,7 +20,13 @@ mod model;
 mod simplification;
 mod stage;
 
+pub const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
+pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
+
 fn main() {
+    configure_logging();
+    info!("Starting {PROGRAM_NAME}");
+
     let args = parse_args();
 
     let exe_dir = get_exe_dir();
@@ -180,4 +189,59 @@ fn get_exe_dir() -> PathBuf {
     let mut exe_path = std::env::current_exe().unwrap();
     exe_path.pop();
     exe_path
+}
+
+fn configure_logging() {
+    let mut builder = Builder::from_default_env();
+
+    builder.format(|buf, record| {
+        let level_style = buf.default_level_style(record.level());
+        let level_style = match record.level() {
+            log::Level::Error => level_style.fg_color(Some(AnsiColor::Red.into())),
+            log::Level::Warn => level_style.fg_color(Some(AnsiColor::Yellow.into())),
+            log::Level::Info => level_style.fg_color(Some(AnsiColor::Green.into())),
+            log::Level::Debug => level_style.fg_color(Some(AnsiColor::Blue.into())),
+            log::Level::Trace => level_style.fg_color(Some(AnsiColor::Magenta.into())),
+        };
+
+        let line_number_style = buf.default_level_style(record.level())
+            .fg_color(Some(AnsiColor::Magenta.into()))
+            .bg_color(Some(AnsiColor::White.into()));
+
+        match (record.file(), record.line()) {
+            (Some(file), Some(line)) => writeln!(
+                buf,
+                "[{} {level_style}{}{level_style:#} {}/{line_number_style}{}{line_number_style:#}] {}",
+                buf.timestamp(),
+                record.level(),
+                file,
+                line,
+                record.args()
+            ),
+            (Some(file), None) => writeln!(
+                buf,
+                "[{} {level_style}{}{level_style:#} {}] {}",
+                buf.timestamp(),
+                record.level(),
+                file,
+                record.args()
+            ),
+            (None, Some(_line)) => writeln!(
+                buf,
+                "[{} {level_style}{}{level_style:#}] {}",
+                buf.timestamp(),
+                record.level(),
+                record.args()
+            ),
+            (None, None) => writeln!(
+                buf,
+                "[{} {level_style}{}{level_style:#}] {}",
+                buf.timestamp(),
+                record.level(),
+                record.args()
+            ),
+        }
+    });
+
+    builder.init();
 }

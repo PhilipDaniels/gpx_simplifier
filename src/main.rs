@@ -205,8 +205,7 @@ fn configure_logging() {
         };
 
         let line_number_style = buf.default_level_style(record.level())
-            .fg_color(Some(AnsiColor::Magenta.into()))
-            .bg_color(Some(AnsiColor::White.into()));
+            .fg_color(Some(AnsiColor::Cyan.into()));
 
         match (record.file(), record.line()) {
             (Some(file), Some(line)) => writeln!(

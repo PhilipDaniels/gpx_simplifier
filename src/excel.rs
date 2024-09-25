@@ -1,5 +1,6 @@
 use std::{error::Error, path::Path};
 
+use logging_timer::time;
 use rust_xlsxwriter::{
     Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url,
     Workbook, Worksheet,
@@ -27,6 +28,7 @@ const SPEED_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
 const SPEED_COLUMN_WIDTH: f64 = 8.0;
 
 /// Builds the Workbook that is used for the summary.
+#[time]
 pub fn create_summary_xlsx<'gpx>(
     trackpoint_options: TrackpointSummaryOptions,
     gpx: &EnrichedGpx,
@@ -53,6 +55,7 @@ pub fn create_summary_xlsx<'gpx>(
 }
 
 /// Writes the summary workbook to file.
+#[time]
 pub fn write_summary_file<'gpx>(
     summary_filename: &Path,
     mut workbook: Workbook,

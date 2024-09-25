@@ -8,6 +8,7 @@ clap = { version = "4.5.11", features = ["derive", "cargo"] }
 env_logger = "0.11.5"
 geo = "0.28.0"
 log = "0.4.22"
+logging_timer = "1.1.1"
 quick-xml = { version = "0.36.0", features = ["serialize"] }
 rayon = "1.10.0"
 rust_xlsxwriter = "0.75.0"

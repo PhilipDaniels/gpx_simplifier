@@ -8,6 +8,7 @@ use std::ops::Index;
 
 use geo::{point, GeodesicDistance};
 use log::{debug, info, warn};
+use logging_timer::time;
 use time::{Duration, OffsetDateTime};
 
 use crate::model::{EnrichedGpx, EnrichedTrackPoint};
@@ -274,6 +275,7 @@ impl<'gpx> StageList<'gpx> {
 }
 
 /// Calculate a set of enriched TrackPoint information (distances, speed, climb).
+#[time]
 pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let start_time = gpx.points[0].time;
     let mut cum_ascent_metres = 0.0;
@@ -341,6 +343,7 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 /// for a 'min_stop_time' length of time.
 ///
 /// All non-Stopped stages are considered Moving stages.
+#[time]
 pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> StageList {
     if gpx.points.len() < 2 {
         warn!("GPX {:?} does not have any points", gpx.filename);

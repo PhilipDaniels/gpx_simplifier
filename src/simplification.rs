@@ -1,6 +1,7 @@
 use std::{collections::HashSet, fs::File, io::{BufWriter, Write}, path::Path};
 
 use geo::{coord, LineString, SimplifyIdx};
+use logging_timer::time;
 
 use crate::{formatting::format_utc_date, model::{EnrichedGpx, EnrichedTrackPoint}};
 
@@ -30,6 +31,7 @@ pub fn metres_to_epsilon(metres: u16) -> f64 {
 /// 31358           20      636 (2.0%, 83Kb)    Ok - within a few metres of the road
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
+#[time]
 pub fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: f64) {
     let line_string: LineString<_> = points
         .iter()
@@ -45,6 +47,7 @@ pub fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: 
     });
 }
 
+#[time]
 pub fn write_simplified_gpx_file(output_file: &Path, gpx: &EnrichedGpx) {
     const HDR: &str = include_str!("header.txt");
     print!("Writing file {:?}", &output_file);

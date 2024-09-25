@@ -1,43 +1,36 @@
-fn simplify(input_file: &Path) {
-    let mut output_file = input_file.to_owned();
-    output_file.set_extension("simplified.gpx");
-    if output_file.exists() {
-        println!(
-            "Simplified file {:?} already exists, skipping...",
-            &output_file
-        );
-        return;
-    } else {
-        println!("Writing file {:?}", &output_file);
-    }
+use core::str;
+use std::{error::Error, fs::File, path::Path};
 
-    // Reading.
-    let mut reader = Reader::from_file(input_file).expect("Could not create XML reader");
-    let mut buf = Vec::with_capacity(8096);
-    // Writing.
-    let bw = BufWriter::new(File::create(&output_file).expect("Could not open output_file"));
-    let mut writer = Writer::new_with_indent(bw, b' ', 2);
+use quick_xml::{events::{BytesStart, Event}, Reader};
 
-    let mut trackpoints = Vec::new();
+use crate::model::Gpx;
+
+
+/// The serde/quick-xml deserialization integration does a "good enough" job of parsing
+/// the XML file. We also tag on the original filename as it's handy to track this
+/// through the program for when we come to the point of writing output.
+pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
+    let mut reader = Reader::from_file(input_file)?;
+    let mut buf: Vec<u8> = Vec::with_capacity(4096);
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                writer.write_event(Event::Decl(decl)).unwrap();
+                //writer.write_event(Event::Decl(decl)).unwrap();
             }
             Ok(Event::Start(e)) => {
                 match e.name().as_ref() {
                     b"gpx" => {
                         println!("Found the gpx tag");
-                        writer.write_event(Event::Start(e)).unwrap();
+                        //writer.write_event(Event::Start(e)).unwrap();
                     }
                     b"trk" => {
                         println!("Found a trk tag");
-                        writer.write_event(Event::Start(e)).unwrap();
+                        //writer.write_event(Event::Start(e)).unwrap();
                     }
                     b"trkseg" => {
                         println!("Found a trkseg tag");
-                        writer.write_event(Event::Start(e)).unwrap();
+                        //writer.write_event(Event::Start(e)).unwrap();
                     }
                     b"trkpt" => {
                         let lat = get_f32_attr(&e, "lat");
@@ -60,38 +53,21 @@ fn simplify(input_file: &Path) {
                             _ => panic!("Did not get both the <ele> and <time> tags"),
                         }
 
-                        let tp = Trackpoint {
-                            lat,
-                            lon,
-                            ele,
-                            time,
-                        };
+                        // let tp = Trackpoint {
+                        //     lat,
+                        //     lon,
+                        //     ele,
+                        //     time,
+                        // };
 
-                        println!("{:?}", tp);
-                        trackpoints.push(tp);
-
-                        // // The lat and lon attributes have an absurd number of decimal places.
-                        // // Only 6 d.p. are needed to be precise to 11cm.
-                        // // See https://en.wikipedia.org/wiki/Decimal_degrees
-                        // let lat = e.try_get_attribute("lat").unwrap().unwrap().value;
-                        // let trimmed_lat = trim_dp(&lat);
-                        // let trimmed_lat = make_attr("lat", trimmed_lat);
-
-                        // let lon = e.try_get_attribute("lon").unwrap().unwrap().value;
-                        // let trimmed_lon = trim_dp(&lon);
-                        // let trimmed_lon = make_attr("lon", trimmed_lon);
-
-                        // let mut e2 = BytesStart::new("trkpt");
-                        // e2.push_attribute(trimmed_lat);
-                        // e2.push_attribute(trimmed_lon);
-
-                        // writer.write_event(Event::Start(e2)).unwrap();
+                        //println!("{:?}", tp);
+                        //trackpoints.push(tp);
                     }
                     b"ele" => {
                         // Read again to get the text inside the <ele>...</ele> tags.
                         match reader.read_event_into(&mut buf) {
                             Ok(Event::Text(t)) => {
-                                writer.create_element("ele").write_text_content(t).unwrap();
+                                //writer.create_element("ele").write_text_content(t).unwrap();
                             }
                             _ => panic!("Got unexpected XML node, document is probably corrupt"),
                         }
@@ -100,7 +76,7 @@ fn simplify(input_file: &Path) {
                         // Read again to get the text inside the <time>...</time> tags.
                         match reader.read_event_into(&mut buf) {
                             Ok(Event::Text(t)) => {
-                                writer.create_element("time").write_text_content(t).unwrap();
+                                //writer.create_element("time").write_text_content(t).unwrap();
                             }
                             _ => panic!("Got unexpected XML node, document is probably corrupt"),
                         }
@@ -110,16 +86,16 @@ fn simplify(input_file: &Path) {
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    writer.write_event(Event::End(e)).unwrap();
+                    //writer.write_event(Event::End(e)).unwrap();
                 }
                 b"trk" => {
-                    writer.write_event(Event::End(e)).unwrap();
+                    //writer.write_event(Event::End(e)).unwrap();
                 }
                 b"trkseg" => {
-                    writer.write_event(Event::End(e)).unwrap();
+                    //writer.write_event(Event::End(e)).unwrap();
                 }
                 b"trkpt" => {
-                    writer.write_event(Event::End(e)).unwrap();
+                    //writer.write_event(Event::End(e)).unwrap();
                 }
                 _ => (),
             },
@@ -131,7 +107,13 @@ fn simplify(input_file: &Path) {
         buf.clear();
     }
 
-    println!("Found {} trkpt nodes", trackpoints.len());
+
+
+    let mut doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
+    doc.filename = input_file.to_owned();
+
+
+    Ok(doc)
 }
 
 enum EleOrTime {
@@ -182,13 +164,13 @@ fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec
 }
 
 fn get_f32_attr(e: &BytesStart, arg: &str) -> f32 {
-    let lat2 = e
+    let attr = e
         .try_get_attribute(arg)
         .expect("Unless the file is corrupt the attributes we asl for always exist")
         .expect("And always have values")
         .value;
-    let lat2 = lat2.as_ref();
-    let lat2 = str::from_utf8(lat2).expect("The bytes should be ASCII, therefore valid UTF-8");
-    let lat2: f32 = lat2.parse().expect("The string should be a valid number");
-    lat2
+    let attr = attr.as_ref();
+    let attr = str::from_utf8(attr).expect("The bytes should be ASCII, therefore valid UTF-8");
+    let attr: f32 = attr.parse().expect("The string should be a valid number");
+    attr
 }

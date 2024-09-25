@@ -16,6 +16,7 @@ use std::{
 mod args;
 mod excel;
 mod formatting;
+mod gpx_reader;
 mod model;
 mod simplification;
 mod stage;

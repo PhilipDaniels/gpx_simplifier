@@ -172,46 +172,50 @@ fn write_stages<'gpx>(
     ws.set_column_width(31, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 32), (0, 35), "Max Speed (kmh)")?;
-    write_header(ws, &fc, (1, 32), "Speed")?;
-    write_header(ws, &fc, (1, 33), "Lat")?;
-    write_header(ws, &fc, (1, 34), "Lon")?;
-    write_header(ws, &fc, (1, 35), "Map")?;
-    ws.set_column_width(32, SPEED_COLUMN_WIDTH)?;
-    ws.set_column_width(33, LAT_LON_COLUMN_WIDTH)?;
+    write_header_merged(ws, &fc, (0, 32), (0, 36), "Max Speed")?;
+    write_header(ws, &fc, (1, 32), "Speed (kmh)")?;
+    write_header(ws, &fc, (1, 33), "Distance (km)")?;
+    write_header(ws, &fc, (1, 34), "Lat")?;
+    write_header(ws, &fc, (1, 35), "Lon")?;
+    write_header(ws, &fc, (1, 36), "Map")?;
+    ws.set_column_width(32, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(33, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(34, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(35, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(35, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(36, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 36), (0, 40), "Heart Rate")?;
-    write_header(ws, &fc, (1, 36), "Avg")?;
-    write_header(ws, &fc, (1, 37), "Max")?;
-    write_header(ws, &fc, (1, 38), "Lat")?;
-    write_header(ws, &fc, (1, 39), "Lon")?;
-    write_header(ws, &fc, (1, 40), "Map")?;
+    write_header_merged(ws, &fc, (0, 37), (0, 41), "Heart Rate")?;
+    write_header(ws, &fc, (1, 37), "Avg")?;
+    write_header(ws, &fc, (1, 38), "Max")?;
+    write_header(ws, &fc, (1, 39), "Lat")?;
+    write_header(ws, &fc, (1, 40), "Lon")?;
+    write_header(ws, &fc, (1, 41), "Map")?;
     ws.set_column_width(39, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(39, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(40, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(40, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(41, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 41), (0, 45), "Temp °C")?;
-    write_header(ws, &fc, (1, 41), "Avg")?;
-    write_header(ws, &fc, (1, 42), "Max")?;
-    write_header(ws, &fc, (1, 43), "Lat")?;
-    write_header(ws, &fc, (1, 44), "Lon")?;
-    write_header(ws, &fc, (1, 45), "Map")?;
-    ws.set_column_width(43, LAT_LON_COLUMN_WIDTH)?;
+    write_header_merged(ws, &fc, (0, 42), (0, 46), "Temp °C")?;
+    write_header(ws, &fc, (1, 42), "Avg")?;
+    write_header(ws, &fc, (1, 43), "Max")?;
+    write_header(ws, &fc, (1, 44), "Lat")?;
+    write_header(ws, &fc, (1, 45), "Lon")?;
+    write_header(ws, &fc, (1, 46), "Map")?;
     ws.set_column_width(44, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(45, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(45, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(46, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 46), (0, 48), "Track Points")?;
-    write_header(ws, &fc, (1, 46), "First")?;
-    write_header(ws, &fc, (1, 47), "Last")?;
-    write_header(ws, &fc, (1, 48), "Count")?;
+    write_header_merged(ws, &fc, (0, 47), (0, 49), "Track Points")?;
+    write_header(ws, &fc, (1, 47), "First")?;
+    write_header(ws, &fc, (1, 48), "Last")?;
+    write_header(ws, &fc, (1, 49), "Count")?;
 
     // Regarding lat-lon hyperlinks: on the summary tab we generally always
     // write them, because they are few in number and so don't slow down Calc.
+    // But they are optional on the Track Points tab because there are thousands
+    // of them and they really slow down Calc.
 
     // This hyper controls whether we are making an internal link to
     // the trackpoints tab (which may not exist, hence the check).
@@ -286,12 +290,12 @@ fn write_stages<'gpx>(
         // temp here
 
         fc.increment_column();
-        write_trackpoint_number(ws, &fc, (row, 46), stage.start.index, hyperlink_to_tps)?;
-        write_trackpoint_number(ws, &fc, (row, 47), stage.end.index, hyperlink_to_tps)?;
+        write_trackpoint_number(ws, &fc, (row, 47), stage.start.index, hyperlink_to_tps)?;
+        write_trackpoint_number(ws, &fc, (row, 48), stage.end.index, hyperlink_to_tps)?;
         write_integer(
             ws,
             &fc,
-            (row, 48),
+            (row, 49),
             (stage.end.index - stage.start.index + 1).try_into()?,
         )?;
 
@@ -346,21 +350,21 @@ fn write_stages<'gpx>(
     write_trackpoint_number(
         ws,
         &fc,
-        (row, 46),
+        (row, 47),
         stages.first_point().index,
         hyperlink_to_tps,
     )?;
     write_trackpoint_number(
         ws,
         &fc,
-        (row, 47),
+        (row, 48),
         stages.last_point().index,
         hyperlink_to_tps,
     )?;
     write_integer(
         ws,
         &fc,
-        (row, 48),
+        (row, 49),
         (stages.last_point().index - stages.first_point().index + 1).try_into()?,
     )?;
 
@@ -652,10 +656,11 @@ fn write_max_speed_data(
     point: &EnrichedTrackPoint,
 ) -> Result<(), Box<dyn Error>> {
     write_speed(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
+    write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
     write_lat_lon(
         ws,
         &fc,
-        (rc.0, rc.1 + 1),
+        (rc.0, rc.1 + 2),
         (point.lat, point.lon),
         Hyperlink::Yes,
     )?;

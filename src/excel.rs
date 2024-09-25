@@ -304,7 +304,7 @@ fn write_stages<'gpx>(
     // Now write an overall summary row.
     let mut fc = FormatControl::new();
     row += 2;
-    write_string(ws, &fc, (row, 5), "SUMMARY")?;
+    write_string_bold(ws, &fc, (row, 5), "SUMMARY")?;
     fc.increment_column();
     write_utc_date(ws, &fc, (row, 6), stages.start_time())?;
     write_utc_date_as_local(ws, &fc, (row, 7), stages.start_time())?;
@@ -524,6 +524,18 @@ fn write_string(
     value: &str,
 ) -> Result<(), Box<dyn Error>> {
     ws.write_string_with_format(rc.0, rc.1, value, &fc.string_format())?;
+    Ok(())
+}
+
+/// Writes a string right aligned and bold.
+fn write_string_bold(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: &str,
+) -> Result<(), Box<dyn Error>> {
+    let format = fc.string_format().set_bold();
+    ws.write_string_with_format(rc.0, rc.1, value, &format)?;
     Ok(())
 }
 

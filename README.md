@@ -82,7 +82,6 @@ Or build from source using cargo.
 
 # TODO
 - MaxSpeed - include distance of this point
-- 'Summary' to be in bold.
 - Extract the extension information from the GPX - need to go back
   to manual parsing? Use speed from the GPX in preference to trying
   to derive it.

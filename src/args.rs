@@ -29,19 +29,27 @@ pub struct Args {
 
     #[arg(
         long,
-        default_value = "10",
-        help = "A stop is considered to end when you start moving with this speed, in km/h",
+        default_value = "0.15",
+        help = "The speed, in km/h, which you must drop below for us to think you are stopped",
         requires = "detect_stages"
     )]
-    pub resume_speed: u8,
+    pub stopped_speed: f64,
 
     #[arg(
         long,
-        default_value = "10",
-        help = "Minimum length of a stop, in minutes, for it to be detected",
+        default_value = "5.0",
+        help = "Minimum length of a stage stop, in minutes, for it to be detected",
         requires = "detect_stages"
     )]
-    pub min_stop_time: u8,
+    pub min_stop_time: f64,
+
+    #[arg(
+        long,
+        default_value = "100.0",
+        help = "The distance you must move (as the crow flies from your stop point) before you are considered to be moving again",
+        requires = "detect_stages"
+    )]
+    pub stop_resumption_distance: f64,
 
     #[arg(
         long,

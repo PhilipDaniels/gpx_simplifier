@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use geo::{point, Point};
 use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
 
@@ -100,6 +101,14 @@ pub struct EnrichedGpx {
     pub points: Vec<EnrichedTrackPoint>,
 }
 
+impl EnrichedGpx {
+    /// Returns the last valid index in the points array.
+    /// Just a convenience fn to avoid off-by-one errors (hopefully).
+    pub fn last_valid_idx(&self) -> usize {
+        self.points.len() - 1
+    }
+}
+
 /// A TrackPoint with lots of extra stuff calculated. We need the extras
 /// to find the stages.
 #[derive(Debug)]
@@ -166,6 +175,14 @@ impl EnrichedTrackPoint {
     pub fn start_time(&self) -> OffsetDateTime {
         self.time - self.delta_time
     }
+
+    /// Makes a geo-Point based on the lat-lon coordinates of this point.
+    /// n.b. x=lon, y=lat. If you do it the other way round the
+    /// distances are wrong - a lot wrong.
+    pub fn as_geo_point(&self) -> Point {
+        point! { x: self.lon, y: self.lat }
+    }
+
 }
 
 impl From<MergedGpx> for EnrichedGpx {

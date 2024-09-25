@@ -6,7 +6,7 @@
 use core::{fmt, slice};
 use std::ops::Index;
 
-use geo::{point, GeodesicDistance};
+use geo::{GeodesicDistance, Point};
 use log::{debug, info, warn};
 use logging_timer::time;
 use time::{Duration, OffsetDateTime};
@@ -281,15 +281,11 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let mut cum_ascent_metres = 0.0;
     let mut cum_descent_metres = 0.0;
 
-    let mut p1 = point!(x: gpx.points[0].lon, y: gpx.points[0].lat);
+    let mut p1 = gpx.points[0].as_geo_point();
 
     for idx in 1..gpx.points.len() {
-        let p2 = point!(x: gpx.points[idx].lon, y: gpx.points[idx].lat);
-
-        // Distance.
-        // n.b. x=lon, y=lat. If you do it the other way round the
-        // distances are wrong - a lot wrong.
-        gpx.points[idx].delta_metres = p1.geodesic_distance(&p2);
+        let p2 = gpx.points[idx].as_geo_point();
+        gpx.points[idx].delta_metres = distance_between_points_metres(p1, p2);
         assert!(gpx.points[idx].delta_metres >= 0.0);
 
         gpx.points[idx].running_metres =
@@ -424,7 +420,7 @@ fn get_next_stage<'gpx>(
     params: &StageDetectionParameters,
 ) -> Option<Stage<'gpx>> {
     // Get this out into a variable to avoid off-by-one errors (hopefully).
-    let last_valid_idx = gpx.points.len() - 1;
+    let last_valid_idx = gpx.last_valid_idx();
 
     info!(
         "Finding stage of type {} starting at index {}",
@@ -577,18 +573,22 @@ fn find_stop_index(
 /// A Stopped stage is ended when we have moved at least 'min_metres_to_resume'.
 /// GPX readings can be very noisy when stopped, especially if you move the bike
 /// around or take the GPX in a shop with you, so it is better to rely on distance
-/// moved rather than speed.
+/// moved rather than speed. We do this using an "as the crow flies" measurement
+/// to hopefully avoid nonsense such as parking the bike in a secure spot near
+/// the shop...
 fn find_resume_index(
     gpx: &EnrichedGpx,
     start_idx: usize,
     last_valid_idx: usize,
     min_metres_to_resume: f64,
 ) -> usize {
+    let start_pt = gpx.points[start_idx].as_geo_point();
+
     let mut end_index = start_idx + 1;
-    let start_metres = gpx.points[start_idx].running_metres;
 
     while end_index <= last_valid_idx {
-        let moved_metres = gpx.points[end_index].running_metres - start_metres;
+        let moved_metres =
+            distance_between_points_metres(start_pt, gpx.points[end_index].as_geo_point());
         if moved_metres > min_metres_to_resume {
             debug!("find_resume_index(start_idx={start_idx}) Returning end_idx={end_index} due to having moved {moved_metres:.2}m");
             return end_index;
@@ -643,25 +643,41 @@ fn find_max_speed<'gpx>(
     max
 }
 
+/// Calculate distance between two points in metres.
+fn distance_between_points_metres(p1: Point, p2: Point) -> f64 {
+    p1.geodesic_distance(&p2)
+}
+
+/// Try and figure out whether we are starting Moving or Stopped
+/// by looking at the average speed over the first 3 minutes.
+fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters) -> StageType {
+    // Get this out into a variable to avoid off-by-one errors (hopefully).
+    let last_valid_idx = gpx.last_valid_idx();
+
+    let start = &gpx.points[0];
+    let mut end_idx = 1;
+    while end_idx < last_valid_idx {
+        let duration = gpx.points[end_idx].time - start.start_time();
+        if duration.as_seconds_f64() >= 180.0 {
+            return classify_stage(start, &gpx.points[end_idx]);
+        } else {
+            end_idx += 1;
+        }
+    }
+
+    let end = &gpx.points[end_idx];
+    classify_stage(start, end)
+}
+
 /// Classifies a stage, based on the average speed within that stage.
 fn classify_stage(start_point: &EnrichedTrackPoint, last_point: &EnrichedTrackPoint) -> StageType {
-    // TODO: Deal with 1 point stages? Need to include delta_metres?
     let distance_metres = last_point.running_metres - start_point.running_metres;
     let time = last_point.time - start_point.time;
     let speed = speed_kmh_from_duration(distance_metres, time);
     if speed < 5.0 {
+        // Less than walking pace? Assume you're stopped.
         StageType::Stopped
     } else {
         StageType::Moving
     }
-}
-
-/// Try and figure out whether we are starting Moving or Stopped
-/// by looking at the average speed over the first 100 points.
-/// TODO: Better to use time.
-fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters) -> StageType {
-    let start = &gpx.points[0];
-    let end_idx = std::cmp::min(100, gpx.points.len() - 1);
-    let end = &gpx.points[end_idx];
-    classify_stage(start, end)
 }

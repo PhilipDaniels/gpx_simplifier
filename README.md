@@ -82,7 +82,7 @@ Or build from source using cargo.
 
 # TODO
 - MaxSpeed - include distance of this point
-- Use crow flies distance for resumption
+- 'Summary' to be in bold.
 - Extract the extension information from the GPX - need to go back
   to manual parsing? Use speed from the GPX in preference to trying
   to derive it.
@@ -91,5 +91,3 @@ Or build from source using cargo.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
-
-# TODO

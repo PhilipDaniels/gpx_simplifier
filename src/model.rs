@@ -153,6 +153,19 @@ impl EnrichedTrackPoint {
             location: Default::default(),
         }
     }
+
+    /// The start time of the TrackPoint. TrackPoints are written after
+    /// a period of time has expired. Most trackpoint are written at 1
+    /// second intervals, but when you are stopped it can be a long time,
+    /// say 20 minutes, before the trackpoint is written. So a TrackPoint
+    /// may have a time of 14:40, and the previous TrackPoint has a time
+    /// of 14:20, giving a delta_time of 20 minutes.
+    /// 
+    /// It is important to use start_time() when calculating things like
+    /// durations of stages.
+    pub fn start_time(&self) -> OffsetDateTime {
+        self.time - self.delta_time
+    }
 }
 
 impl From<MergedGpx> for EnrichedGpx {

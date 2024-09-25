@@ -27,7 +27,6 @@ pub fn speed_kmh_from_duration(metres: f64, time: Duration) -> f64 {
 #[derive(Debug)]
 pub struct StageDetectionParameters {
     /// You are considered "Stopped" if your speed drops below this.
-    /// So that means a dead-stop.
     pub stopped_speed_kmh: f64,
 
     // You are considered to be "Moving Again" when you have moved
@@ -50,8 +49,8 @@ pub struct Stage<'gpx> {
     pub min_elevation: &'gpx EnrichedTrackPoint,
     pub max_elevation: &'gpx EnrichedTrackPoint,
     pub max_speed: &'gpx EnrichedTrackPoint,
-    // The first point in the track. We could pass it into
-    // the relevant methods, but storing it works ok too.
+    // The first point in the entire track. We could pass it
+    // into the relevant methods, but storing it works ok too.
     // We will need this to calculate some metrics later.
     pub track_start_point: &'gpx EnrichedTrackPoint,
 }
@@ -84,18 +83,17 @@ impl StageType {
 impl<'gpx> Stage<'gpx> {
     /// Returns the duration of the stage.
     pub fn duration(&self) -> Duration {
-        // We need to include the delta_time of the first TrackPoint
-        // in order for this to be accurate. e.g. consider a Stopped
-        // stage which has a point with a 25 minute delta_time. The time
-        // will be the time at the end of that 25 minute period. If
-        // we don't include delta_time we will be 25 minutes short.
-        (self.end.time - self.start.time) + self.start.delta_time
+        // Be careful to use the time that the 'start' TrackPoint
+        // began, not when it was recorded. They are very different
+        // for TrackPoints written when you are stopped. A TrackPoint
+        // may not be written for many minutes in that situation.
+        self.end.time - self.start.start_time()
     }
 
     /// Returns the running duration to the end of the stage from
-    /// the 'starting_track_point' (normally will be the first point in the track).
+    /// the 'track_start_point' (the first point in the track).
     pub fn running_duration(&self) -> Duration {
-        self.end.time - self.track_start_point.time
+        self.end.time - self.track_start_point.start_time()
     }
 
     /// Returns the distance (length) of the stage, in metres.
@@ -185,7 +183,7 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the start time of the first Stage.
     pub fn start_time(&self) -> OffsetDateTime {
-        self.first_point().time
+        self.first_point().start_time()
     }
 
     /// Returns the end time of the last Stage.
@@ -333,15 +331,13 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 ///
 /// Invariants: the first stage starts at TrackPoint 0
 /// and goes to TrackPoint N. The next stage starts at
-/// Trackpoint N and goes to TrackPoint M. The last stage
-/// ends at the last TrackPoint.
-///
-/// In other words, there are no gaps, all TrackPoints are in a
-/// stage, and TrackPoints in the middle will be in two adjacent
-/// stages. TrackPoints are cloned as part of this construction.
+/// Trackpoint N + 1 and goes to TrackPoint M. The last stage
+/// ends at the last TrackPoint. In other words, there are no gaps,
+/// all TrackPoints are in a stage, and no TrackPoint is in
+/// two stages. TrackPoints are cloned as part of this construction.
 ///
 /// A Stage is a Stopped stage if you speed drops below
-/// a (very low) limit and does not go above a 'resume_speed'
+/// a (very low) limit and you don't move a certain distance
 /// for a 'min_stop_time' length of time.
 ///
 /// All non-Stopped stages are considered Moving stages.
@@ -352,7 +348,7 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     }
 
     info!(
-        "Detecting stages in {:?} using min_stopped_speed={}, min_duration_seconds={}, min_metres_to_resume={}",
+        "Detecting stages in {:?} using stopped_speed_kmh={}, min_duration_seconds={}, min_metres_to_resume={}",
         gpx.filename,
         params.stopped_speed_kmh,
         params.min_duration_seconds,
@@ -372,7 +368,7 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     let mut start_idx = 0;
 
     // We will alternate stage types - Moving-Stopped-Moving-Stopped etc.
-    // But instead of assuming that we start off moving, we try and figure it out.
+    // But instead of assuming that we start off Moving, we try and figure it out.
     let mut stage_type = get_starting_stage_type(gpx, &params);
     info!("Determined type of the first stage to be {}", stage_type);
 
@@ -434,12 +430,12 @@ fn get_next_stage<'gpx>(
 
     // Termination condition, we reached the end of the TrackPoints.
     if start_idx >= last_valid_idx {
-        info!("All points exhausted, start_idx={start_idx}, last_valid_index={last_valid_idx}");
+        info!("get_next_stage(start_idx={start_idx}, stage_type={stage_type}) All TrackPoints exhausted, returning None. last_valid_index={last_valid_idx}");
         return None;
     }
 
     // A Moving stage ends on the point before the speed drops below the limit.
-    // A Stopped stage ends when we have moved 100m or more.
+    // A Stopped stage ends when we have moved some distance.
     let end_idx = match stage_type {
         StageType::Moving => find_stop_index(gpx, start_idx, last_valid_idx, params),
         StageType::Stopped => {
@@ -473,47 +469,6 @@ fn get_next_stage<'gpx>(
     assert!(stage.start.index >= stage.track_start_point.index);
 
     return Some(stage);
-}
-
-/// Within a given range of trackpoints, finds the ones with the minimum
-/// and maximum elevation.
-fn find_min_and_max_elevation_points<'gpx>(
-    gpx: &'gpx EnrichedGpx,
-    start_idx: usize,
-    end_idx: usize,
-) -> (&'gpx EnrichedTrackPoint, &'gpx EnrichedTrackPoint) {
-    let mut min = &gpx.points[start_idx];
-    let mut max = &gpx.points[start_idx];
-
-    for tp in &gpx.points[start_idx..=end_idx] {
-        if tp.ele < min.ele {
-            min = tp;
-        } else if tp.ele > max.ele {
-            max = tp;
-        }
-    }
-
-    assert!(max.ele >= min.ele);
-
-    (min, max)
-}
-
-/// Within a given range of trackpoints, finds the one with the
-/// maximum speed.
-fn find_max_speed<'gpx>(
-    gpx: &'gpx EnrichedGpx,
-    start_idx: usize,
-    end_idx: usize,
-) -> &'gpx EnrichedTrackPoint {
-    let mut max = &gpx.points[start_idx];
-
-    for tp in &gpx.points[start_idx..=end_idx] {
-        if tp.speed_kmh > max.speed_kmh {
-            max = tp;
-        }
-    }
-
-    max
 }
 
 /// A Moving stage is ended when we stop. This occurs when we drop below the
@@ -642,6 +597,47 @@ fn find_resume_index(
     debug!("find_resume_index(start_idx={start_idx}) Returning last_valid_idx={last_valid_idx} due to TrackPoint exhaustion");
 
     last_valid_idx
+}
+
+/// Within a given range of trackpoints, finds the ones with the minimum
+/// and maximum elevation.
+fn find_min_and_max_elevation_points<'gpx>(
+    gpx: &'gpx EnrichedGpx,
+    start_idx: usize,
+    end_idx: usize,
+) -> (&'gpx EnrichedTrackPoint, &'gpx EnrichedTrackPoint) {
+    let mut min = &gpx.points[start_idx];
+    let mut max = &gpx.points[start_idx];
+
+    for tp in &gpx.points[start_idx..=end_idx] {
+        if tp.ele < min.ele {
+            min = tp;
+        } else if tp.ele > max.ele {
+            max = tp;
+        }
+    }
+
+    assert!(max.ele >= min.ele);
+
+    (min, max)
+}
+
+/// Within a given range of trackpoints, finds the one with the
+/// maximum speed.
+fn find_max_speed<'gpx>(
+    gpx: &'gpx EnrichedGpx,
+    start_idx: usize,
+    end_idx: usize,
+) -> &'gpx EnrichedTrackPoint {
+    let mut max = &gpx.points[start_idx];
+
+    for tp in &gpx.points[start_idx..=end_idx] {
+        if tp.speed_kmh > max.speed_kmh {
+            max = tp;
+        }
+    }
+
+    max
 }
 
 /// Classifies a stage, based on the average speed within that stage.

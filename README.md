@@ -81,7 +81,8 @@ Or build from source using cargo.
 
 
 # TODO
-- Fix the stage detection. Use distance moved as the prime metric?
+- MaxSpeed - include distance of this point
+- Use crow flies distance for resumption
 - Extract the extension information from the GPX - need to go back
   to manual parsing? Use speed from the GPX in preference to trying
   to derive it.
@@ -91,46 +92,4 @@ Or build from source using cargo.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
 
-
-# PROBLEMS
-1. find_stop_index stops on the first index with speed < kmh.
-But this point is not necessarily the start of the stop, it
-may have a delta time of several minutes which means the PREVIOUS
-point is the start of the stop.
-
-2. Varying trackpoint delta times - do we need to smooth the data
-to 1 per second resolution?
-
-6779 - Spar shop
-10295 - not a ctrl, seems spurious
-17143 - Prysor SS, a 39 minute trackpoint!
-26724 - Dafydd stores, a 33 minute trackpoint
-
-M&M
-5819 is a pee stop
-11137 is the 1st control, it is 16 minutes long
-14855 is the 2nd control, it is 22 minutes long
-23841 is the 3rd control, it is 24 minutes long.
-
-At 23840 we find the stop, but on the next call
-we don't determine the stopped portion, we go
-straight back to moving.
-
-
-Track Points		
-First	Last	Count
-Stage 1 0	11127	11128     Moving
-Stage 2 11128	11168	41    Stopped
-Stage 3 11169	14849	3681  Moving
-Stage 4 14850	14886	37    Stopped
-Stage 5 14887	23840	8954  Moving
-Stage 6 23841	32552	8712  Moving
-
-The stop is correctly found at the end of Stage 5 and the stage type is correct.
-The problem is a stage is missing - point 23841 should be a stage in itself
-of type Stopped. ie.
-
-Stage 6 23841 23841 1     Stopped
-Stage 7 23842 32552       Moving
-
-We could find all the transitions first, then classify the stages.
+# TODO

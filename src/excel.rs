@@ -185,32 +185,40 @@ fn write_stages<'gpx>(
     ws.set_column_width(36, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 37), (0, 41), "Heart Rate")?;
+    write_header_merged(ws, &fc, (0, 37), (0, 43), "Heart Rate")?;
     write_header(ws, &fc, (1, 37), "Avg")?;
     write_header(ws, &fc, (1, 38), "Max")?;
-    write_header(ws, &fc, (1, 39), "Lat")?;
-    write_header(ws, &fc, (1, 40), "Lon")?;
-    write_header(ws, &fc, (1, 41), "Map")?;
-    ws.set_column_width(39, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(40, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(41, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    write_header(ws, &fc, (1, 39), "Speed (kmh)")?;
+    write_header(ws, &fc, (1, 40), "Distance (km)")?;
+    write_header(ws, &fc, (1, 41), "Lat")?;
+    write_header(ws, &fc, (1, 42), "Lon")?;
+    write_header(ws, &fc, (1, 43), "Map")?;
+    ws.set_column_width(39, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(40, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(41, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(42, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(43, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 42), (0, 46), "Temp °C")?;
-    write_header(ws, &fc, (1, 42), "Avg")?;
-    write_header(ws, &fc, (1, 43), "Max")?;
-    write_header(ws, &fc, (1, 44), "Lat")?;
-    write_header(ws, &fc, (1, 45), "Lon")?;
-    write_header(ws, &fc, (1, 46), "Map")?;
-    ws.set_column_width(44, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(45, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(46, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    write_header_merged(ws, &fc, (0, 44), (0, 50), "Temp °C")?;
+    write_header(ws, &fc, (1, 44), "Avg")?;
+    write_header(ws, &fc, (1, 45), "Max")?;
+    write_header(ws, &fc, (1, 46), "Speed (kmh)")?;
+    write_header(ws, &fc, (1, 47), "Distance (km)")?;
+    write_header(ws, &fc, (1, 48), "Lat")?;
+    write_header(ws, &fc, (1, 49), "Lon")?;
+    write_header(ws, &fc, (1, 50), "Map")?;
+    ws.set_column_width(46, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(47, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(48, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(49, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(50, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 47), (0, 49), "Track Points")?;
-    write_header(ws, &fc, (1, 47), "First")?;
-    write_header(ws, &fc, (1, 48), "Last")?;
-    write_header(ws, &fc, (1, 49), "Count")?;
+    write_header_merged(ws, &fc, (0, 51), (0, 53), "Track Points")?;
+    write_header(ws, &fc, (1, 51), "First")?;
+    write_header(ws, &fc, (1, 52), "Last")?;
+    write_header(ws, &fc, (1, 53), "Count")?;
 
     // Regarding lat-lon hyperlinks: on the summary tab we generally always
     // write them, because they are few in number and so don't slow down Calc.
@@ -290,12 +298,12 @@ fn write_stages<'gpx>(
         // temp here
 
         fc.increment_column();
-        write_trackpoint_number(ws, &fc, (row, 47), stage.start.index, hyperlink_to_tps)?;
-        write_trackpoint_number(ws, &fc, (row, 48), stage.end.index, hyperlink_to_tps)?;
+        write_trackpoint_number(ws, &fc, (row, 51), stage.start.index, hyperlink_to_tps)?;
+        write_trackpoint_number(ws, &fc, (row, 52), stage.end.index, hyperlink_to_tps)?;
         write_integer(
             ws,
             &fc,
-            (row, 49),
+            (row, 53),
             (stage.end.index - stage.start.index + 1).try_into()?,
         )?;
 
@@ -350,21 +358,21 @@ fn write_stages<'gpx>(
     write_trackpoint_number(
         ws,
         &fc,
-        (row, 47),
+        (row, 51),
         stages.first_point().index,
         hyperlink_to_tps,
     )?;
     write_trackpoint_number(
         ws,
         &fc,
-        (row, 48),
+        (row, 52),
         stages.last_point().index,
         hyperlink_to_tps,
     )?;
     write_integer(
         ws,
         &fc,
-        (row, 49),
+        (row, 53),
         (stages.last_point().index - stages.first_point().index + 1).try_into()?,
     )?;
 

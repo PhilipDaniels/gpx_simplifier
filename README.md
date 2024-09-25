@@ -81,7 +81,6 @@ Or build from source using cargo.
 
 
 # TODO
-- HR and TEMP - include speed and distance of this point
 - Extract the extension information from the GPX - need to go back
   to manual parsing? Use speed from the GPX in preference to trying
   to derive it.

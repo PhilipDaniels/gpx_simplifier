@@ -73,15 +73,15 @@ pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx2, Box<dyn Error>> {
                 }
                 _ => (),
             },
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                panic!("Reached EOF unexpectedly (before the closing GPX tag). File is probably corrupt.");
+            }
             Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
             _ => (),
         }
 
         buf.clear();
     }
-
-    todo!();
 }
 
 /// Parses an XML declaration, i.e. the very first line of the file which is:

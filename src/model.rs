@@ -9,10 +9,11 @@ use time::{Duration, OffsetDateTime};
 #[derive(Debug)]
 pub struct Gpx2 {
     pub filename: PathBuf,
-    pub decl: Declaration,
+    pub declaration: Declaration,
     pub info: GpxInfo,
     pub metadata: GpxMetadata,
     pub tracks: Vec<Track2>,
+    // TODO: There can also be a list of waypoints and/or routes.
 }
 
 #[derive(Debug)]
@@ -46,12 +47,38 @@ pub struct Link {
     pub r#type: Option<String>,
 }
 
+/// TODO: Parse all fields.
 #[derive(Debug)]
 pub struct Track2 {
-    pub name: String,
-    pub r#type: String,
+    pub name: Option<String>,
+    pub r#type: Option<String>,
+    pub segments: Vec<TrackSegment2>,
 }
 
+#[derive(Debug)]
+pub struct TrackSegment2 {
+    pub points: Vec<TrackPoint2>,
+}
+
+#[derive(Debug)]
+pub struct TrackPoint2 {
+    pub lat: f64,
+    pub lon: f64,
+    pub ele: f64,                   // Optional according to the XSD.
+    pub time: OffsetDateTime,       // Optional according to the XSD.
+    pub extensions: Option<Extensions>,
+}
+
+/// All the Garmin TrackPoint extensions according to
+/// https://www8.garmin.com/xmlschemas/TrackPointExtensionv1.xsd
+#[derive(Debug)]
+pub struct Extensions {
+    pub air_temp: Option<f64>,
+    pub water_temp: Option<f64>,
+    pub depth: Option<f64>,
+    pub heart_rate: Option<u16>,
+    pub cadence: Option<u16>,
+}
 //////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize)]

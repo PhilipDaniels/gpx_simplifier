@@ -8,114 +8,69 @@ use std::{
     path::Path,
 };
 
+use logging_timer::time;
 use quick_xml::{
     events::{BytesDecl, BytesStart, Event},
+    name::QName,
     Reader,
 };
 use time::{format_description::well_known, OffsetDateTime};
 
-use crate::model::{Declaration, Gpx2, GpxInfo, GpxMetadata, Link, Track, Track2};
+use crate::model::{
+    Declaration, Extensions, Gpx2, GpxInfo, GpxMetadata, Link, Track2, TrackPoint2, TrackSegment2,
+};
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
+#[time]
 pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx2, Box<dyn Error>> {
     let mut reader = Reader::from_file(input_file)?;
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 
-    let mut declaration: Declaration;
-    let mut gpx_info: GpxInfo;
-    let mut metadata: GpxMetadata;
+    let mut declaration = None;
+    let mut gpx_info = None;
+    let mut metadata = None;
     let mut tracks: Vec<Track2> = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                // This is the very first line: <?xml version="1.0" encoding="UTF-8"?>
-                declaration = parse_decl(decl)?;
-                dbg!(declaration);
+                declaration = Some(parse_decl(&decl)?);
             }
-            Ok(Event::Start(e)) => {
-                match e.name().as_ref() {
-                    b"gpx" => {
-                        gpx_info = parse_gpx_info(e)?;
-                        dbg!(gpx_info);
-                    }
-                    b"metadata" => {
-                        metadata = parse_metadata(&mut buf, &mut reader)?;
-                        dbg!(metadata);
-                    }
-                    b"trk" => {
-                        let track = parse_track(&mut buf, &mut reader)?;
-                        tracks.push(track);
-                    }
-                    b"trkseg" => {
-                        println!("Found a trkseg tag");
-                        //writer.write_event(Event::Start(e)).unwrap();
-                    }
-                    b"trkpt" => {
-                        let lat = get_f32_attr(&e, "lat");
-                        let lon = get_f32_attr(&e, "lon");
-                        let ele: f32;
-                        let time: String;
-
-                        let eot1 = read_ele_or_time(&mut reader, &mut buf);
-                        let eot2 = read_ele_or_time(&mut reader, &mut buf);
-
-                        match (eot1, eot2) {
-                            (EleOrTime::ele(e), EleOrTime::time(t)) => {
-                                ele = e;
-                                time = t;
-                            }
-                            (EleOrTime::time(t), EleOrTime::ele(e)) => {
-                                ele = e;
-                                time = t;
-                            }
-                            _ => panic!("Did not get both the <ele> and <time> tags"),
-                        }
-
-                        // let tp = Trackpoint {
-                        //     lat,
-                        //     lon,
-                        //     ele,
-                        //     time,
-                        // };
-
-                        //println!("{:?}", tp);
-                        //trackpoints.push(tp);
-                    }
-                    b"ele" => {
-                        // Read again to get the text inside the <ele>...</ele> tags.
-                        match reader.read_event_into(&mut buf) {
-                            Ok(Event::Text(t)) => {
-                                //writer.create_element("ele").write_text_content(t).unwrap();
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    b"time" => {
-                        // Read again to get the text inside the <time>...</time> tags.
-                        match reader.read_event_into(&mut buf) {
-                            Ok(Event::Text(t)) => {
-                                //writer.create_element("time").write_text_content(t).unwrap();
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    _ => (),
-                }
-            }
-            Ok(Event::End(e)) => match e.name().as_ref() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    //writer.write_event(Event::End(e)).unwrap();
+                    gpx_info = Some(parse_gpx_info(&e)?);
+                }
+                b"metadata" => {
+                    metadata = Some(parse_metadata(&mut buf, &mut reader)?);
                 }
                 b"trk" => {
-                    //writer.write_event(Event::End(e)).unwrap();
+                    let track = parse_track(&mut buf, &mut reader)?;
+                    tracks.push(track);
                 }
-                b"trkseg" => {
-                    //writer.write_event(Event::End(e)).unwrap();
-                }
-                b"trkpt" => {
-                    //writer.write_event(Event::End(e)).unwrap();
+                _ => (),
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"gpx" => {
+                    if declaration.is_none() {
+                        return Err("Did not find the 'xml' declaration element")?;
+                    }
+                    if gpx_info.is_none() {
+                        return Err("Did not find the 'gpx' element")?;
+                    }
+                    if metadata.is_none() {
+                        return Err("Did not find the 'metadata' element")?;
+                    }
+
+                    let gpx = Gpx2 {
+                        filename: input_file.to_owned(),
+                        declaration: declaration.unwrap(),
+                        info: gpx_info.unwrap(),
+                        metadata: metadata.unwrap(),
+                        tracks,
+                    };
+
+                    return Ok(gpx);
                 }
                 _ => (),
             },
@@ -130,9 +85,9 @@ pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx2, Box<dyn Error>> {
     todo!();
 }
 
-/// Parses a declaration, i.e. the very first line of the file which is:
+/// Parses an XML declaration, i.e. the very first line of the file which is:
 ///     <?xml version="1.0" encoding="UTF-8"?>
-fn parse_decl(decl: BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
+fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
     Ok(Declaration {
         version: rcow_to_string(decl.version())?,
         encoding: orcow_to_string(decl.encoding())?,
@@ -140,9 +95,9 @@ fn parse_decl(decl: BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
     })
 }
 
-fn parse_gpx_info(tag: BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
+fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
     Ok(GpxInfo {
-        attributes: parse_attributes(tag)?,
+        attributes: parse_attributes(&tag)?,
     })
 }
 
@@ -161,7 +116,7 @@ fn parse_metadata(
             // element type in the XSD.
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"link" => {
-                    href = Some(read_attribute_as_string(e, "href")?);
+                    href = Some(read_attribute_as_string(&e, "href")?);
                 }
                 b"text" => {
                     text = Some(read_inner_as_string(buf, reader)?);
@@ -204,71 +159,169 @@ fn parse_track(
     buf: &mut Vec<u8>,
     reader: &mut Reader<BufReader<File>>,
 ) -> Result<Track2, Box<dyn Error>> {
-    todo!()
-}
+    let mut name = None;
+    let mut track_type = None;
+    let mut segments = Vec::new();
 
-enum EleOrTime {
-    ele(f32),
-    time(String),
-}
-
-/// Read the <ele> or <time> sub-node. I am not assuming which comes first in the file,
-/// (so we return an enum) but I am assuming they are the first sub-nodes, e.g. before
-/// any <extensions>.
-fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec<u8>) -> EleOrTime {
     loop {
         match reader.read_event_into(buf) {
-            Ok(Event::Start(e)) => {
-                match e.name().as_ref() {
-                    b"ele" => {
-                        // Read again to get the text inside the <ele>...</ele> tags.
-                        match reader.read_event_into(buf) {
-                            Ok(Event::Text(ele)) => {
-                                let ele = ele.as_ref();
-                                let ele = str::from_utf8(ele)
-                                    .expect("The bytes should be ASCII, therefore valid UTF-8");
-                                let ele: f32 =
-                                    ele.parse().expect("The string should be a valid number");
-                                // All the ele's will come out to 1 d.p., because that is all that my Garmin
-                                // Edge 1040 can actually manage, even though it records them as
-                                // "151.1999969482421875" or "149.8000030517578125".
-                                return EleOrTime::ele(ele);
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    b"time" => {
-                        // Read again to get the text inside the <time>...</time> tags.
-                        match reader.read_event_into(buf) {
-                            Ok(Event::Text(time)) => {
-                                let time = time.as_ref();
-                                let time = String::from_utf8_lossy(time).into_owned();
-                                return EleOrTime::time(time);
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    _ => panic!("Unexpected element"),
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"name" => {
+                    name = Some(read_inner_as_string(buf, reader)?);
                 }
-            }
-            _ => {}
+                b"type" => {
+                    track_type = Some(read_inner_as_string(buf, reader)?);
+                }
+                b"trkseg" => {
+                    let segment = parse_track_segment(buf, reader)?;
+                    segments.push(segment);
+                }
+                e @ _ => panic!("Unexpected element {:?}", e),
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"trk" => {
+                    return Ok(Track2 {
+                        name,
+                        r#type: track_type,
+                        segments,
+                    })
+                }
+                _ => {}
+            },
+            // Ignore spurious Event::Text, I think they are newlines.
+            Ok(Event::Text(_)) => {}
+            e @ _ => panic!("Unexpected element {:?}", e),
         }
     }
 }
 
-fn get_f32_attr(e: &BytesStart, arg: &str) -> f32 {
-    let attr = e
-        .try_get_attribute(arg)
-        .expect("Unless the file is corrupt the attributes we asl for always exist")
-        .expect("And always have values")
-        .value;
-    let attr = attr.as_ref();
-    let attr = str::from_utf8(attr).expect("The bytes should be ASCII, therefore valid UTF-8");
-    let attr: f32 = attr.parse().expect("The string should be a valid number");
-    attr
+fn parse_track_segment(
+    buf: &mut Vec<u8>,
+    reader: &mut Reader<BufReader<File>>,
+) -> Result<TrackSegment2, Box<dyn Error>> {
+    let mut points = Vec::new();
+
+    while let Some(point) = parse_trackpoint(buf, reader) {
+        let point = point?;
+        points.push(point);
+    }
+
+    return Ok(TrackSegment2 { points });
 }
 
-fn parse_attributes(tag: BytesStart<'_>) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn parse_trackpoint(
+    buf: &mut Vec<u8>,
+    reader: &mut Reader<BufReader<File>>,
+) -> Option<Result<TrackPoint2, Box<dyn Error>>> {
+    let mut lat = None;
+    let mut lon = None;
+    let mut ele = None;
+    let mut time = None;
+    let mut extensions = None;
+
+    loop {
+        match reader.read_event_into(buf) {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"trkpt" => {
+                    match read_attribute_as_f64(&e, "lat") {
+                        Ok(attr_value) => lat = Some(attr_value),
+                        Err(err) => return Some(Err(err)),
+                    }
+                    match read_attribute_as_f64(&e, "lon") {
+                        Ok(attr_value) => lon = Some(attr_value),
+                        Err(err) => return Some(Err(err)),
+                    }
+                }
+                b"ele" => match read_inner_as_f64(buf, reader) {
+                    Ok(inner) => ele = Some(inner),
+                    Err(err) => return Some(Err(err)),
+                },
+                b"time" => match read_inner_as_time(buf, reader) {
+                    Ok(inner) => time = Some(inner),
+                    Err(err) => return Some(Err(err)),
+                },
+                b"extensions" => match parse_trackpoint_extensions(buf, reader) {
+                    Ok(ext) => extensions = Some(ext),
+                    Err(err) => return Some(Err(err)),
+                },
+                e @ _ => panic!("Unexpected element {:?}", e),
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"trkpt" => {
+                    return Some(Ok(TrackPoint2 {
+                        lat: lat.unwrap(),
+                        lon: lon.unwrap(),
+                        ele: ele.unwrap(),
+                        time: time.unwrap(),
+                        extensions,
+                    }))
+                }
+                b"trkseg" => {
+                    // Reached the end of the trackpoints for this segment.
+                    return None;
+                }
+                _ => {}
+            },
+            // Ignore spurious Event::Text, I think they are newlines.
+            Ok(Event::Text(_)) => {}
+            e @ _ => panic!("Unexpected element {:?}", e),
+        }
+    }
+}
+
+fn parse_trackpoint_extensions(
+    buf: &mut Vec<u8>,
+    reader: &mut Reader<BufReader<File>>,
+) -> Result<Extensions, Box<dyn Error>> {
+    let mut air_temp = None;
+    let mut water_temp = None;
+    let mut depth = None;
+    let mut heart_rate = None;
+    let mut cadence = None;
+
+    loop {
+        match reader.read_event_into(buf) {
+            Ok(Event::Start(e)) => match e.local_name().as_ref() {
+                b"TrackPointExtension" => { /* ignore, just a container element */ }
+                b"atemp" => {
+                    air_temp = Some(read_inner_as_f64(buf, reader)?);
+                }
+                b"wtemp" => {
+                    water_temp = Some(read_inner_as_f64(buf, reader)?);
+                }
+                b"depth" => {
+                    depth = Some(read_inner_as_f64(buf, reader)?);
+                }
+                b"hr" => {
+                    heart_rate = Some(read_inner_as_u16(buf, reader)?);
+                }
+                b"cad" => {
+                    cadence = Some(read_inner_as_u16(buf, reader)?);
+                }
+                e @ _ => panic!("Unexpected element {:?}", bytes_to_string(e)),
+            },
+            Ok(Event::End(e)) => match e.local_name().as_ref() {
+                b"TrackPointExtension" => { /* ignore, just a container element */ }
+                b"extensions" => {
+                    return Ok(Extensions {
+                        air_temp,
+                        water_temp,
+                        depth,
+                        heart_rate,
+                        cadence,
+                    });
+                }
+                b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */}
+                e @ _ => panic!("Unexpected element {:?}", bytes_to_string(e)),
+            },
+            // Ignore spurious Event::Text, I think they are newlines.
+            Ok(Event::Text(_)) => {}            
+            e @ _ => panic!("Unexpected element {:?}", e),
+        }
+    }
+}
+
+fn parse_attributes(tag: &BytesStart<'_>) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut result = HashMap::new();
 
     for attr in tag.attributes() {
@@ -284,7 +337,7 @@ fn parse_attributes(tag: BytesStart<'_>) -> Result<HashMap<String, String>, Box<
 }
 
 fn read_attribute_as_string(
-    tag: BytesStart<'_>,
+    tag: &BytesStart<'_>,
     attribute_name: &str,
 ) -> Result<String, Box<dyn Error>> {
     let attrs = parse_attributes(tag)?;
@@ -292,6 +345,14 @@ fn read_attribute_as_string(
         Some(value) => Ok(value.clone()),
         None => Err(format!("No attribute named {attribute_name}"))?,
     }
+}
+
+fn read_attribute_as_f64(
+    tag: &BytesStart<'_>,
+    attribute_name: &str,
+) -> Result<f64, Box<dyn Error>> {
+    let s = read_attribute_as_string(tag, attribute_name)?;
+    Ok(s.parse::<f64>()?)
 }
 
 /// Reads the 'INNER TEXT' from a tag such as <tag>INNER TEXT</tag>.
@@ -365,3 +426,67 @@ fn bytes_to_string(value: &[u8]) -> Result<String, Box<dyn Error>> {
         Err(err) => Err(Box::new(err)),
     }
 }
+
+//////////////
+/*
+enum EleOrTime {
+    ele(f32),
+    time(String),
+}
+
+/// Read the <ele> or <time> sub-node. I am not assuming which comes first in the file,
+/// (so we return an enum) but I am assuming they are the first sub-nodes, e.g. before
+/// any <extensions>.
+fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec<u8>) -> EleOrTime {
+    loop {
+        match reader.read_event_into(buf) {
+            Ok(Event::Start(e)) => {
+                match e.name().as_ref() {
+                    b"ele" => {
+                        // Read again to get the text inside the <ele>...</ele> tags.
+                        match reader.read_event_into(buf) {
+                            Ok(Event::Text(ele)) => {
+                                let ele = ele.as_ref();
+                                let ele = str::from_utf8(ele)
+                                    .expect("The bytes should be ASCII, therefore valid UTF-8");
+                                let ele: f32 =
+                                    ele.parse().expect("The string should be a valid number");
+                                // All the ele's will come out to 1 d.p., because that is all that my Garmin
+                                // Edge 1040 can actually manage, even though it records them as
+                                // "151.1999969482421875" or "149.8000030517578125".
+                                return EleOrTime::ele(ele);
+                            }
+                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
+                        }
+                    }
+                    b"time" => {
+                        // Read again to get the text inside the <time>...</time> tags.
+                        match reader.read_event_into(buf) {
+                            Ok(Event::Text(time)) => {
+                                let time = time.as_ref();
+                                let time = String::from_utf8_lossy(time).into_owned();
+                                return EleOrTime::time(time);
+                            }
+                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
+                        }
+                    }
+                    _ => panic!("Unexpected element"),
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn get_f32_attr(e: &BytesStart, arg: &str) -> f32 {
+    let attr = e
+        .try_get_attribute(arg)
+        .expect("Unless the file is corrupt the attributes we asl for always exist")
+        .expect("And always have values")
+        .value;
+    let attr = attr.as_ref();
+    let attr = str::from_utf8(attr).expect("The bytes should be ASCII, therefore valid UTF-8");
+    let attr: f32 = attr.parse().expect("The string should be a valid number");
+    attr
+}
+*/

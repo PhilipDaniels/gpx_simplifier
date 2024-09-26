@@ -1,8 +1,58 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use geo::{point, Point};
 use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
+
+/// Data parsed from a GPX file, based on the XSD description at
+/// https://www.topografix.com/GPX/1/1/gpx.xsd
+#[derive(Debug)]
+pub struct Gpx2 {
+    pub filename: PathBuf,
+    pub decl: Declaration,
+    pub info: GpxInfo,
+    pub metadata: GpxMetadata,
+    pub tracks: Vec<Track2>,
+}
+
+#[derive(Debug)]
+pub struct Declaration {
+    pub version: String,
+    pub encoding: Option<String>,
+    pub standalone: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct GpxInfo {
+    pub attributes: HashMap<String, String>,
+}
+
+/// TODO: Parse all fields.
+#[derive(Debug)]
+pub struct GpxMetadata {
+    pub link: Link,
+    pub time: Option<OffsetDateTime>,
+}
+
+/// Data parsed from a <link> tag.
+/// This is all the fields per the XSD.
+#[derive(Debug)]
+pub struct Link {
+    /// URL of hyperlink
+    pub href: String,
+    /// Text of hyperlink
+    pub text: Option<String>,
+    /// Mime type of content (image/jpeg)
+    pub r#type: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct Track2 {
+    pub name: String,
+    pub r#type: String,
+}
+
+//////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize)]
 pub struct Gpx {

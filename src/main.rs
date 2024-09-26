@@ -2,6 +2,7 @@ use args::parse_args;
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
 use excel::{create_summary_xlsx, write_summary_file};
+use gpx_reader::read_gpx_file2;
 use log::info;
 use model::{EnrichedGpx, Gpx, MergedGpx};
 use quick_xml::reader::Reader;
@@ -141,6 +142,8 @@ fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
 /// the XML file. We also tag on the original filename as it's handy to track this
 /// through the program for when we come to the point of writing output.
 fn read_gpx_file(input_file: &Path) -> Gpx {
+    let _ = read_gpx_file2(input_file);
+
     let reader = Reader::from_file(input_file).expect("Could not create XML reader");
     let mut doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
     doc.filename = input_file.to_owned();

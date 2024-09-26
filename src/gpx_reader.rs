@@ -1,7 +1,7 @@
 use core::{panic, str};
 use std::{
     borrow::{Borrow, Cow},
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     error::Error,
     fs::File,
     io::BufReader,
@@ -11,7 +11,6 @@ use std::{
 use logging_timer::time;
 use quick_xml::{
     events::{BytesDecl, BytesStart, Event},
-    name::QName,
     Reader,
 };
 use time::{format_description::well_known, OffsetDateTime};
@@ -96,8 +95,26 @@ fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
 }
 
 fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
+    let mut attributes = parse_attributes(&tag)?;
+
+    let creator = match attributes.entry("creator".to_string()) {
+        Entry::Occupied(occupied_entry) => {
+            occupied_entry.remove()
+        }
+        _ => return Err("Mandatory attribute 'creator' was missing on the GPX element")? 
+    };
+
+    let version = match attributes.entry("version".to_string()) {
+        Entry::Occupied(occupied_entry) => {
+            occupied_entry.remove()
+        }
+        _ => return Err("Mandatory attribute 'version' was missing on the GPX element")? 
+    };
+
     Ok(GpxInfo {
-        attributes: parse_attributes(&tag)?,
+        creator,
+        version,
+        attributes,
     })
 }
 
@@ -311,11 +328,12 @@ fn parse_trackpoint_extensions(
                         cadence,
                     });
                 }
-                b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */}
+                b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */
+                }
                 e @ _ => panic!("Unexpected element {:?}", bytes_to_string(e)),
             },
             // Ignore spurious Event::Text, I think they are newlines.
-            Ok(Event::Text(_)) => {}            
+            Ok(Event::Text(_)) => {}
             e @ _ => panic!("Unexpected element {:?}", e),
         }
     }
@@ -426,67 +444,3 @@ fn bytes_to_string(value: &[u8]) -> Result<String, Box<dyn Error>> {
         Err(err) => Err(Box::new(err)),
     }
 }
-
-//////////////
-/*
-enum EleOrTime {
-    ele(f32),
-    time(String),
-}
-
-/// Read the <ele> or <time> sub-node. I am not assuming which comes first in the file,
-/// (so we return an enum) but I am assuming they are the first sub-nodes, e.g. before
-/// any <extensions>.
-fn read_ele_or_time(reader: &mut Reader<std::io::BufReader<File>>, buf: &mut Vec<u8>) -> EleOrTime {
-    loop {
-        match reader.read_event_into(buf) {
-            Ok(Event::Start(e)) => {
-                match e.name().as_ref() {
-                    b"ele" => {
-                        // Read again to get the text inside the <ele>...</ele> tags.
-                        match reader.read_event_into(buf) {
-                            Ok(Event::Text(ele)) => {
-                                let ele = ele.as_ref();
-                                let ele = str::from_utf8(ele)
-                                    .expect("The bytes should be ASCII, therefore valid UTF-8");
-                                let ele: f32 =
-                                    ele.parse().expect("The string should be a valid number");
-                                // All the ele's will come out to 1 d.p., because that is all that my Garmin
-                                // Edge 1040 can actually manage, even though it records them as
-                                // "151.1999969482421875" or "149.8000030517578125".
-                                return EleOrTime::ele(ele);
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    b"time" => {
-                        // Read again to get the text inside the <time>...</time> tags.
-                        match reader.read_event_into(buf) {
-                            Ok(Event::Text(time)) => {
-                                let time = time.as_ref();
-                                let time = String::from_utf8_lossy(time).into_owned();
-                                return EleOrTime::time(time);
-                            }
-                            _ => panic!("Got unexpected XML node, document is probably corrupt"),
-                        }
-                    }
-                    _ => panic!("Unexpected element"),
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-fn get_f32_attr(e: &BytesStart, arg: &str) -> f32 {
-    let attr = e
-        .try_get_attribute(arg)
-        .expect("Unless the file is corrupt the attributes we asl for always exist")
-        .expect("And always have values")
-        .value;
-    let attr = attr.as_ref();
-    let attr = str::from_utf8(attr).expect("The bytes should be ASCII, therefore valid UTF-8");
-    let attr: f32 = attr.parse().expect("The string should be a valid number");
-    attr
-}
-*/

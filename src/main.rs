@@ -147,6 +147,9 @@ fn read_gpx_file(input_file: &Path) -> Gpx {
     dbg!(&g.declaration);
     dbg!(&g.info);
     dbg!(&g.metadata);
+    dbg!(&g.tracks[0].segments[0].points[0]);
+    dbg!(&g.tracks[0].segments[0].points[1]);
+    dbg!(&g.tracks[0].segments[0].points[2]);
 
 
     let reader = Reader::from_file(input_file).expect("Could not create XML reader");

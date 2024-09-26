@@ -25,6 +25,12 @@ pub struct Declaration {
 
 #[derive(Debug)]
 pub struct GpxInfo {
+    /// The 'creator' attribute.
+    pub creator: String,
+    /// The 'version' attribute. This should always be "1.1".
+    pub version: String,
+    /// The other attributes (excluding creator and version, which
+    /// are mandatory.)
     pub attributes: HashMap<String, String>,
 }
 

@@ -96,13 +96,18 @@ impl Gpx {
             .sum()
     }
 
+    /// Returns true if the GPX consists of a single track with one segment.
+    pub fn is_single_track(&self) -> bool {
+        self.tracks.len() == 1 && self.tracks[0].segments.len() == 1
+    }
+
     /// Merges all the tracks and segments within the GPX into
     /// a new structure that has one track with one segment containing
     /// all the points.
     /// The name and type of the first track in `self` is used
     /// to name the new track.
     pub fn into_single_track(mut self) -> Gpx {
-        if self.tracks.len() == 1 && self.tracks[0].segments.len() == 1 {
+        if self.is_single_track() {
             return self;
         }
 
@@ -127,22 +132,17 @@ impl Gpx {
     }
 }
 
-/// Represents the result of merging several GPX files
-/// into a single file.
-pub struct MergedGpx {
+/// An EnrichedGpx is one where we flatten the Tracks and Segments into a
+/// simple vector of EnrichedTrackPoints. These are TrackPoints with a lot
+/// of derived data fields that make later work easier.
+#[derive(Debug)]
+pub struct EnrichedGpx {
     pub filename: PathBuf,
     pub declaration: Declaration,
     pub info: GpxInfo,
     pub metadata: Metadata,
-    pub track: Track,
-}
-
-#[derive(Debug)]
-pub struct EnrichedGpx {
-    pub filename: PathBuf,
-    pub metadata_time: OffsetDateTime,
-    pub track_name: String,
-    pub track_type: String,
+    pub track_name: Option<String>,
+    pub track_type: Option<String>,
     pub points: Vec<EnrichedTrackPoint>,
 }
 
@@ -168,6 +168,11 @@ pub struct EnrichedTrackPoint {
     pub ele: f64,
     /// The time as read from the <time> tag.
     pub time: OffsetDateTime,
+    /// The Garmin TrackPoint extensions.
+    pub extensions: Option<Extensions>,
+
+    // All the below fields are the 'enriched' ones.
+
     /// The amount of time between this trackpoint and the previous one.
     pub delta_time: Duration,
     /// The distance between this trackpoint and the previous one.
@@ -189,13 +194,14 @@ pub struct EnrichedTrackPoint {
 }
 
 impl EnrichedTrackPoint {
-    fn new(index: usize, value: TrackPoint) -> Self {
+    fn new(index: usize, value: &TrackPoint) -> Self {
         Self {
             index,
             lat: value.lat,
             lon: value.lon,
             ele: value.ele,
             time: value.time,
+            extensions: None,
             delta_time: Duration::ZERO,
             delta_metres: 0.0,
             running_metres: 0.0,
@@ -229,16 +235,21 @@ impl EnrichedTrackPoint {
     }
 }
 
-impl From<MergedGpx> for EnrichedGpx {
-    fn from(value: MergedGpx) -> Self {
+impl From<Gpx> for EnrichedGpx {
+    fn from(value: Gpx) -> Self {
+        let value = value.into_single_track();
+
         Self {
             filename: value.filename,
-            metadata_time: value.metadata_time,
-            track_name: value.track_name,
-            track_type: value.track_type,
+            declaration: value.declaration,
+            info: value.info,
+            metadata: value.metadata,
+            track_name: value.tracks[0].name.clone(),
+            track_type: value.tracks[0].r#type.clone(),
             points: value
-                .points
-                .into_iter()
+                .tracks[0]
+                .segments[0].points
+                .iter()
                 .enumerate()
                 .map(|(idx, tp)| EnrichedTrackPoint::new(idx, tp))
                 .collect(),

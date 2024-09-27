@@ -1,9 +1,17 @@
-use std::{collections::HashSet, fs::File, io::{BufWriter, Write}, path::Path};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{BufWriter, Write},
+    path::Path,
+};
 
 use geo::{coord, LineString, SimplifyIdx};
 use logging_timer::time;
 
-use crate::{formatting::format_utc_date, model::{EnrichedGpx, EnrichedTrackPoint}};
+use crate::{
+    formatting::format_utc_date,
+    model::{EnrichedGpx, EnrichedTrackPoint},
+};
 
 /// We take input from the user in "metres of accuracy".
 /// The 'geo' implementation of RDP requires an epsilon
@@ -55,11 +63,17 @@ pub fn write_simplified_gpx_file(output_file: &Path, gpx: &EnrichedGpx) {
     let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
     writeln!(w, "{}", HDR).unwrap();
     writeln!(w, "  <metadata>").unwrap();
-    writeln!(w, "    <time>{}</time>", format_utc_date(gpx.metadata_time)).unwrap();
+    if let Some(t) = gpx.metadata.time {
+        writeln!(w, "    <time>{}</time>", format_utc_date(t)).unwrap();
+    }
     writeln!(w, "  </metadata>").unwrap();
     writeln!(w, "  <trk>").unwrap();
-    writeln!(w, "    <name>{}</name>", gpx.track_name).unwrap();
-    writeln!(w, "    <type>{}</type>", gpx.track_type).unwrap();
+    if let Some(track_name) = &gpx.track_name {
+        writeln!(w, "    <name>{}</name>", track_name).unwrap();
+    }
+    if let Some(track_type) = &gpx.track_type {
+        writeln!(w, "    <type>{}</type>", track_type).unwrap();
+    }
     writeln!(w, "    <trkseg>").unwrap();
     for tp in &gpx.points {
         writeln!(

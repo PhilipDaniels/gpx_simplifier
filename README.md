@@ -89,3 +89,10 @@ Or build from source using cargo.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
+
+
+
+# Bugs
+- I think it's technically wrong to simply merge all tracks and segments?
+  They may exist due to GPS interruptions, device restarts etc.
+  Fixing this would make things a lot more complicated though.

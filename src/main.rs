@@ -4,8 +4,7 @@ use env_logger::Builder;
 use excel::{create_summary_xlsx, write_summary_file};
 use gpx_reader::read_gpx_file2;
 use log::info;
-use model::{EnrichedGpx, Gpx, MergedGpx};
-use quick_xml::reader::Reader;
+use model::{EnrichedGpx, Gpx};
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use std::{
@@ -45,11 +44,14 @@ fn main() {
     // --join --metres=NN   - join into a single file then simplify
 
     // Read all files into RAM.
-    let gpxs: Vec<Gpx> = input_files.iter().map(|f| read_gpx_file(f)).collect();
+    let mut gpxs: Vec<_> = input_files.iter().map(|f| read_gpx_file(f)).collect();
 
     // Within each file, merge multiple tracks and segments into a single
-    // track-segment.
-    let mut gpxs: Vec<MergedGpx> = gpxs.iter().map(|f| f.merge_all_tracks()).collect();
+    // track-segment. (join_input_files also does that)
+    gpxs = gpxs
+        .into_iter()
+        .map(|gpx| gpx.into_single_track())
+        .collect();
 
     // Join if necessary. Keep as a vec (of one element) so that
     // following loop can be used whether we join or not.
@@ -119,43 +121,44 @@ fn make_summary_filename(p: &Path) -> PathBuf {
     p
 }
 
-fn join_input_files(mut input_files: Vec<MergedGpx>) -> MergedGpx {
-    let required_capacity: usize = input_files.iter().map(|f| f.points.len()).sum();
-    let mut m = input_files[0].clone();
-    m.points = Vec::with_capacity(required_capacity);
-
-    for f in &mut input_files {
-        println!("Joining {:?}", f.filename);
-        m.points.append(&mut f.points);
+fn join_input_files(mut input_files: Vec<Gpx>) -> Gpx {
+    for gpx in &input_files {
+        assert!(gpx.is_single_track());
     }
 
-    // If we got the files in a wacky order, ensure we
-    // sort all the points by ascending time.
-    m.points.sort_by_key(|p| p.time);
+    // We can't simply re-use the first track/segment due to
+    // multiple mut borrows. So create a new vec of points.
+    let required_capacity: usize = input_files.iter().map(|f| f.num_points()).sum();
+    let mut points = Vec::with_capacity(required_capacity);
+    
+    for f in &mut input_files {
+        println!("Joining {:?}", f.filename);
+        points.append(&mut f.tracks[0].segments[0].points);
+    }
+
+    // Sort all the points by ascending time in case
+    // we got the files in a wacky order.
+    points.sort_by_key(|p| p.time);
 
     println!("Joined {} files", input_files.len());
 
-    m
+    input_files.swap_remove(0)
 }
 
 /// The serde/quick-xml deserialization integration does a "good enough" job of parsing
 /// the XML file. We also tag on the original filename as it's handy to track this
 /// through the program for when we come to the point of writing output.
 fn read_gpx_file(input_file: &Path) -> Gpx {
-    let g = read_gpx_file2(input_file).unwrap();
-    dbg!(&g.filename);
-    dbg!(&g.declaration);
-    dbg!(&g.info);
-    dbg!(&g.metadata);
-    dbg!(&g.tracks[0].segments[0].points[0]);
-    dbg!(&g.tracks[0].segments[0].points[1]);
-    dbg!(&g.tracks[0].segments[0].points[2]);
+    let gpx = read_gpx_file2(input_file).unwrap();
+    dbg!(&gpx.filename);
+    dbg!(&gpx.declaration);
+    dbg!(&gpx.info);
+    dbg!(&gpx.metadata);
+    dbg!(&gpx.tracks[0].segments[0].points[0]);
+    dbg!(&gpx.tracks[0].segments[0].points[1]);
+    dbg!(&gpx.tracks[0].segments[0].points[2]);
 
-
-    let reader = Reader::from_file(input_file).expect("Could not create XML reader");
-    let mut doc: Gpx = quick_xml::de::from_reader(reader.into_inner()).unwrap();
-    doc.filename = input_file.to_owned();
-    doc
+    gpx
 }
 
 /// Get a list of all files in the exe_dir that have the ".gpx" extension.

@@ -16,20 +16,20 @@ use quick_xml::{
 use time::{format_description::well_known, OffsetDateTime};
 
 use crate::model::{
-    Declaration, Extensions, Gpx2, GpxInfo, GpxMetadata, Link, Track2, TrackPoint2, TrackSegment2,
+    Declaration, Extensions, Gpx, GpxInfo, Metadata, Link, Track, TrackPoint, TrackSegment,
 };
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
 #[time]
-pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx2, Box<dyn Error>> {
+pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
     let mut reader = Reader::from_file(input_file)?;
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 
     let mut declaration = None;
     let mut gpx_info = None;
     let mut metadata = None;
-    let mut tracks: Vec<Track2> = Vec::new();
+    let mut tracks: Vec<Track> = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -61,7 +61,7 @@ pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx2, Box<dyn Error>> {
                         return Err("Did not find the 'metadata' element")?;
                     }
 
-                    let gpx = Gpx2 {
+                    let gpx = Gpx {
                         filename: input_file.to_owned(),
                         declaration: declaration.unwrap(),
                         info: gpx_info.unwrap(),
@@ -121,7 +121,7 @@ fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
 fn parse_metadata(
     buf: &mut Vec<u8>,
     reader: &mut Reader<BufReader<File>>,
-) -> Result<GpxMetadata, Box<dyn Error>> {
+) -> Result<Metadata, Box<dyn Error>> {
     let mut href = None;
     let mut text = None;
     let mut mime_type = None;
@@ -152,7 +152,7 @@ fn parse_metadata(
                         if href.is_none() {
                             return Err("href attribute not found, but it is mandatory according to the XSD")?;
                         } else {
-                            return Ok(GpxMetadata {
+                            return Ok(Metadata {
                                 link: Link {
                                     href: href.unwrap(),
                                     text,
@@ -175,7 +175,7 @@ fn parse_metadata(
 fn parse_track(
     buf: &mut Vec<u8>,
     reader: &mut Reader<BufReader<File>>,
-) -> Result<Track2, Box<dyn Error>> {
+) -> Result<Track, Box<dyn Error>> {
     let mut name = None;
     let mut track_type = None;
     let mut segments = Vec::new();
@@ -197,7 +197,7 @@ fn parse_track(
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trk" => {
-                    return Ok(Track2 {
+                    return Ok(Track {
                         name,
                         r#type: track_type,
                         segments,
@@ -215,7 +215,7 @@ fn parse_track(
 fn parse_track_segment(
     buf: &mut Vec<u8>,
     reader: &mut Reader<BufReader<File>>,
-) -> Result<TrackSegment2, Box<dyn Error>> {
+) -> Result<TrackSegment, Box<dyn Error>> {
     let mut points = Vec::new();
 
     while let Some(point) = parse_trackpoint(buf, reader) {
@@ -223,13 +223,13 @@ fn parse_track_segment(
         points.push(point);
     }
 
-    return Ok(TrackSegment2 { points });
+    return Ok(TrackSegment { points });
 }
 
 fn parse_trackpoint(
     buf: &mut Vec<u8>,
     reader: &mut Reader<BufReader<File>>,
-) -> Option<Result<TrackPoint2, Box<dyn Error>>> {
+) -> Option<Result<TrackPoint, Box<dyn Error>>> {
     let mut lat = None;
     let mut lon = None;
     let mut ele = None;
@@ -265,7 +265,7 @@ fn parse_trackpoint(
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trkpt" => {
-                    return Some(Ok(TrackPoint2 {
+                    return Some(Ok(TrackPoint {
                         lat: lat.unwrap(),
                         lon: lon.unwrap(),
                         ele: ele.unwrap(),

@@ -1,29 +1,28 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use geo::{point, Point};
-use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
 
 /// Data parsed from a GPX file, based on the XSD description at
 /// https://www.topografix.com/GPX/1/1/gpx.xsd
 #[derive(Debug)]
-pub struct Gpx2 {
+pub struct Gpx {
     pub filename: PathBuf,
     pub declaration: Declaration,
     pub info: GpxInfo,
-    pub metadata: GpxMetadata,
-    pub tracks: Vec<Track2>,
+    pub metadata: Metadata,
+    pub tracks: Vec<Track>,
     // TODO: There can also be a list of waypoints and/or routes.
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Declaration {
     pub version: String,
     pub encoding: Option<String>,
     pub standalone: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GpxInfo {
     /// The 'creator' attribute.
     pub creator: String,
@@ -35,15 +34,15 @@ pub struct GpxInfo {
 }
 
 /// TODO: Parse all fields.
-#[derive(Debug)]
-pub struct GpxMetadata {
+#[derive(Debug, Clone)]
+pub struct Metadata {
     pub link: Link,
     pub time: Option<OffsetDateTime>,
 }
 
 /// Data parsed from a <link> tag.
 /// This is all the fields per the XSD.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Link {
     /// URL of hyperlink
     pub href: String,
@@ -55,29 +54,29 @@ pub struct Link {
 
 /// TODO: Parse all fields.
 #[derive(Debug)]
-pub struct Track2 {
+pub struct Track {
     pub name: Option<String>,
     pub r#type: Option<String>,
-    pub segments: Vec<TrackSegment2>,
+    pub segments: Vec<TrackSegment>,
 }
 
 #[derive(Debug)]
-pub struct TrackSegment2 {
-    pub points: Vec<TrackPoint2>,
+pub struct TrackSegment {
+    pub points: Vec<TrackPoint>,
 }
 
-#[derive(Debug)]
-pub struct TrackPoint2 {
+#[derive(Debug, Clone)]
+pub struct TrackPoint {
     pub lat: f64,
     pub lon: f64,
-    pub ele: f64,                   // Optional according to the XSD.
-    pub time: OffsetDateTime,       // Optional according to the XSD.
+    pub ele: f64,             // Optional according to the XSD.
+    pub time: OffsetDateTime, // Optional according to the XSD.
     pub extensions: Option<Extensions>,
 }
 
 /// All the Garmin TrackPoint extensions according to
 /// https://www8.garmin.com/xmlschemas/TrackPointExtensionv1.xsd
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Extensions {
     pub air_temp: Option<f64>,
     pub water_temp: Option<f64>,
@@ -85,94 +84,57 @@ pub struct Extensions {
     pub heart_rate: Option<u16>,
     pub cadence: Option<u16>,
 }
-//////////////////////////////////////////////////////
-
-#[derive(Debug, Deserialize)]
-pub struct Gpx {
-    #[serde(skip)]
-    pub filename: PathBuf,
-
-    pub metadata: Metadata,
-
-    #[serde(rename = "trk")]
-    pub tracks: Vec<Track>,
-}
-
-/// Represents the <metadata> node from the header.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Metadata {
-    #[serde(with = "time::serde::rfc3339")]
-    pub time: OffsetDateTime,
-}
-
-/// Represents a single <trk>
-#[derive(Debug, Deserialize)]
-pub struct Track {
-    pub name: String,
-    pub r#type: String,
-    #[serde(rename = "trkseg")]
-    pub segments: Vec<TrackSegment>,
-}
-
-/// Represents a single <trkseg>
-#[derive(Debug, Deserialize)]
-pub struct TrackSegment {
-    #[serde(rename = "trkpt")]
-    pub points: Vec<TrackPoint>,
-}
-
-/// Represents a single <trkpt>.
-#[derive(Debug, Clone, Deserialize)]
-pub struct TrackPoint {
-    /// The latitude, read from the "lat" attribute.
-    #[serde(rename = "@lat")]
-    pub lat: f64,
-    /// The longitude, read from the "lon" attribute.
-    #[serde(rename = "@lon")]
-    pub lon: f64,
-    /// The elevation, as read from the <ele> tag.
-    pub ele: f64,
-    /// Represents the time as read from the <time> tag.
-    /// Serde handles the parsing.
-    #[serde(with = "time::serde::rfc3339")]
-    pub time: OffsetDateTime,
-}
 
 impl Gpx {
+    /// Returns the total number of points across all tracks and segments.
+    pub fn num_points(&self) -> usize {
+        self.tracks.iter()
+            .map(|track|
+                    track.segments.iter().map(
+                        |segment| segment.points.len()
+                    ).sum::<usize>())
+            .sum()
+    }
+
     /// Merges all the tracks and segments within the GPX into
-    /// a new structure that just has one set of points.
+    /// a new structure that has one track with one segment containing
+    /// all the points.
     /// The name and type of the first track in `self` is used
     /// to name the new track.
-    pub fn merge_all_tracks(&self) -> MergedGpx {
-        let mut result = MergedGpx {
-            filename: self.filename.clone(),
-            metadata_time: self.metadata.time.clone(),
-            track_name: self.tracks[0].name.clone(),
-            track_type: self.tracks[0].r#type.clone(),
-            points: Vec::new(),
-        };
+    pub fn into_single_track(mut self) -> Gpx {
+        if self.tracks.len() == 1 && self.tracks[0].segments.len() == 1 {
+            return self;
+        }
 
-        for src_track in &self.tracks {
-            for src_segment in &src_track.segments {
-                for src_point in &src_segment.points {
-                    result.points.push(src_point.clone().into());
-                }
+        let mut points = Vec::with_capacity(self.num_points());
+
+        // This copies the first track as well, which may seem a bit inefficient,
+        // but the obvious optimisation of moving all but the first track doesn't
+        // work because that track may have multiple segments. This function is
+        // only called once and the simpler code wins out over the fix for that
+        // problem.
+        for src_track in self.tracks.iter_mut() {
+            for src_segment in src_track.segments.iter_mut() {
+                points.append(&mut src_segment.points);
             }
         }
 
-        result
+        for idx in (1..self.tracks.len() - 1).rev() {
+            self.tracks.remove(idx);
+        }
+
+        return self;
     }
 }
 
 /// Represents the result of merging several GPX files
 /// into a single file.
-#[derive(Clone)]
 pub struct MergedGpx {
     pub filename: PathBuf,
-    pub metadata_time: OffsetDateTime,
-    pub track_name: String,
-    pub track_type: String,
-    pub points: Vec<TrackPoint>,
+    pub declaration: Declaration,
+    pub info: GpxInfo,
+    pub metadata: Metadata,
+    pub track: Track,
 }
 
 #[derive(Debug)]
@@ -252,7 +214,7 @@ impl EnrichedTrackPoint {
     /// say 20 minutes, before the trackpoint is written. So a TrackPoint
     /// may have a time of 14:40, and the previous TrackPoint has a time
     /// of 14:20, giving a delta_time of 20 minutes.
-    /// 
+    ///
     /// It is important to use start_time() when calculating things like
     /// durations of stages.
     pub fn start_time(&self) -> OffsetDateTime {
@@ -265,7 +227,6 @@ impl EnrichedTrackPoint {
     pub fn as_geo_point(&self) -> Point {
         point! { x: self.lon, y: self.lat }
     }
-
 }
 
 impl From<MergedGpx> for EnrichedGpx {

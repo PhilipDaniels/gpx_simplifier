@@ -81,6 +81,7 @@ Or build from source using cargo.
 
 
 # TODO
+- Update the write_simplified_gpx_file function.
 - Extract the extension information from the GPX - need to go back
   to manual parsing? Use speed from the GPX in preference to trying
   to derive it.

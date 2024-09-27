@@ -14,7 +14,7 @@ pub fn to_local_date(utc_date: OffsetDateTime) -> OffsetDateTime {
 
 /// Formats 'utc_date' into a string like "2024-09-01T05:10:44Z".
 /// This is the format that GPX files contain.
-pub fn format_utc_date(utc_date: OffsetDateTime) -> String {
+pub fn format_utc_date(utc_date: &OffsetDateTime) -> String {
     assert!(utc_date.offset().is_utc());
 
     let mut buf = Vec::with_capacity(20);

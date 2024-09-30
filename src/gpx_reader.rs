@@ -22,7 +22,7 @@ use crate::model::{
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
 #[time]
-pub fn read_gpx_file2(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
+pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
     let mut reader = Reader::from_file(input_file)?;
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 

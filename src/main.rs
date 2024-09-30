@@ -2,7 +2,7 @@ use args::parse_args;
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
 use excel::{create_summary_xlsx, write_summary_file};
-use gpx_reader::read_gpx_file2;
+use gpx_reader::read_gpx_file;
 use log::info;
 use model::{EnrichedGpx, Gpx};
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
@@ -37,14 +37,8 @@ fn main() {
         return;
     }
 
-    // We can operate in 3 modes depending on the command line
-    // arguments.
-    // --metres=NN          - simplify each input file individually
-    // --join               - join all the input files into a single file
-    // --join --metres=NN   - join into a single file then simplify
-
     // Read all files into RAM.
-    let mut gpxs: Vec<_> = input_files.iter().map(|f| read_gpx_file(f)).collect();
+    let mut gpxs: Vec<_> = input_files.iter().map(|f| read_gpx_file(f).unwrap()).collect();
 
     // Within each file, merge multiple tracks and segments into a single
     // track-segment. (join_input_files also does that)
@@ -130,7 +124,7 @@ fn join_input_files(mut input_files: Vec<Gpx>) -> Gpx {
     // multiple mut borrows. So create a new vec of points.
     let required_capacity: usize = input_files.iter().map(|f| f.num_points()).sum();
     let mut points = Vec::with_capacity(required_capacity);
-    
+
     for f in &mut input_files {
         println!("Joining {:?}", f.filename);
         points.append(&mut f.tracks[0].segments[0].points);
@@ -143,22 +137,6 @@ fn join_input_files(mut input_files: Vec<Gpx>) -> Gpx {
     println!("Joined {} files", input_files.len());
 
     input_files.swap_remove(0)
-}
-
-/// The serde/quick-xml deserialization integration does a "good enough" job of parsing
-/// the XML file. We also tag on the original filename as it's handy to track this
-/// through the program for when we come to the point of writing output.
-fn read_gpx_file(input_file: &Path) -> Gpx {
-    let gpx = read_gpx_file2(input_file).unwrap();
-    dbg!(&gpx.filename);
-    dbg!(&gpx.declaration);
-    dbg!(&gpx.info);
-    dbg!(&gpx.metadata);
-    dbg!(&gpx.tracks[0].segments[0].points[0]);
-    dbg!(&gpx.tracks[0].segments[0].points[1]);
-    dbg!(&gpx.tracks[0].segments[0].points[2]);
-
-    gpx
 }
 
 /// Get a list of all files in the exe_dir that have the ".gpx" extension.

@@ -268,8 +268,8 @@ fn parse_trackpoint(
                     return Some(Ok(TrackPoint {
                         lat: lat.unwrap(),
                         lon: lon.unwrap(),
-                        ele: ele.unwrap(),
-                        time: time.unwrap(),
+                        ele,
+                        time,
                         extensions,
                     }))
                 }

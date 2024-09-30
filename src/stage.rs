@@ -47,9 +47,9 @@ pub struct Stage<'gpx> {
     pub stage_type: StageType,
     pub start: &'gpx EnrichedTrackPoint,
     pub end: &'gpx EnrichedTrackPoint,
-    pub min_elevation: &'gpx EnrichedTrackPoint,
-    pub max_elevation: &'gpx EnrichedTrackPoint,
-    pub max_speed: &'gpx EnrichedTrackPoint,
+    pub min_elevation: Option<&'gpx EnrichedTrackPoint>,
+    pub max_elevation: Option<&'gpx EnrichedTrackPoint>,
+    pub max_speed: Option<&'gpx EnrichedTrackPoint>,
     // The first point in the entire track. We could pass it
     // into the relevant methods, but storing it works ok too.
     // We will need this to calculate some metrics later.
@@ -83,18 +83,24 @@ impl StageType {
 
 impl<'gpx> Stage<'gpx> {
     /// Returns the duration of the stage.
-    pub fn duration(&self) -> Duration {
+    pub fn duration(&self) -> Option<Duration> {
         // Be careful to use the time that the 'start' TrackPoint
         // began, not when it was recorded. They are very different
         // for TrackPoints written when you are stopped. A TrackPoint
         // may not be written for many minutes in that situation.
-        self.end.time - self.start.start_time()
+        match (self.end.time, self.start.start_time()) {
+            (Some(et), Some(st)) => Some(et - st),
+            _ => None,
+        }
     }
 
     /// Returns the running duration to the end of the stage from
     /// the 'track_start_point' (the first point in the track).
-    pub fn running_duration(&self) -> Duration {
-        self.end.time - self.track_start_point.start_time()
+    pub fn running_duration(&self) -> Option<Duration> {
+        match (self.end.time, self.track_start_point.start_time()) {
+            (Some(et), Some(st)) => Some(et - st),
+            _ => None,
+        }
     }
 
     /// Returns the distance (length) of the stage, in metres.
@@ -114,35 +120,53 @@ impl<'gpx> Stage<'gpx> {
     }
 
     /// Returns the average speed of the stage, in kmh.
-    pub fn average_speed_kmh(&self) -> f64 {
-        speed_kmh_from_duration(self.distance_metres(), self.duration())
+    pub fn average_speed_kmh(&self) -> Option<f64> {
+        match self.duration() {
+            Some(dur) => Some(speed_kmh_from_duration(self.distance_metres(), dur)),
+            _ => None,
+        }
     }
 
     /// Returns the average speed, calculated over the distance from
     /// the start of the track to the end of the stage.
-    pub fn running_average_speed_kmh(&self) -> f64 {
-        speed_kmh_from_duration(self.end.running_metres, self.running_duration())
+    pub fn running_average_speed_kmh(&self) -> Option<f64> {
+        match self.running_duration() {
+            Some(dur) => Some(speed_kmh_from_duration(self.end.running_metres, dur)),
+            _ => None,
+        }
     }
 
     /// Returns the total ascent in metres over the stage.
-    pub fn ascent_metres(&self) -> f64 {
-        self.end.running_ascent_metres - self.start.running_ascent_metres
+    pub fn ascent_metres(&self) -> Option<f64> {
+        match (
+            self.end.running_ascent_metres,
+            self.start.running_ascent_metres,
+        ) {
+            (Some(m1), Some(m2)) => Some(m1 - m2),
+            _ => None,
+        }
     }
 
     /// Returns the total ascent to the end of the stage from
     /// the beginning of the track.
-    pub fn running_ascent_metres(&self) -> f64 {
+    pub fn running_ascent_metres(&self) -> Option<f64> {
         self.end.running_ascent_metres
     }
 
     /// Returns the total descent in metres over the stage.
-    pub fn descent_metres(&self) -> f64 {
-        self.end.running_descent_metres - self.start.running_descent_metres
+    pub fn descent_metres(&self) -> Option<f64> {
+        match (
+            self.end.running_descent_metres,
+            self.start.running_descent_metres,
+        ) {
+            (Some(m1), Some(m2)) => Some(m1 - m2),
+            _ => None,
+        }
     }
 
     /// Returns the total descent to the end of the stage from
     /// the beginning of the track.
-    pub fn running_descent_metres(&self) -> f64 {
+    pub fn running_descent_metres(&self) -> Option<f64> {
         self.end.running_descent_metres
     }
 }
@@ -183,35 +207,41 @@ impl<'gpx> StageList<'gpx> {
     }
 
     /// Returns the start time of the first Stage.
-    pub fn start_time(&self) -> OffsetDateTime {
+    pub fn start_time(&self) -> Option<OffsetDateTime> {
         self.first_point().start_time()
     }
 
     /// Returns the end time of the last Stage.
-    pub fn end_time(&self) -> OffsetDateTime {
+    pub fn end_time(&self) -> Option<OffsetDateTime> {
         self.last_point().time
     }
 
     /// Returns the total duration between the start of the first
     /// stage and the end of the last stage.
-    pub fn duration(&self) -> Duration {
-        self.end_time() - self.start_time()
+    pub fn duration(&self) -> Option<Duration> {
+        match (self.end_time(), self.start_time()) {
+            (Some(et), Some(st)) => Some(et - st),
+            _ => None,
+        }
     }
 
     /// Returns the total time Moving across all the stages.
-    pub fn total_moving_time(&self) -> Duration {
-        self.duration() - self.total_stopped_time()
+    pub fn total_moving_time(&self) -> Option<Duration> {
+        match (self.duration(), self.total_stopped_time()) {
+            (Some(dur), Some(tst)) => Some(dur - tst),
+            _ => None,
+        }
     }
 
     /// Returns the total time Stopped across all the stages.
-    pub fn total_stopped_time(&self) -> Duration {
+    pub fn total_stopped_time(&self) -> Option<Duration> {
         self.0
             .iter()
             .filter_map(|stage| match stage.stage_type {
                 StageType::Moving => None,
                 StageType::Stopped => Some(stage.duration()),
             })
-            .sum()
+            .sum() // TODO: Correct?
     }
 
     /// Returns the total distance of all the stages in metres.
@@ -226,51 +256,86 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the average moving speed over the whole track,
     /// this excludes stopped time.
-    pub fn average_moving_speed(&self) -> f64 {
-        speed_kmh_from_duration(self.distance_metres(), self.total_moving_time())
+    pub fn average_moving_speed(&self) -> Option<f64> {
+        match self.total_moving_time() {
+            Some(tmt) => Some(speed_kmh_from_duration(self.distance_metres(), tmt)),
+            None => None,
+        }
     }
 
     /// Returns the overall average moving speed over the whole track,
     /// this includes stopped time.
-    pub fn average_overall_speed(&self) -> f64 {
-        speed_kmh_from_duration(self.distance_metres(), self.duration())
+    pub fn average_overall_speed(&self) -> Option<f64> {
+        match self.duration() {
+            Some(dur) => Some(speed_kmh_from_duration(self.distance_metres(), dur)),
+            None => None,
+        }
     }
 
     /// Returns the point of minimum elevation across all the stages.
-    pub fn min_elevation(&self) -> &EnrichedTrackPoint {
-        self.0
-            .iter()
-            .map(|stage| &stage.min_elevation)
-            .min_by(|a, b| a.ele.total_cmp(&b.ele))
-            .unwrap()
+    pub fn min_elevation(&self) -> Option<&EnrichedTrackPoint> {
+        let mut min_stage = &self.0[0];
+        for stage in self.iter() {
+            if stage.min_elevation.is_none() {
+                return None;
+            } else if stage.min_elevation.unwrap().ele < min_stage.min_elevation.unwrap().ele {
+                // The unwraps are safe because we are iterating across all
+                // stages, so min being None will be trapped.
+                min_stage = stage;
+            }
+        }
+
+        min_stage.min_elevation
     }
 
     /// Returns the point of maximum elevation across all the stages.
-    pub fn max_elevation(&self) -> &EnrichedTrackPoint {
-        self.0
-            .iter()
-            .map(|stage| &stage.max_elevation)
-            .max_by(|a, b| a.ele.total_cmp(&b.ele))
-            .unwrap()
+    pub fn max_elevation(&self) -> Option<&EnrichedTrackPoint> {
+        let mut max_stage = &self.0[0];
+        for stage in self.iter() {
+            if stage.max_elevation.is_none() {
+                return None;
+            } else if stage.max_elevation.unwrap().ele < max_stage.max_elevation.unwrap().ele {
+                // The unwraps are safe because we are iterating across all
+                // stages, so max being None will be trapped.
+                max_stage = stage;
+            }
+        }
+
+        max_stage.max_elevation
+
+        // TODO: Can we improve this code to something similar to this?
+        // See also min_elevation and max_speed.
+        // self.0
+        //     .iter()
+        //     .map(|stage| &stage.max_elevation)
+        //     .max_by(|a, b| a.ele.total_cmp(&b.ele))
+        //     .unwrap()
     }
 
     /// Returns the total ascent in metres across all the stages.
-    pub fn total_ascent_metres(&self) -> f64 {
+    pub fn total_ascent_metres(&self) -> Option<f64> {
         self.0.iter().map(|stage| stage.ascent_metres()).sum()
     }
 
     /// Returns the total descent in metres across all the stages.
-    pub fn total_descent_metres(&self) -> f64 {
+    pub fn total_descent_metres(&self) -> Option<f64> {
         self.0.iter().map(|stage| stage.descent_metres()).sum()
     }
 
     /// Returns the point of maximum speed across all the stages.
-    pub fn max_speed(&self) -> &EnrichedTrackPoint {
-        self.0
-            .iter()
-            .map(|stage| &stage.max_speed)
-            .max_by(|a, b| a.speed_kmh.total_cmp(&b.speed_kmh))
-            .unwrap()
+    pub fn max_speed(&self) -> Option<&EnrichedTrackPoint> {
+        let mut max_stage = &self.0[0];
+        for stage in self.iter() {
+            if stage.max_speed.is_none() {
+                return None;
+            } else if stage.max_speed.unwrap().speed_kmh > max_stage.max_speed.unwrap().speed_kmh {
+                // The unwraps are safe because we are iterating across all
+                // stages, so max being None will be trapped.
+                max_stage = stage;
+            }
+        }
+
+        max_stage.max_speed
     }
 }
 
@@ -278,8 +343,8 @@ impl<'gpx> StageList<'gpx> {
 #[time]
 pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let start_time = gpx.points[0].time;
-    let mut cum_ascent_metres = 0.0;
-    let mut cum_descent_metres = 0.0;
+    let mut cum_ascent_metres = None;
+    let mut cum_descent_metres = None;
 
     let mut p1 = gpx.points[0].as_geo_point();
 
@@ -294,32 +359,57 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 
         // Time delta. Don't really need this stored, but is handy to spot
         // points that took more than usual when scanning the CSV.
-        gpx.points[idx].delta_time = gpx.points[idx].time - gpx.points[idx - 1].time;
-        assert!(gpx.points[idx].delta_time.is_positive());
+        gpx.points[idx].delta_time = match (gpx.points[idx].time, gpx.points[idx - 1].time) {
+            (Some(t1), Some(t2)) => {
+                let dt = t1 - t2;
+                assert!(dt.is_positive());
+                Some(dt)
+            }
+            _ => None,
+        };
 
         // Speed. Based on the distance we just calculated.
-        gpx.points[idx].speed_kmh =
-            speed_kmh_from_duration(gpx.points[idx].delta_metres, gpx.points[idx].delta_time);
-        assert!(gpx.points[idx].speed_kmh >= 0.0);
+        gpx.points[idx].speed_kmh = match gpx.points[idx].delta_time {
+            Some(t) => {
+                let speed = speed_kmh_from_duration(gpx.points[idx].delta_metres, t);
+                assert!(speed >= 0.0);
+                Some(speed)
+            }
+            None => todo!(),
+        };
 
         // How long it took to get here.
-        gpx.points[idx].running_delta_time = gpx.points[idx].time - start_time;
-        assert!(gpx.points[idx].running_delta_time.is_positive());
+        gpx.points[idx].running_delta_time = match (gpx.points[idx].time, start_time) {
+            (Some(t1), Some(t2)) => {
+                let dt = t1 - t2;
+                assert!(dt.is_positive());
+                Some(dt)
+            }
+            _ => None,
+        };
 
         // Ascent and descent.
-        let ele_delta_metres = gpx.points[idx].ele - gpx.points[idx - 1].ele;
+        let ele_delta_metres = match (gpx.points[idx].ele, gpx.points[idx - 1].ele) {
+            (Some(ele1), Some(ele2)) => Some(ele1 - ele2),
+            _ => None,
+        };
+
         gpx.points[idx].ele_delta_metres = ele_delta_metres;
 
-        if ele_delta_metres > 0.0 {
-            cum_ascent_metres += ele_delta_metres;
-        } else {
-            cum_descent_metres += ele_delta_metres.abs();
+        if let Some(edm) = ele_delta_metres {
+            if edm > 0.0 {
+                let cam = cum_ascent_metres.unwrap() + edm;
+                assert!(cam >= 0.0);
+                cum_ascent_metres = Some(cam);
+            } else {
+                let cdm = cum_descent_metres.unwrap() + edm.abs();
+                assert!(cdm >= 0.0);
+                cum_descent_metres = Some(cdm);
+            }
         }
 
         gpx.points[idx].running_ascent_metres = cum_ascent_metres;
-        assert!(gpx.points[idx].running_ascent_metres >= 0.0);
         gpx.points[idx].running_descent_metres = cum_descent_metres;
-        assert!(gpx.points[idx].running_descent_metres >= 0.0);
 
         p1 = p2;
     }
@@ -356,6 +446,15 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
 
     let mut stages = StageList::default();
 
+    // If we don't have speed there is nothing we can do.
+    if gpx
+        .points
+        .iter()
+        .any(|p| p.time.is_none() || p.speed_kmh.is_none())
+    {
+        return stages;
+    }
+
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
     // that you are actually in a Stopped stage. However, it's not impossible,
     // see Note 2 for why.
@@ -375,14 +474,24 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
         // Stages do not share points, the next stage starts on the next point.
         start_idx = stage.end.index + 1;
 
-        info!(
-            "Adding {} stage from point {} to {}, length={:.3}km, duration={}",
-            stage.stage_type,
-            stage.start.index,
-            stage.end.index,
-            stage.distance_km(),
-            stage.duration(),
-        );
+        if stage.duration().is_none() {
+            info!(
+                "Adding {} stage from point {} to {}, length={:.3}km, duration=unknown",
+                stage.stage_type,
+                stage.start.index,
+                stage.end.index,
+                stage.distance_km()
+            );
+        } else {
+            info!(
+                "Adding {} stage from point {} to {}, length={:.3}km, duration={}",
+                stage.stage_type,
+                stage.start.index,
+                stage.end.index,
+                stage.distance_km(),
+                stage.duration().unwrap(),
+            );
+        }
         stages.push(stage);
 
         stage_type = stage_type.toggle();
@@ -483,7 +592,11 @@ fn find_stop_index(
 
     while end_idx <= last_valid_idx {
         // Find the first time we drop below 'stopped_speed_kmh'
-        while end_idx <= last_valid_idx && gpx.points[end_idx].speed_kmh > params.stopped_speed_kmh
+        while end_idx <= last_valid_idx
+            && gpx.points[end_idx]
+                .speed_kmh
+                .expect("speed exists due to check in detect_stages")
+                > params.stopped_speed_kmh
         {
             end_idx += 1;
         }
@@ -542,7 +655,12 @@ fn find_stop_index(
         // TrackPoint will be the time at the END of that 25 minute period. We need to
         // include that 25 minutes in the calculation, so we calculate the duration based on
         // the 'possible_end_point' as a starting point.
-        let stop_duration = gpx.points[end_idx].time - possible_end_point.time;
+        let stop_duration = gpx.points[end_idx]
+            .time
+            .expect("time exists due to check in detect_stages")
+            - possible_end_point
+                .time
+                .expect("time exists due to check in detect_stages");
 
         if stop_duration.as_seconds_f64() >= params.min_duration_seconds {
             debug!(
@@ -608,11 +726,19 @@ fn find_min_and_max_elevation_points<'gpx>(
     gpx: &'gpx EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> (&'gpx EnrichedTrackPoint, &'gpx EnrichedTrackPoint) {
+) -> (
+    Option<&'gpx EnrichedTrackPoint>,
+    Option<&'gpx EnrichedTrackPoint>,
+) {
     let mut min = &gpx.points[start_idx];
     let mut max = &gpx.points[start_idx];
 
     for tp in &gpx.points[start_idx..=end_idx] {
+        // Any missing elevation invalidates the calculation.
+        if tp.ele.is_none() {
+            return (None, None);
+        }
+
         if tp.ele < min.ele {
             min = tp;
         } else if tp.ele > max.ele {
@@ -622,7 +748,7 @@ fn find_min_and_max_elevation_points<'gpx>(
 
     assert!(max.ele >= min.ele);
 
-    (min, max)
+    (Some(min), Some(max))
 }
 
 /// Within a given range of trackpoints, finds the one with the
@@ -631,16 +757,21 @@ fn find_max_speed<'gpx>(
     gpx: &'gpx EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> &'gpx EnrichedTrackPoint {
+) -> Option<&'gpx EnrichedTrackPoint> {
     let mut max = &gpx.points[start_idx];
 
     for tp in &gpx.points[start_idx..=end_idx] {
+        if tp.speed_kmh.is_none() {
+            // Any missing speed invalidates the calculation.
+            return None;
+        }
+
         if tp.speed_kmh > max.speed_kmh {
             max = tp;
         }
     }
 
-    max
+    Some(max)
 }
 
 /// Calculate distance between two points in metres.
@@ -657,7 +788,13 @@ fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters
     let start = &gpx.points[0];
     let mut end_idx = 1;
     while end_idx < last_valid_idx {
-        let duration = gpx.points[end_idx].time - start.start_time();
+        let duration = gpx.points[end_idx]
+            .time
+            .expect("time exists due to check in detect_stages")
+            - start
+                .start_time()
+                .expect("time exists due to check in detect_stages");
+
         if duration.as_seconds_f64() >= 180.0 {
             return classify_stage(start, &gpx.points[end_idx]);
         } else {
@@ -672,8 +809,16 @@ fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters
 /// Classifies a stage, based on the average speed within that stage.
 fn classify_stage(start_point: &EnrichedTrackPoint, last_point: &EnrichedTrackPoint) -> StageType {
     let distance_metres = last_point.running_metres - start_point.running_metres;
-    let time = last_point.time - start_point.time;
+
+    let time = last_point
+        .time
+        .expect("time exists due to check in detect_stages")
+        - start_point
+            .time
+            .expect("time exists due to check in detect_stages");
+
     let speed = speed_kmh_from_duration(distance_metres, time);
+
     if speed < 5.0 {
         // Less than walking pace? Assume you're stopped.
         StageType::Stopped

@@ -2,8 +2,8 @@ use std::{error::Error, path::Path};
 
 use logging_timer::time;
 use rust_xlsxwriter::{
-    Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url,
-    Workbook, Worksheet,
+    Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url, Workbook,
+    Worksheet,
 };
 use time::{Duration, OffsetDateTime};
 
@@ -254,30 +254,46 @@ fn write_stages<'gpx>(
         write_location_description(ws, &fc, (row, 5), &stage.start.location)?;
         fc.increment_column();
 
-        write_utc_date(ws, &fc, (row, 6), stage.start.time)?;
-        write_utc_date_as_local(ws, &fc, (row, 7), stage.start.time)?;
+        match stage.start.time {
+            Some(start_time) => {
+                write_utc_date(ws, &fc, (row, 6), start_time)?;
+                write_utc_date_as_local(ws, &fc, (row, 7), start_time)?;
+            }
+            None => {
+                write_blank(ws, &fc, (row, 6))?;
+                write_blank(ws, &fc, (row, 7))?;
+            }
+        };
         fc.increment_column();
 
-        write_utc_date(ws, &fc, (row, 8), stage.end.time)?;
-        write_utc_date_as_local(ws, &fc, (row, 9), stage.end.time)?;
+        match stage.end.time {
+            Some(end_time) => {
+                write_utc_date(ws, &fc, (row, 8), end_time)?;
+                write_utc_date_as_local(ws, &fc, (row, 9), end_time)?;
+            }
+            None => {
+                write_blank(ws, &fc, (row, 8))?;
+                write_blank(ws, &fc, (row, 9))?;
+            }
+        }
         fc.increment_column();
 
-        write_duration(ws, &fc, (row, 10), stage.duration())?;
-        write_duration(ws, &fc, (row, 11), stage.running_duration())?;
+        write_duration_option(ws, &fc, (row, 10), stage.duration())?;
+        write_duration_option(ws, &fc, (row, 11), stage.running_duration())?;
         fc.increment_column();
 
         if stage.stage_type == StageType::Moving {
             write_kilometres(ws, &fc, (row, 12), stage.distance_km())?;
             write_kilometres(ws, &fc, (row, 13), stage.running_distance_km())?;
             fc.increment_column();
-            write_speed(ws, &fc, (row, 14), stage.average_speed_kmh())?;
-            write_speed(ws, &fc, (row, 15), stage.running_average_speed_kmh())?;
+            write_speed_option(ws, &fc, (row, 14), stage.average_speed_kmh())?;
+            write_speed_option(ws, &fc, (row, 15), stage.running_average_speed_kmh())?;
             fc.increment_column();
-            write_metres(ws, &fc, (row, 16), stage.ascent_metres())?;
-            write_metres(ws, &fc, (row, 17), stage.running_ascent_metres())?;
+            write_metres_option(ws, &fc, (row, 16), stage.ascent_metres())?;
+            write_metres_option(ws, &fc, (row, 17), stage.running_ascent_metres())?;
             fc.increment_column();
-            write_metres(ws, &fc, (row, 18), stage.descent_metres())?;
-            write_metres(ws, &fc, (row, 19), stage.running_descent_metres())?;
+            write_metres_option(ws, &fc, (row, 18), stage.descent_metres())?;
+            write_metres_option(ws, &fc, (row, 19), stage.running_descent_metres())?;
             fc.increment_column();
             write_elevation_data(ws, &fc, (row, 20), stage.min_elevation)?;
             fc.increment_column();
@@ -318,32 +334,32 @@ fn write_stages<'gpx>(
     row += 2;
     write_string_bold(ws, &fc, (row, 5), "SUMMARY")?;
     fc.increment_column();
-    write_utc_date(ws, &fc, (row, 6), stages.start_time())?;
-    write_utc_date_as_local(ws, &fc, (row, 7), stages.start_time())?;
+    write_utc_date_option(ws, &fc, (row, 6), stages.start_time())?;
+    write_utc_date_as_local_option(ws, &fc, (row, 7), stages.start_time())?;
     fc.increment_column();
-    write_utc_date(ws, &fc, (row, 8), stages.end_time())?;
-    write_utc_date_as_local(ws, &fc, (row, 9), stages.end_time())?;
+    write_utc_date_option(ws, &fc, (row, 8), stages.end_time())?;
+    write_utc_date_as_local_option(ws, &fc, (row, 9), stages.end_time())?;
     fc.increment_column();
     write_string(ws, &fc, (row, 10), "Total")?;
-    write_duration(ws, &fc, (row, 11), stages.duration())?;
+    write_duration_option(ws, &fc, (row, 11), stages.duration())?;
     write_string(ws, &fc, (row + 1, 10), "Stopped")?;
-    write_duration(ws, &fc, (row + 1, 11), stages.total_stopped_time())?;
+    write_duration_option(ws, &fc, (row + 1, 11), stages.total_stopped_time())?;
     write_string(ws, &fc, (row + 2, 10), "Moving")?;
-    write_duration(ws, &fc, (row + 2, 11), stages.total_moving_time())?;
+    write_duration_option(ws, &fc, (row + 2, 11), stages.total_moving_time())?;
     fc.increment_column();
     write_blank(ws, &fc, (row, 12))?;
     write_kilometres(ws, &fc, (row, 13), stages.distance_km())?;
     fc.increment_column();
     write_string(ws, &fc, (row, 14), "Overall")?;
-    write_speed(ws, &fc, (row, 15), stages.average_overall_speed())?;
+    write_speed_option(ws, &fc, (row, 15), stages.average_overall_speed())?;
     write_string(ws, &fc, (row + 1, 14), "Moving")?;
-    write_speed(ws, &fc, (row + 1, 15), stages.average_moving_speed())?;
+    write_speed_option(ws, &fc, (row + 1, 15), stages.average_moving_speed())?;
     fc.increment_column();
     write_blank(ws, &fc, (row, 16))?;
-    write_metres(ws, &fc, (row, 17), stages.total_ascent_metres())?;
+    write_metres_option(ws, &fc, (row, 17), stages.total_ascent_metres())?;
     fc.increment_column();
     write_blank(ws, &fc, (row, 18))?;
-    write_metres(ws, &fc, (row, 19), stages.total_descent_metres())?;
+    write_metres_option(ws, &fc, (row, 19), stages.total_descent_metres())?;
     fc.increment_column();
     write_elevation_data(ws, &fc, (row, 20), stages.min_elevation())?;
     fc.increment_column();
@@ -443,27 +459,43 @@ fn write_trackpoints(
         write_integer(ws, &fc, (row, 0), p.index as u32)?;
         fc.increment_column();
 
-        write_utc_date(ws, &fc, (row, 1), p.time)?;
-        write_utc_date_as_local(ws, &fc, (row, 2), p.time)?;
-        write_duration(ws, &fc, (row, 3), p.delta_time)?;
-        write_duration(ws, &fc, (row, 4), p.running_delta_time)?;
+        match p.time {
+            Some(time) => {
+                write_utc_date(ws, &fc, (row, 1), time)?;
+                write_utc_date_as_local(ws, &fc, (row, 2), time)?;
+            }
+            None => {
+                write_blank(ws, &fc, (row, 1))?;
+                write_blank(ws, &fc, (row, 2))?;
+            }
+        }
+        write_duration_option(ws, &fc, (row, 3), p.delta_time)?;
+        write_duration_option(ws, &fc, (row, 4), p.running_delta_time)?;
         fc.increment_column();
 
         write_lat_lon(ws, &fc, (row, 5), (p.lat, p.lon), hyperlink)?;
         write_location_description(ws, &fc, (row, 8), &p.location)?;
         fc.increment_column();
 
-        write_metres(ws, &fc, (row, 9), p.ele)?;
-        write_metres(ws, &fc, (row, 10), p.ele_delta_metres)?;
-        write_metres(ws, &fc, (row, 11), p.running_ascent_metres)?;
-        write_metres(ws, &fc, (row, 12), p.running_descent_metres)?;
+        match p.ele {
+            Some(ele) => {
+                write_metres(ws, &fc, (row, 9), ele)?;
+            }
+            None => {
+                write_blank(ws, &fc, (row, 9))?;
+            }
+        }
+
+        write_metres_option(ws, &fc, (row, 10), p.ele_delta_metres)?;
+        write_metres_option(ws, &fc, (row, 11), p.running_ascent_metres)?;
+        write_metres_option(ws, &fc, (row, 12), p.running_descent_metres)?;
         fc.increment_column();
 
         write_metres(ws, &fc, (row, 13), p.delta_metres)?;
         write_kilometres(ws, &fc, (row, 14), p.running_metres / 1000.0)?;
         fc.increment_column();
 
-        write_speed(ws, &fc, (row, 15), p.speed_kmh)?;
+        write_speed_option(ws, &fc, (row, 15), p.speed_kmh)?;
 
         row += 1;
         fc.increment_row();
@@ -565,6 +597,20 @@ fn write_utc_date(
     Ok(())
 }
 
+fn write_utc_date_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    utc_date: Option<OffsetDateTime>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(d) = utc_date {
+        write_utc_date(ws, fc, rc, d)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
+    Ok(())
+}
+
 /// Converts 'utc_date' to a local date and then formats it into
 /// a string like "2024-09-01 05:10:44".
 fn write_utc_date_as_local(
@@ -576,6 +622,20 @@ fn write_utc_date_as_local(
     assert!(utc_date.offset().is_utc());
     let excel_date = date_to_excel_date(to_local_date(utc_date))?;
     ws.write_with_format(rc.0, rc.1, &excel_date, &&fc.local_date_format())?;
+    Ok(())
+}
+
+fn write_utc_date_as_local_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    utc_date: Option<OffsetDateTime>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(d) = utc_date {
+        write_utc_date_as_local(ws, fc, rc, d)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
     Ok(())
 }
 
@@ -620,6 +680,21 @@ fn write_duration(
     Ok(())
 }
 
+fn write_duration_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    duration: Option<Duration>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(dur) = duration {
+        write_duration(ws, fc, rc, dur)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
+
+    Ok(())
+}
+
 fn duration_to_excel_date(duration: Duration) -> Result<ExcelDateTime, Box<dyn Error>> {
     const SECONDS_PER_MINUTE: u32 = 60;
     const SECONDS_PER_HOUR: u32 = SECONDS_PER_MINUTE * 60;
@@ -641,11 +716,38 @@ fn write_elevation_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    point: &EnrichedTrackPoint,
+    point: Option<&EnrichedTrackPoint>,
 ) -> Result<(), Box<dyn Error>> {
-    write_metres(ws, &fc, (rc.0, rc.1), point.ele)?;
+    if point.is_none() {
+        write_blank(ws, fc, (rc.0, rc.1))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 1))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 3))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 4))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 5))?;
+        return Ok(());
+    }
+
+    let point = point.unwrap();
+
+    match point.ele {
+        Some(ele) => {
+            write_metres(ws, &fc, (rc.0, rc.1), ele)?;
+        }
+        None => {
+            write_blank(ws, fc, (rc.0, rc.1))?;
+        }
+    }
     write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
-    write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), point.time)?;
+    match point.time {
+        Some(time) => {
+            write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), time)?;
+        }
+        None => {
+            write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+        }
+    }
+
     write_lat_lon(
         ws,
         &fc,
@@ -661,9 +763,19 @@ fn write_max_speed_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    point: &EnrichedTrackPoint,
+    point: Option<&EnrichedTrackPoint>,
 ) -> Result<(), Box<dyn Error>> {
-    write_speed(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
+    if point.is_none() {
+        write_blank(ws, fc, (rc.0, rc.1))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 1))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 3))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 4))?;
+    }
+
+    let point = point.unwrap();
+
+    write_speed_option(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
     write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
     write_lat_lon(
         ws,
@@ -781,6 +893,20 @@ fn write_metres(
     Ok(())
 }
 
+fn write_metres_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    metres: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(m) = metres {
+        write_metres(ws, fc, rc, m)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
+    Ok(())
+}
+
 fn write_kilometres(
     ws: &mut Worksheet,
     fc: &FormatControl,
@@ -798,6 +924,21 @@ fn write_speed(
     speed: f64,
 ) -> Result<(), Box<dyn Error>> {
     ws.write_number_with_format(rc.0, rc.1, speed, &fc.speed_format())?;
+    Ok(())
+}
+
+fn write_speed_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    speed: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(s) = speed {
+        write_speed(ws, fc, rc, s)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
+
     Ok(())
 }
 

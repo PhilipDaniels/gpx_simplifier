@@ -69,8 +69,8 @@ pub struct TrackSegment {
 pub struct TrackPoint {
     pub lat: f64,
     pub lon: f64,
-    pub ele: f64,             // Optional according to the XSD.
-    pub time: OffsetDateTime, // Optional according to the XSD.
+    pub ele: Option<f64>,
+    pub time: Option<OffsetDateTime>,
     pub extensions: Option<Extensions>,
 }
 
@@ -165,30 +165,30 @@ pub struct EnrichedTrackPoint {
     /// The longitude, read from the "lon" attribute.
     pub lon: f64,
     /// The elevation, as read from the <ele> tag.
-    pub ele: f64,
+    pub ele: Option<f64>,
     /// The time as read from the <time> tag.
-    pub time: OffsetDateTime,
+    pub time: Option<OffsetDateTime>,
     /// The Garmin TrackPoint extensions.
     pub extensions: Option<Extensions>,
 
     // All the below fields are the 'enriched' ones.
 
     /// The amount of time between this trackpoint and the previous one.
-    pub delta_time: Duration,
+    pub delta_time: Option<Duration>,
     /// The distance between this trackpoint and the previous one.
     pub delta_metres: f64,
     /// The distance to this trackpoint from the beginning of the track.
     pub running_metres: f64,
     /// The instantaneous speed at this point.
-    pub speed_kmh: f64,
+    pub speed_kmh: Option<f64>,
     /// The elapsed time between the beginning of the track and this point.
-    pub running_delta_time: Duration,
+    pub running_delta_time: Option<Duration>,
     /// The change in elevation between this trackpoint and the previous one.
-    pub ele_delta_metres: f64,
+    pub ele_delta_metres: Option<f64>,
     /// The running ascent between the beginning of the track and this point.
-    pub running_ascent_metres: f64,
+    pub running_ascent_metres: Option<f64>,
     /// The running descent between the beginning of the track and this point.
-    pub running_descent_metres: f64,
+    pub running_descent_metres: Option<f64>,
     /// The location (reverse geo-coded based on lat-lon)
     pub location: Option<String>,
 }
@@ -202,14 +202,14 @@ impl EnrichedTrackPoint {
             ele: value.ele,
             time: value.time,
             extensions: None,
-            delta_time: Duration::ZERO,
+            delta_time: None,
             delta_metres: 0.0,
             running_metres: 0.0,
-            speed_kmh: 0.0,
-            running_delta_time: Duration::ZERO,
-            ele_delta_metres: 0.0,
-            running_ascent_metres: 0.0,
-            running_descent_metres: 0.0,
+            speed_kmh: None,
+            running_delta_time: None,
+            ele_delta_metres: None,
+            running_ascent_metres: None,
+            running_descent_metres: None,
             location: Default::default(),
         }
     }
@@ -223,8 +223,11 @@ impl EnrichedTrackPoint {
     ///
     /// It is important to use start_time() when calculating things like
     /// durations of stages.
-    pub fn start_time(&self) -> OffsetDateTime {
-        self.time - self.delta_time
+    pub fn start_time(&self) -> Option<OffsetDateTime> {
+        match (self.time, self.delta_time) {
+            (Some(t), Some(dt)) => Some(t - dt),
+            _ => None
+        }
     }
 
     /// Makes a geo-Point based on the lat-lon coordinates of this point.

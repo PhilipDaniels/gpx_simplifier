@@ -1,4 +1,3 @@
-use core::slice::memchr::memchr;
 use std::{
     collections::HashSet,
     error::Error,
@@ -58,7 +57,7 @@ pub fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: 
 }
 
 #[time]
-pub fn write_simplified_gpx_file2(
+pub fn write_simplified_gpx_file(
     output_file: &Path,
     gpx: &EnrichedGpx,
 ) -> Result<(), Box<dyn Error>> {
@@ -162,44 +161,4 @@ fn write_trackpoint<W: Write>(w: &mut W, point: &EnrichedTrackPoint) -> Result<(
     writeln!(w, "      </trkpt>")?;
 
     Ok(())
-}
-
-#[time]
-pub fn write_simplified_gpx_file(output_file: &Path, gpx: &EnrichedGpx) {
-    const HDR: &str = include_str!("header.txt");
-    print!("Writing file {:?}", &output_file);
-
-    let mut w = BufWriter::new(File::create(output_file).expect("Could not open output_file"));
-    writeln!(w, "{}", HDR).unwrap();
-    writeln!(w, "  <metadata>").unwrap();
-    if let Some(t) = gpx.metadata.time {
-        writeln!(w, "    <time>{}</time>", format_utc_date(&t)).unwrap();
-    }
-    writeln!(w, "  </metadata>").unwrap();
-    writeln!(w, "  <trk>").unwrap();
-    if let Some(track_name) = &gpx.track_name {
-        writeln!(w, "    <name>{}</name>", track_name).unwrap();
-    }
-    if let Some(track_type) = &gpx.track_type {
-        writeln!(w, "    <type>{}</type>", track_type).unwrap();
-    }
-    writeln!(w, "    <trkseg>").unwrap();
-    for tp in &gpx.points {
-        writeln!(
-            w,
-            "      <trkpt lat=\"{:.6}\" lon=\"{:.6}\">",
-            tp.lat, tp.lon
-        )
-        .unwrap();
-        writeln!(w, "        <ele>{:.1}</ele>", tp.ele).unwrap();
-        writeln!(w, "        <time>{}</time>", format_utc_date(&tp.time)).unwrap();
-        writeln!(w, "      </trkpt>").unwrap();
-    }
-    writeln!(w, "    </trkseg>").unwrap();
-    writeln!(w, "  </trk>").unwrap();
-    writeln!(w, "</gpx>").unwrap();
-
-    w.flush().unwrap();
-    let metadata = std::fs::metadata(output_file).unwrap();
-    println!(", {} Kb", metadata.len() / 1024);
 }

@@ -221,9 +221,16 @@ impl EnrichedTrackPoint {
     /// may have a time of 14:40, and the previous TrackPoint has a time
     /// of 14:20, giving a delta_time of 20 minutes.
     ///
+    /// Note that we can't work out the start time for the first point
+    /// since it has no delta_time.
+    /// 
     /// It is important to use start_time() when calculating things like
     /// durations of stages.
     pub fn start_time(&self) -> Option<OffsetDateTime> {
+        if self.index == 0 {
+            return self.time;
+        }
+
         match (self.time, self.delta_time) {
             (Some(t), Some(dt)) => Some(t - dt),
             _ => None

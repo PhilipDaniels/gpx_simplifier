@@ -347,6 +347,7 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let mut cum_descent_metres = None;
 
     let mut p1 = gpx.points[0].as_geo_point();
+    //gpx.points[0].delta_time = Duration::ZERO;
 
     for idx in 1..gpx.points.len() {
         let p2 = gpx.points[idx].as_geo_point();
@@ -398,11 +399,11 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 
         if let Some(edm) = ele_delta_metres {
             if edm > 0.0 {
-                let cam = cum_ascent_metres.unwrap() + edm;
+                let cam = cum_ascent_metres.unwrap_or_default() + edm;
                 assert!(cam >= 0.0);
                 cum_ascent_metres = Some(cam);
             } else {
-                let cdm = cum_descent_metres.unwrap() + edm.abs();
+                let cdm = cum_descent_metres.unwrap_or_default() + edm.abs();
                 assert!(cdm >= 0.0);
                 cum_descent_metres = Some(cdm);
             }
@@ -446,11 +447,11 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
 
     let mut stages = StageList::default();
 
-    // If we don't have speed there is nothing we can do.
+    // If we don't have time there is nothing we can do.
     if gpx
         .points
         .iter()
-        .any(|p| p.time.is_none() || p.speed_kmh.is_none())
+        .any(|p| p.time.is_none())
     {
         return stages;
     }
@@ -785,7 +786,10 @@ fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters
     // Get this out into a variable to avoid off-by-one errors (hopefully).
     let last_valid_idx = gpx.last_valid_idx();
 
-    let start = &gpx.points[0];
+    // The first point has no start_time() since it does not have
+    // a delta time. We can safely skip it.
+
+    let start = &gpx.points[1];
     let mut end_idx = 1;
     while end_idx < last_valid_idx {
         let duration = gpx.points[end_idx]

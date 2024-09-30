@@ -72,6 +72,11 @@ fn write_stages<'gpx>(
     trackpoint_options: TrackpointSummaryOptions,
     stages: &StageList<'gpx>,
 ) -> Result<(), Box<dyn Error>> {
+    if stages.len() == 0 {
+        // TODO: Write something.
+        return Ok(());
+    }
+
     let mut fc = FormatControl::new();
 
     write_header_blank(ws, &fc, (0, 0))?;
@@ -771,6 +776,7 @@ fn write_max_speed_data(
         write_blank(ws, fc, (rc.0, rc.1 + 2))?;
         write_blank(ws, fc, (rc.0, rc.1 + 3))?;
         write_blank(ws, fc, (rc.0, rc.1 + 4))?;
+        return Ok(());
     }
 
     let point = point.unwrap();

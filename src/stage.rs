@@ -347,8 +347,25 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
     let mut cum_descent_metres = None;
 
     let mut p1 = gpx.points[0].as_geo_point();
-    //gpx.points[0].delta_time = Duration::ZERO;
 
+    // If we have time and elevation, fill in the first point with some starting
+    // values. There are quite a few calculations that rely on these values
+    // being set (mainly 'running' data). The calculations won't panic, but they
+    // will return None when in fact we know the data.
+    if gpx.points[0].time.is_some() {
+        gpx.points[0].delta_time = Some(Duration::ZERO);
+        gpx.points[0].running_delta_time = Some(Duration::ZERO);
+        gpx.points[0].speed_kmh = Some(0.0);
+    }
+    if gpx.points[0].ele.is_some() {
+        gpx.points[0].ele_delta_metres = Some(0.0);
+        gpx.points[0].running_ascent_metres = Some(0.0);
+        gpx.points[0].running_descent_metres = Some(0.0);
+        cum_ascent_metres = Some(0.0);
+        cum_descent_metres = Some(0.0);
+    }
+
+    // Note we are iterating all points EXCEPT the first one.
     for idx in 1..gpx.points.len() {
         let p2 = gpx.points[idx].as_geo_point();
         gpx.points[idx].delta_metres = distance_between_points_metres(p1, p2);

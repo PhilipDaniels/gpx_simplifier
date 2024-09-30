@@ -26,6 +26,9 @@ const KILOMETRES_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
 const KILOMETRES_COLUMN_WIDTH: f64 = 8.0;
 const SPEED_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
 const SPEED_COLUMN_WIDTH: f64 = 8.0;
+const HEART_RATE_WIDTH_WITH_UNITS: f64 = 15.0;
+const TEMPERATURE_COLUMN_WIDTH_WITH_UNITS: f64 = 10.0;
+const CADENCE_COLUMN_WIDTH_WITH_UNITS: f64 = 13.0;
 
 /// Builds the Workbook that is used for the summary.
 #[time]
@@ -313,7 +316,7 @@ fn write_stages<'gpx>(
         }
 
         fc.increment_column();
-        // heart rate here
+        write_heart_rate_data(ws, &fc, (row, 37), stage.max_heart_rate)?;
 
         fc.increment_column();
         // temp here
@@ -455,6 +458,21 @@ fn write_trackpoints(
     write_header(ws, &fc, (1, 15), "Speed (kmh)")?;
     ws.set_column_width(15, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
 
+    fc.increment_column();
+    write_header_blank(ws, &fc, (0, 16))?;
+    write_header(ws, &fc, (1, 16), "Heart Rate (bpm)")?;
+    ws.set_column_width(16, HEART_RATE_WIDTH_WITH_UNITS)?;
+
+    fc.increment_column();
+    write_header_blank(ws, &fc, (0, 17))?;
+    write_header(ws, &fc, (1, 17), "Temp (°C)")?;
+    ws.set_column_width(17, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
+
+    fc.increment_column();
+    write_header_blank(ws, &fc, (0, 18))?;
+    write_header(ws, &fc, (1, 18), "Cadence (rpm)")?;
+    ws.set_column_width(18, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
+
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();
     let mut row = 2;
@@ -501,6 +519,28 @@ fn write_trackpoints(
         fc.increment_column();
 
         write_speed_option(ws, &fc, (row, 15), p.speed_kmh)?;
+        fc.increment_column();
+
+        if let Some(Some(hr)) = p.extensions.as_ref().map(|ex| ex.heart_rate) {
+            write_integer(ws, &fc, (row, 16), hr.into())?;
+        } else {
+            write_blank(ws, &fc, (row, 16))?;
+        }
+        fc.increment_column();
+
+        if let Some(Some(at)) = p.extensions.as_ref().map(|ex| ex.air_temp) {
+            write_temperature(ws, &fc, (row, 17), at)?;
+        } else {
+            write_blank(ws, &fc, (row, 17))?;
+        }
+        fc.increment_column();
+
+        if let Some(Some(cadence)) = p.extensions.as_ref().map(|ex| ex.cadence) {
+            write_integer(ws, &fc, (row, 18), cadence.into())?;
+        } else {
+            write_blank(ws, &fc, (row, 18))?;
+        }
+        fc.increment_column();
 
         row += 1;
         fc.increment_row();
@@ -562,6 +602,21 @@ fn write_integer(
     value: u32,
 ) -> Result<(), Box<dyn Error>> {
     ws.write_number_with_format(rc.0, rc.1, value, &fc.integer_format())?;
+    Ok(())
+}
+
+fn write_integer_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: Option<u32>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(v) = value {
+        write_integer(ws, fc, rc, v)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
+    
     Ok(())
 }
 
@@ -790,6 +845,43 @@ fn write_max_speed_data(
         (point.lat, point.lon),
         Hyperlink::Yes,
     )?;
+    Ok(())
+}
+
+fn write_heart_rate_data(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    point: Option<&EnrichedTrackPoint>,
+) -> Result<(), Box<dyn Error>> {
+
+    if let Some(point) = point {
+        let extensions = point.extensions.as_ref().expect("extensions should exist for hr");
+        if let Some(mhr) = extensions.heart_rate {
+            write_integer(ws, &fc, (rc.0, rc.1 + 1), mhr as u32)?;
+        }
+        return Ok(());
+    }
+
+    write_blank(ws, &fc, (rc.0, rc.1))?;
+    write_blank(ws, &fc, (rc.0, rc.1 + 1))?;
+    write_blank(ws, &fc, (rc.0, rc.1 + 2))?;
+    write_blank(ws, &fc, (rc.0, rc.1 + 3))?;
+    write_blank(ws, &fc, (rc.0, rc.1 + 4))?;
+    write_blank(ws, &fc, (rc.0, rc.1 + 5))?;
+    write_blank(ws, &fc, (rc.0, rc.1 + 6))?;
+
+    Ok(())
+}
+
+fn write_temperature(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    temperature: f64,
+) -> Result<(), Box<dyn Error>> {
+    let format = fc.temperature_format();
+    ws.write_number_with_format(rc.0, rc.1, temperature, &format)?;
     Ok(())
 }
 
@@ -1033,6 +1125,11 @@ impl FormatControl {
 
     fn metres_format(&self) -> Format {
         let format = Format::new().set_num_format("0.##");
+        self.apply_banding(format)
+    }
+
+    fn temperature_format(&self) -> Format {
+        let format = Format::new().set_num_format("0.#");
         self.apply_banding(format)
     }
 

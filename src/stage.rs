@@ -45,15 +45,17 @@ pub struct StageDetectionParameters {
 #[derive(Debug)]
 pub struct Stage<'gpx> {
     pub stage_type: StageType,
+    // The first point in the entire track. We need this to calculate various
+    // running totals. We could pass it into the relevant methods, but storing
+    // it works ok too.
+    pub track_start_point: &'gpx EnrichedTrackPoint,
     pub start: &'gpx EnrichedTrackPoint,
     pub end: &'gpx EnrichedTrackPoint,
     pub min_elevation: Option<&'gpx EnrichedTrackPoint>,
     pub max_elevation: Option<&'gpx EnrichedTrackPoint>,
     pub max_speed: Option<&'gpx EnrichedTrackPoint>,
-    // The first point in the entire track. We could pass it
-    // into the relevant methods, but storing it works ok too.
-    // We will need this to calculate some metrics later.
-    pub track_start_point: &'gpx EnrichedTrackPoint,
+    pub max_heart_rate: Option<&'gpx EnrichedTrackPoint>,
+    pub max_air_temp: Option<&'gpx EnrichedTrackPoint>,
 }
 
 /// The type of a Stage.
@@ -575,16 +577,20 @@ fn get_next_stage<'gpx>(
         "A stage must contain at least 1 TrackPoint"
     );
 
-    let (min_ele, max_ele) = find_min_and_max_elevation_points(gpx, start_idx, end_idx);
+    let (min_elevation, max_elevation) = find_min_and_max_elevation_points(gpx, start_idx, end_idx);
+    let max_heart_rate = find_max_heart_rate(gpx, start_idx, end_idx);
+    let max_air_temp = find_max_air_temp(gpx, start_idx, end_idx);
 
     let stage = Stage {
         stage_type,
+        track_start_point: &gpx.points[0],
         start: &gpx.points[start_idx],
         end: &gpx.points[end_idx],
-        min_elevation: min_ele,
-        max_elevation: max_ele,
+        min_elevation,
+        max_elevation,
         max_speed: find_max_speed(gpx, start_idx, end_idx),
-        track_start_point: &gpx.points[0],
+        max_heart_rate,
+        max_air_temp
     };
 
     // Just check we created everything correctly.
@@ -790,6 +796,52 @@ fn find_max_speed<'gpx>(
     }
 
     Some(max)
+}
+
+/// Within a given range of trackpoints, finds the one with the
+/// maximum heart rate.
+fn find_max_heart_rate<'gpx>(
+    gpx: &'gpx EnrichedGpx,
+    start_idx: usize,
+    end_idx: usize,
+) -> Option<&'gpx EnrichedTrackPoint> {
+
+    let point = &gpx.points[start_idx..=end_idx].iter()
+        .max_by(|a, b| {
+            let hr1 = a.extensions.as_ref().map(|ex| ex.heart_rate);
+            let hr2 = b.extensions.as_ref().map(|ex| ex.heart_rate);
+            hr1.cmp(&hr2)
+            }
+        );
+
+    if let Some(p) = point {
+        if p.extensions.is_none() {
+            None
+        } else {
+            Some(p)
+        }
+    } else {
+        None
+    }
+}
+
+/// Within a given range of trackpoints, finds the one with the
+/// maximum air temperature
+fn find_max_air_temp<'gpx>(
+    gpx: &'gpx EnrichedGpx,
+    start_idx: usize,
+    end_idx: usize,
+) -> Option<&'gpx EnrichedTrackPoint> {
+
+    let point = &gpx.points[start_idx..=end_idx].iter()
+        .max_by(|a, b| {
+            let temp1 = a.extensions.as_ref().map(|ex| ex.air_temp);
+            let temp2 = b.extensions.as_ref().map(|ex| ex.air_temp);
+            temp1.partial_cmp(&temp2).unwrap()
+            }
+        );
+
+    *point        
 }
 
 /// Calculate distance between two points in metres.

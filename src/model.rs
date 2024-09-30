@@ -201,7 +201,7 @@ impl EnrichedTrackPoint {
             lon: value.lon,
             ele: value.ele,
             time: value.time,
-            extensions: None,
+            extensions: value.extensions.clone(),
             delta_time: None,
             delta_metres: 0.0,
             running_metres: 0.0,

@@ -8,4 +8,4 @@ rm -f target/release/*simp*.gpx && rm -f target/release/*.xlsx
 RUST_LOG=DEBUG cargo run --release -- --detect-stages --write-trackpoints  # --write-trackpoint-hyperlinks
 
 # A run that just does simplification.
-cargo run --release -- --metres=1
+#cargo run --release -- --metres=1

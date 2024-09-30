@@ -112,7 +112,7 @@ fn write_gpx_tag_close<W: Write>(w: &mut W) -> Result<(), Box<dyn Error>> {
 
 fn write_metadata_tag<W: Write>(w: &mut W, metadata: &Metadata) -> Result<(), Box<dyn Error>> {
     writeln!(w, "  <metadata>")?;
-    writeln!(w, "    <link href=\"{}\"", metadata.link.href)?;
+    writeln!(w, "    <link href=\"{}\">", metadata.link.href)?;
     if let Some(text) = &metadata.link.text {
         writeln!(w, "      <text>{}</text>", text)?;
     }
@@ -133,21 +133,21 @@ fn write_track<W: Write>(
     track_type: &Option<String>,
     points: &[EnrichedTrackPoint],
 ) -> Result<(), Box<dyn Error>> {
-    writeln!(w, "    <trk>")?;
+    writeln!(w, "  <trk>")?;
     if let Some(track_name) = track_name {
-        writeln!(w, "      <name>{}</name>", track_name)?;
+        writeln!(w, "    <name>{}</name>", track_name)?;
     }
     if let Some(track_type) = track_type {
-        writeln!(w, "      <type>{}</type>", track_type)?;
+        writeln!(w, "    <type>{}</type>", track_type)?;
     }
 
-    writeln!(w, "      <trkseg>")?;
+    writeln!(w, "    <trkseg>")?;
     for p in points {
         write_trackpoint(w, &p)?;
     }
-    writeln!(w, "      </trkseg>")?;
+    writeln!(w, "    </trkseg>")?;
 
-    writeln!(w, "    </trk>")?;
+    writeln!(w, "  </trk>")?;
     Ok(())
 }
 
@@ -157,6 +157,14 @@ fn write_trackpoint<W: Write>(w: &mut W, point: &EnrichedTrackPoint) -> Result<(
         "      <trkpt lat=\"{:.6}\" lon=\"{:.6}\">",
         point.lat, point.lon
     )?;
+
+    if let Some(ele) = point.ele {
+        writeln!(w, "        <ele>{:.1}</ele>", ele)?;
+    }
+
+    if let Some(t) = point.time {
+        writeln!(w, "        <time>{}</time>", format_utc_date(&t))?;
+    }
 
     writeln!(w, "      </trkpt>")?;
 

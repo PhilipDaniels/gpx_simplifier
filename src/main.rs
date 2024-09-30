@@ -103,7 +103,7 @@ fn main() {
                     gpx.filename
                 );
 
-                write_simplified_gpx_file(&simplified_filename, &gpx);
+                write_simplified_gpx_file(&simplified_filename, &gpx).unwrap();
             }
         }
     }

@@ -81,10 +81,6 @@ Or build from source using cargo.
 
 
 # TODO
-- Update the write_simplified_gpx_file function.
-- Extract the extension information from the GPX - need to go back
-  to manual parsing? Use speed from the GPX in preference to trying
-  to derive it.
 - Include hr, temperature in the xlsx.
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.

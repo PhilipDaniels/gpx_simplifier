@@ -81,9 +81,10 @@ Or build from source using cargo.
 
 
 # TODO
+- Max ele overall is wrong.
+- Same for max speed
 - Temp: Min, Max, Avg, with links to TPoints for min and max. Geocode those.
 - HR: ditto.
-- Need to remove the option to write the trackpoints.
 - Moving %
 - Find micro-stops
 - Reverse geocode the stopped stages and the first and last point.

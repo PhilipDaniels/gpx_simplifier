@@ -4,7 +4,7 @@
 //! other metrics fairly easily.
 
 use core::{fmt, slice};
-use std::ops::Index;
+use std::{collections::HashSet, ops::Index};
 
 use geo::{GeodesicDistance, Point};
 use log::{debug, info, warn};
@@ -84,6 +84,40 @@ impl StageType {
 }
 
 impl<'gpx> Stage<'gpx> {
+    /// Returns the indexes of all the TrackPoints that have been
+    /// highlighted as 'special' in some way, e.g. the point
+    /// of min elevation. This is so we can force a hyperlink
+    /// to Google Maps for the special points.
+    pub fn highlighted_trackpoints(&self) -> Vec<usize> {
+        let mut idxs = vec![self.track_start_point.index,
+            self.start.index,
+            self.end.index];
+
+        if let Some(p) = self.min_elevation {
+            idxs.push(p.index);
+        }
+
+        if let Some(p) = self.max_elevation {
+            idxs.push(p.index);
+        }
+
+        if let Some(p) = self.max_speed {
+            idxs.push(p.index);
+        }
+
+        if let Some(p) = self.max_heart_rate {
+            idxs.push(p.index);
+        }
+
+        if let Some(p) = self.max_air_temp {
+            idxs.push(p.index);
+        }
+
+        idxs.sort();
+
+        idxs
+    }
+
     /// Returns the duration of the stage.
     pub fn duration(&self) -> Option<Duration> {
         // Be careful to use the time that the 'start' TrackPoint
@@ -185,6 +219,22 @@ impl<'gpx> Index<usize> for StageList<'gpx> {
 }
 
 impl<'gpx> StageList<'gpx> {
+    /// Returns the indexes of all the TrackPoints that have been
+    /// highlighted as 'special' in some way, e.g. the point
+    /// of min elevation. This is so we can force a hyperlink
+    /// to Google Maps for the special points.
+    pub fn highlighted_trackpoints(&self) -> HashSet<usize> {
+        let mut idxs = HashSet::new();
+
+        for s in self.iter() {
+            for i in s.highlighted_trackpoints() {
+                idxs.insert(i);
+            }
+        }
+
+        idxs
+    }
+
     // TODO: Implement Iterator properly.
     pub fn iter(&self) -> slice::Iter<Stage> {
         self.0.iter()

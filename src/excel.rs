@@ -198,46 +198,32 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
         ws,
         &fc,
         (0, COL_MIN_ELE),
-        (0, COL_MIN_ELE + 5),
+        (0, COL_MIN_ELE + 2),
         "Minimum Elevation",
     )?;
     write_header(ws, &fc, (1, COL_MIN_ELE), "Elevation (m)")?;
     write_header(ws, &fc, (1, COL_MIN_ELE + 1), "Distance (km)")?;
-    write_header(ws, &fc, (1, COL_MIN_ELE + 2), "Time (local)")?;
-    write_header(ws, &fc, (1, COL_MIN_ELE + 3), "Lat")?;
-    write_header(ws, &fc, (1, COL_MIN_ELE + 4), "Lon")?;
-    write_header(ws, &fc, (1, COL_MIN_ELE + 5), "Map")?;
+    write_header(ws, &fc, (1, COL_MIN_ELE + 2), "Point")?;
     ws.set_column_width(COL_MIN_ELE, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(COL_MIN_ELE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MIN_ELE + 2, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MIN_ELE + 3, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MIN_ELE + 4, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MIN_ELE + 5, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    const COL_MAX_ELE: u16 = COL_MIN_ELE + 6;
+    const COL_MAX_ELE: u16 = COL_MIN_ELE + 3;
     write_header_merged(
         ws,
         &fc,
         (0, COL_MAX_ELE),
-        (0, COL_MAX_ELE + 5),
+        (0, COL_MAX_ELE + 2),
         "Maximum Elevation (m)",
     )?;
     write_header(ws, &fc, (1, COL_MAX_ELE), "Elevation")?;
     write_header(ws, &fc, (1, COL_MAX_ELE + 1), "Distance (km)")?;
-    write_header(ws, &fc, (1, COL_MAX_ELE + 2), "Time (local)")?;
-    write_header(ws, &fc, (1, COL_MAX_ELE + 3), "Lat")?;
-    write_header(ws, &fc, (1, COL_MAX_ELE + 4), "Lon")?;
-    write_header(ws, &fc, (1, COL_MAX_ELE + 5), "Map")?;
+    write_header(ws, &fc, (1, COL_MAX_ELE + 2), "Point")?;
     ws.set_column_width(COL_MAX_ELE, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(COL_MAX_ELE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MAX_ELE + 2, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_ELE + 3, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_ELE + 4, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_ELE + 5, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    const COL_MAX_SPEED: u16 = COL_MAX_ELE + 6;
+    const COL_MAX_SPEED: u16 = COL_MAX_ELE + 3;
     write_header_merged(
         ws,
         &fc,
@@ -419,18 +405,8 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
         write_temperature_data(ws, &fc, (row, COL_MAX_TEMP), stage.max_air_temp)?;
 
         fc.increment_column();
-        write_trackpoint_number(
-            ws,
-            &fc,
-            (row, COL_TRACKPOINTS),
-            stage.start.index
-        )?;
-        write_trackpoint_number(
-            ws,
-            &fc,
-            (row, COL_TRACKPOINTS + 1),
-            stage.end.index
-        )?;
+        write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stage.start.index)?;
+        write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS + 1), stage.end.index)?;
         write_integer(
             ws,
             &fc,
@@ -511,12 +487,7 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
     fc.increment_column();
     write_temperature_data(ws, &fc, (row, COL_MAX_TEMP), stages.max_temperature())?;
     fc.increment_column();
-    write_trackpoint_number(
-        ws,
-        &fc,
-        (row, COL_TRACKPOINTS),
-        stages.first_point().index
-    )?;
+    write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stages.first_point().index)?;
     write_trackpoint_number(
         ws,
         &fc,
@@ -918,9 +889,6 @@ fn write_elevation_data(
         write_blank(ws, fc, (rc.0, rc.1))?;
         write_blank(ws, fc, (rc.0, rc.1 + 1))?;
         write_blank(ws, fc, (rc.0, rc.1 + 2))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 3))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 4))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 5))?;
         return Ok(());
     }
 
@@ -934,23 +902,9 @@ fn write_elevation_data(
             write_blank(ws, fc, (rc.0, rc.1))?;
         }
     }
-    write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
-    match point.time {
-        Some(time) => {
-            write_utc_date_as_local(ws, &fc, (rc.0, rc.1 + 2), time)?;
-        }
-        None => {
-            write_blank(ws, fc, (rc.0, rc.1 + 2))?;
-        }
-    }
 
-    write_lat_lon(
-        ws,
-        &fc,
-        (rc.0, rc.1 + 3),
-        (point.lat, point.lon),
-        Hyperlink::Yes,
-    )?;
+    write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 1), point)?;
+    write_trackpoint_number(ws, fc, (rc.0, rc.1 + 2), point.index)?;
     Ok(())
 }
 
@@ -1069,6 +1023,19 @@ fn write_temperature(
     Ok(())
 }
 
+fn make_hyperlink((lat, lon): (f64, f64)) -> Url {
+    let text = format!("{:.6}, {:.6}", lat, lon);
+    make_hyperlink_with_text((lat, lon), &text)
+}
+
+fn make_hyperlink_with_text((lat, lon): (f64, f64), text: &str) -> Url {
+    Url::new(format!(
+        "https://www.google.com/maps/search/?api=1&query={:.6},{:.6}",
+        lat, lon
+    ))
+    .set_text(text)
+}
+
 /// Writes a lat-lon pair with the lat in the first cell as specified
 /// by 'rc' and the lon in the next column. If 'hyperlink' is yes then
 /// a hyperlink to Google Maps is written into the third column.
@@ -1076,25 +1043,17 @@ fn write_lat_lon(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    lat_lon: (f64, f64),
+    (lat, lon): (f64, f64),
     hyperlink: Hyperlink,
 ) -> Result<(), Box<dyn Error>> {
     let format = fc.lat_lon_format().set_font_color(Color::Black);
 
-    ws.write_number_with_format(rc.0, rc.1, lat_lon.0, &format)?;
-    ws.write_number_with_format(rc.0, rc.1 + 1, lat_lon.1, &format)?;
-
-    // See https://developers.google.com/maps/documentation/urls/get-started
-    let text = format!("{:.6}, {:.6}", lat_lon.0, lat_lon.1);
+    ws.write_number_with_format(rc.0, rc.1, lat, &format)?;
+    ws.write_number_with_format(rc.0, rc.1 + 1, lon, &format)?;
 
     match hyperlink {
         Hyperlink::Yes => {
-            let url = Url::new(format!(
-                "https://www.google.com/maps/search/?api=1&query={:.6},{:.6}",
-                lat_lon.0, lat_lon.1
-            ))
-            .set_text(text);
-
+            let url = make_hyperlink((lat, lon));
             // TODO: Font still blue.
             let format = format.set_align(FormatAlign::Right);
             ws.write_url_with_format(rc.0, rc.1 + 2, url, &format)?;
@@ -1116,7 +1075,10 @@ fn write_trackpoint_number(
     rc: (u32, u16),
     trackpoint_index: usize,
 ) -> Result<(), Box<dyn Error>> {
-    let format = fc.integer_format().set_font_color(Color::Black);
+    let format = fc
+        .integer_format()
+        .set_font_color(Color::Black)
+        .set_align(FormatAlign::Right);
     let url = Url::new(format!(
         "internal:'Track Points'!A{}",
         trackpoint_index + 3 // allow for the heading on the 'Track Points' sheet.
@@ -1188,6 +1150,20 @@ fn write_kilometres(
     kilometres: f64,
 ) -> Result<(), Box<dyn Error>> {
     ws.write_number_with_format(rc.0, rc.1, kilometres, &fc.kilometres_format())?;
+    Ok(())
+}
+
+fn write_kilometres_running_with_map_hyperlink(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    point: &EnrichedTrackPoint,
+) -> Result<(), Box<dyn Error>> {
+    let km = point.running_metres / 1000.0;
+    let url = make_hyperlink_with_text((point.lat, point.lon), &format!("{:.3}", km));
+    let format = fc.kilometres_format();
+    let format = format.set_align(FormatAlign::Right);
+    ws.write_url_with_format(rc.0, rc.1, url, &format)?;
     Ok(())
 }
 

@@ -53,13 +53,6 @@ pub struct Args {
 
     #[arg(
         long,
-        help = "Whether to write a tab to the summary spreadsheet containing all the TrackPoints in the GPX",
-        requires = "detect_stages"
-    )]
-    pub write_trackpoints: bool,
-
-    #[arg(
-        long,
         help = "Whether to include a Google Maps hyperlink when writing TrackPoints to the summary sheet. WARNING: This can slow down the opening of the .xlsx in LibreOffice a lot",
         requires = "write_trackpoints, detect_stages"
     )]
@@ -77,24 +70,14 @@ pub enum Hyperlink {
     No,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum TrackpointSummaryOptions {
-    NoTrackpoints,
-    Trackpoints(Hyperlink)
-}
-
 impl Args {
-    /// Gets the effective options for writing trackpoints
-    /// to the summary sheet.
-    pub fn trackpoint_options(&self) -> TrackpointSummaryOptions {
-        if !self.write_trackpoints {
-            TrackpointSummaryOptions::NoTrackpoints
+    /// We always write the list of trackpoints, but adding
+    /// hyperlinks is optional.
+    pub fn trackpoint_hyperlinks(&self) -> Hyperlink {
+        if self.write_trackpoint_hyperlinks {
+            Hyperlink::Yes
         } else {
-            if self.write_trackpoint_hyperlinks {
-                TrackpointSummaryOptions::Trackpoints(Hyperlink::Yes)
-            } else {
-                TrackpointSummaryOptions::Trackpoints(Hyperlink::No)
-            }
+            Hyperlink::No
         }
     }
 }

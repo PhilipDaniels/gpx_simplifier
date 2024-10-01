@@ -79,7 +79,7 @@ fn main() {
             };
 
             let stages = detect_stages(&gpx, params);
-            let workbook = create_summary_xlsx(args.trackpoint_options(), &gpx, &stages).unwrap();
+            let workbook = create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
             write_summary_file(&summary_filename, workbook).unwrap();
         }
 

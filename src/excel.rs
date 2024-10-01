@@ -8,7 +8,7 @@ use rust_xlsxwriter::{
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    args::{Hyperlink, TrackpointSummaryOptions},
+    args::Hyperlink,
     formatting::to_local_date,
     model::{EnrichedGpx, EnrichedTrackPoint},
     stage::{StageList, StageType},
@@ -33,7 +33,7 @@ const CADENCE_COLUMN_WIDTH_WITH_UNITS: f64 = 13.0;
 /// Builds the Workbook that is used for the summary.
 #[time]
 pub fn create_summary_xlsx<'gpx>(
-    trackpoint_options: TrackpointSummaryOptions,
+    trackpoint_hyperlinks: Hyperlink,
     gpx: &EnrichedGpx,
     stages: &StageList<'gpx>,
 ) -> Result<Workbook, Box<dyn Error>> {
@@ -42,17 +42,12 @@ pub fn create_summary_xlsx<'gpx>(
     // This will appear as the first sheet in the workbook.
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
-    write_stages(stages_ws, trackpoint_options, stages)?;
+    write_stages(stages_ws, stages)?;
 
     // This will appear as the second sheet in the workbook.
-    match trackpoint_options {
-        TrackpointSummaryOptions::NoTrackpoints => {}
-        TrackpointSummaryOptions::Trackpoints(hyperlink) => {
-            let tp_ws = workbook.add_worksheet();
-            tp_ws.set_name("Track Points")?;
-            write_trackpoints(tp_ws, hyperlink, &gpx.points)?;
-        }
-    }
+    let tp_ws = workbook.add_worksheet();
+    tp_ws.set_name("Track Points")?;
+    write_trackpoints(tp_ws, trackpoint_hyperlinks, &gpx.points)?;
 
     Ok(workbook)
 }
@@ -70,11 +65,7 @@ pub fn write_summary_file<'gpx>(
     Ok(())
 }
 
-fn write_stages<'gpx>(
-    ws: &mut Worksheet,
-    trackpoint_options: TrackpointSummaryOptions,
-    stages: &StageList<'gpx>,
-) -> Result<(), Box<dyn Error>> {
+fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<(), Box<dyn Error>> {
     if stages.len() == 0 {
         // TODO: Write something.
         return Ok(());
@@ -92,8 +83,14 @@ fn write_stages<'gpx>(
     write_header(ws, &fc, (1, COL_TYPE), "Type")?;
     fc.increment_column();
 
-    const COL_STAGE_LOCATION: u16 = COL_TYPE + 1; 
-    write_header_merged(ws, &fc, (0, COL_STAGE_LOCATION), (0, COL_STAGE_LOCATION + 3), "Stage Location")?;
+    const COL_STAGE_LOCATION: u16 = COL_TYPE + 1;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_STAGE_LOCATION),
+        (0, COL_STAGE_LOCATION + 3),
+        "Stage Location",
+    )?;
     write_header(ws, &fc, (1, COL_STAGE_LOCATION), "Lat")?;
     write_header(ws, &fc, (1, COL_STAGE_LOCATION + 1), "Lon")?;
     write_header(ws, &fc, (1, COL_STAGE_LOCATION + 2), "Map")?;
@@ -105,7 +102,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_START_TIME: u16 = COL_STAGE_LOCATION + 4;
-    write_header_merged(ws, &fc, (0, COL_START_TIME), (0, COL_START_TIME + 1), "Start Time")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_START_TIME),
+        (0, COL_START_TIME + 1),
+        "Start Time",
+    )?;
     write_header(ws, &fc, (1, COL_START_TIME), "UTC")?;
     write_header(ws, &fc, (1, COL_START_TIME + 1), "Local")?;
     ws.set_column_width(COL_START_TIME, DATE_COLUMN_WIDTH)?;
@@ -113,7 +116,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_END_TIME: u16 = COL_START_TIME + 2;
-    write_header_merged(ws, &fc, (0, COL_END_TIME), (0, COL_END_TIME + 1), "End Time")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_END_TIME),
+        (0, COL_END_TIME + 1),
+        "End Time",
+    )?;
     write_header(ws, &fc, (1, COL_END_TIME), "UTC")?;
     write_header(ws, &fc, (1, COL_END_TIME + 1), "Local")?;
     ws.set_column_width(COL_END_TIME, DATE_COLUMN_WIDTH)?;
@@ -121,7 +130,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_DURATION: u16 = COL_END_TIME + 2;
-    write_header_merged(ws, &fc, (0, COL_DURATION), (0, COL_DURATION + 1), "Duration")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_DURATION),
+        (0, COL_DURATION + 1),
+        "Duration",
+    )?;
     write_header(ws, &fc, (1, COL_DURATION), "hms")?;
     write_header(ws, &fc, (1, COL_DURATION + 1), "Running")?;
     ws.set_column_width(COL_DURATION, DURATION_COLUMN_WIDTH)?;
@@ -129,7 +144,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_DISTANCE: u16 = COL_DURATION + 2;
-    write_header_merged(ws, &fc, (0, COL_DISTANCE), (0, COL_DISTANCE + 1), "Distance (km)")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_DISTANCE),
+        (0, COL_DISTANCE + 1),
+        "Distance (km)",
+    )?;
     write_header(ws, &fc, (1, COL_DISTANCE), "Stage")?;
     write_header(ws, &fc, (1, COL_DISTANCE + 1), "Running")?;
     ws.set_column_width(COL_DISTANCE, KILOMETRES_COLUMN_WIDTH)?;
@@ -137,7 +158,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_AVG_SPEED: u16 = COL_DISTANCE + 2;
-    write_header_merged(ws, &fc, (0, COL_AVG_SPEED), (0, COL_AVG_SPEED + 1), "Avg Speed (kmh)")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_AVG_SPEED),
+        (0, COL_AVG_SPEED + 1),
+        "Avg Speed (kmh)",
+    )?;
     write_header(ws, &fc, (1, COL_AVG_SPEED), "Stage")?;
     write_header(ws, &fc, (1, COL_AVG_SPEED + 1), "Running")?;
     ws.set_column_width(COL_AVG_SPEED, SPEED_COLUMN_WIDTH)?;
@@ -153,7 +180,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_DESCENT: u16 = COL_ASCENT + 2;
-    write_header_merged(ws, &fc, (0, COL_DESCENT), (0, COL_DESCENT + 1), "Descent (m)")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_DESCENT),
+        (0, COL_DESCENT + 1),
+        "Descent (m)",
+    )?;
     write_header(ws, &fc, (1, COL_DESCENT), "Stage")?;
     write_header(ws, &fc, (1, COL_DESCENT + 1), "Running")?;
     ws.set_column_width(COL_DESCENT, METRES_COLUMN_WIDTH)?;
@@ -161,7 +194,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_MIN_ELE: u16 = COL_DESCENT + 2;
-    write_header_merged(ws, &fc, (0, COL_MIN_ELE), (0, COL_MIN_ELE + 5), "Minimum Elevation")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_MIN_ELE),
+        (0, COL_MIN_ELE + 5),
+        "Minimum Elevation",
+    )?;
     write_header(ws, &fc, (1, COL_MIN_ELE), "Elevation (m)")?;
     write_header(ws, &fc, (1, COL_MIN_ELE + 1), "Distance (km)")?;
     write_header(ws, &fc, (1, COL_MIN_ELE + 2), "Time (local)")?;
@@ -177,7 +216,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_MAX_ELE: u16 = COL_MIN_ELE + 6;
-    write_header_merged(ws, &fc, (0, COL_MAX_ELE), (0, COL_MAX_ELE + 5), "Maximum Elevation (m)")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_MAX_ELE),
+        (0, COL_MAX_ELE + 5),
+        "Maximum Elevation (m)",
+    )?;
     write_header(ws, &fc, (1, COL_MAX_ELE), "Elevation")?;
     write_header(ws, &fc, (1, COL_MAX_ELE + 1), "Distance (km)")?;
     write_header(ws, &fc, (1, COL_MAX_ELE + 2), "Time (local)")?;
@@ -193,7 +238,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_MAX_SPEED: u16 = COL_MAX_ELE + 6;
-    write_header_merged(ws, &fc, (0, COL_MAX_SPEED), (0, COL_MAX_SPEED + 4), "Max Speed")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_MAX_SPEED),
+        (0, COL_MAX_SPEED + 4),
+        "Max Speed",
+    )?;
     write_header(ws, &fc, (1, COL_MAX_SPEED), "Speed (kmh)")?;
     write_header(ws, &fc, (1, COL_MAX_SPEED + 1), "Distance (km)")?;
     write_header(ws, &fc, (1, COL_MAX_SPEED + 2), "Lat")?;
@@ -207,7 +258,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_HEART_RATE: u16 = COL_MAX_SPEED + 5;
-    write_header_merged(ws, &fc, (0, COL_HEART_RATE), (0, COL_HEART_RATE + 6), "Heart Rate")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_HEART_RATE),
+        (0, COL_HEART_RATE + 6),
+        "Heart Rate",
+    )?;
     write_header(ws, &fc, (1, COL_HEART_RATE), "Avg")?;
     write_header(ws, &fc, (1, COL_HEART_RATE + 1), "Max")?;
     write_header(ws, &fc, (1, COL_HEART_RATE + 2), "Speed (kmh)")?;
@@ -239,7 +296,13 @@ fn write_stages<'gpx>(
     fc.increment_column();
 
     const COL_TRACKPOINTS: u16 = COL_MAX_TEMP + 7;
-    write_header_merged(ws, &fc, (0, COL_TRACKPOINTS), (0, COL_TRACKPOINTS + 2), "Track Points")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_TRACKPOINTS),
+        (0, COL_TRACKPOINTS + 2),
+        "Track Points",
+    )?;
     write_header(ws, &fc, (1, COL_TRACKPOINTS), "First")?;
     write_header(ws, &fc, (1, COL_TRACKPOINTS + 1), "Last")?;
     write_header(ws, &fc, (1, COL_TRACKPOINTS + 2), "Count")?;
@@ -248,13 +311,6 @@ fn write_stages<'gpx>(
     // write them, because they are few in number and so don't slow down Calc.
     // But they are optional on the Track Points tab because there are thousands
     // of them and they really slow down Calc.
-
-    // This hyper controls whether we are making an internal link to
-    // the trackpoints tab (which may not exist, hence the check).
-    let hyperlink_to_tps = match trackpoint_options {
-        TrackpointSummaryOptions::NoTrackpoints => Hyperlink::No,
-        TrackpointSummaryOptions::Trackpoints(_) => Hyperlink::Yes,
-    };
 
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();
@@ -275,7 +331,12 @@ fn write_stages<'gpx>(
             (stage.start.lat, stage.start.lon),
             Hyperlink::Yes,
         )?;
-        write_location_description(ws, &fc, (row, COL_STAGE_LOCATION + 3), &stage.start.location)?;
+        write_location_description(
+            ws,
+            &fc,
+            (row, COL_STAGE_LOCATION + 3),
+            &stage.start.location,
+        )?;
         fc.increment_column();
 
         match stage.start.time {
@@ -308,16 +369,36 @@ fn write_stages<'gpx>(
 
         if stage.stage_type == StageType::Moving {
             write_kilometres(ws, &fc, (row, COL_DISTANCE), stage.distance_km())?;
-            write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), stage.running_distance_km())?;
+            write_kilometres(
+                ws,
+                &fc,
+                (row, COL_DISTANCE + 1),
+                stage.running_distance_km(),
+            )?;
             fc.increment_column();
             write_speed_option(ws, &fc, (row, COL_AVG_SPEED), stage.average_speed_kmh())?;
-            write_speed_option(ws, &fc, (row, COL_AVG_SPEED + 1), stage.running_average_speed_kmh())?;
+            write_speed_option(
+                ws,
+                &fc,
+                (row, COL_AVG_SPEED + 1),
+                stage.running_average_speed_kmh(),
+            )?;
             fc.increment_column();
             write_metres_option(ws, &fc, (row, COL_ASCENT), stage.ascent_metres())?;
-            write_metres_option(ws, &fc, (row, COL_ASCENT + 1), stage.running_ascent_metres())?;
+            write_metres_option(
+                ws,
+                &fc,
+                (row, COL_ASCENT + 1),
+                stage.running_ascent_metres(),
+            )?;
             fc.increment_column();
             write_metres_option(ws, &fc, (row, COL_DESCENT), stage.descent_metres())?;
-            write_metres_option(ws, &fc, (row, COL_DESCENT + 1), stage.running_descent_metres())?;
+            write_metres_option(
+                ws,
+                &fc,
+                (row, COL_DESCENT + 1),
+                stage.running_descent_metres(),
+            )?;
             fc.increment_column();
             write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stage.min_elevation)?;
             fc.increment_column();
@@ -338,8 +419,18 @@ fn write_stages<'gpx>(
         write_temperature_data(ws, &fc, (row, COL_MAX_TEMP), stage.max_air_temp)?;
 
         fc.increment_column();
-        write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stage.start.index, hyperlink_to_tps)?;
-        write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS + 1), stage.end.index, hyperlink_to_tps)?;
+        write_trackpoint_number(
+            ws,
+            &fc,
+            (row, COL_TRACKPOINTS),
+            stage.start.index
+        )?;
+        write_trackpoint_number(
+            ws,
+            &fc,
+            (row, COL_TRACKPOINTS + 1),
+            stage.end.index
+        )?;
         write_integer(
             ws,
             &fc,
@@ -367,23 +458,48 @@ fn write_stages<'gpx>(
     write_string(ws, &fc, (row, COL_DURATION), "Total")?;
     write_duration_option(ws, &fc, (row, COL_DURATION + 1), stages.duration())?;
     write_string(ws, &fc, (row + 1, COL_DURATION), "Stopped")?;
-    write_duration_option(ws, &fc, (row + 1, COL_DURATION + 1), stages.total_stopped_time())?;
+    write_duration_option(
+        ws,
+        &fc,
+        (row + 1, COL_DURATION + 1),
+        stages.total_stopped_time(),
+    )?;
     write_string(ws, &fc, (row + 2, COL_DURATION), "Moving")?;
-    write_duration_option(ws, &fc, (row + 2, COL_DURATION + 1), stages.total_moving_time())?;
+    write_duration_option(
+        ws,
+        &fc,
+        (row + 2, COL_DURATION + 1),
+        stages.total_moving_time(),
+    )?;
     fc.increment_column();
     write_blank(ws, &fc, (row, COL_DISTANCE))?;
     write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), stages.distance_km())?;
     fc.increment_column();
     write_string(ws, &fc, (row, COL_AVG_SPEED), "Overall")?;
-    write_speed_option(ws, &fc, (row, COL_AVG_SPEED + 1), stages.average_overall_speed())?;
+    write_speed_option(
+        ws,
+        &fc,
+        (row, COL_AVG_SPEED + 1),
+        stages.average_overall_speed(),
+    )?;
     write_string(ws, &fc, (row + 1, COL_AVG_SPEED), "Moving")?;
-    write_speed_option(ws, &fc, (row + 1, COL_AVG_SPEED + 1), stages.average_moving_speed())?;
+    write_speed_option(
+        ws,
+        &fc,
+        (row + 1, COL_AVG_SPEED + 1),
+        stages.average_moving_speed(),
+    )?;
     fc.increment_column();
     write_blank(ws, &fc, (row, COL_ASCENT))?;
     write_metres_option(ws, &fc, (row, COL_ASCENT + 1), stages.total_ascent_metres())?;
     fc.increment_column();
     write_blank(ws, &fc, (row, COL_DESCENT))?;
-    write_metres_option(ws, &fc, (row, COL_DESCENT + 1), stages.total_descent_metres())?;
+    write_metres_option(
+        ws,
+        &fc,
+        (row, COL_DESCENT + 1),
+        stages.total_descent_metres(),
+    )?;
     fc.increment_column();
     write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stages.min_elevation())?;
     fc.increment_column();
@@ -399,15 +515,13 @@ fn write_stages<'gpx>(
         ws,
         &fc,
         (row, COL_TRACKPOINTS),
-        stages.first_point().index,
-        hyperlink_to_tps,
+        stages.first_point().index
     )?;
     write_trackpoint_number(
         ws,
         &fc,
         (row, COL_TRACKPOINTS + 1),
         stages.last_point().index,
-        hyperlink_to_tps,
     )?;
     write_integer(
         ws,
@@ -444,7 +558,13 @@ fn write_trackpoints(
     fc.increment_column();
 
     const COL_LOCATION: u16 = COL_TIME + 4;
-    write_header_merged(ws, &fc, (0, COL_LOCATION), (0, COL_LOCATION + 3), "Location")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_LOCATION),
+        (0, COL_LOCATION + 3),
+        "Location",
+    )?;
     write_header(ws, &fc, (1, COL_LOCATION), "Lat")?;
     write_header(ws, &fc, (1, COL_LOCATION + 1), "Lon")?;
     write_header(ws, &fc, (1, COL_LOCATION + 2), "Map")?;
@@ -468,7 +588,13 @@ fn write_trackpoints(
     fc.increment_column();
 
     const COL_DISTANCE: u16 = COL_ELE + 4;
-    write_header_merged(ws, &fc, (0, COL_DISTANCE), (0, COL_DISTANCE + 1), "Distance")?;
+    write_header_merged(
+        ws,
+        &fc,
+        (0, COL_DISTANCE),
+        (0, COL_DISTANCE + 1),
+        "Distance",
+    )?;
     write_header(ws, &fc, (1, COL_DISTANCE), "Delta (m)")?;
     write_header(ws, &fc, (1, COL_DISTANCE + 1), "Running (km)")?;
     ws.set_column_width(COL_DISTANCE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
@@ -982,30 +1108,22 @@ fn write_lat_lon(
     Ok(())
 }
 
-/// Writes a hyperlink to the trackpoints sheet if necessary,
-/// otherwise just writes the index of the trackpoint.
+/// Writes a TrackPoint index, including a hyperlink to
+/// the 'Track Points' sheet.
 fn write_trackpoint_number(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
     trackpoint_index: usize,
-    hyperlink: Hyperlink,
 ) -> Result<(), Box<dyn Error>> {
-    match hyperlink {
-        Hyperlink::Yes => {
-            let format = fc.integer_format().set_font_color(Color::Black);
-            let url = Url::new(format!(
-                "internal:'Track Points'!A{}",
-                trackpoint_index + 3 // allow for the heading.
-            ))
-            .set_text(trackpoint_index.to_string());
+    let format = fc.integer_format().set_font_color(Color::Black);
+    let url = Url::new(format!(
+        "internal:'Track Points'!A{}",
+        trackpoint_index + 3 // allow for the heading on the 'Track Points' sheet.
+    ))
+    .set_text(trackpoint_index.to_string());
 
-            ws.write_url_with_format(rc.0, rc.1, url, &format)?;
-        }
-        Hyperlink::No => {
-            write_integer(ws, fc, rc, trackpoint_index.try_into()?)?;
-        }
-    }
+    ws.write_url_with_format(rc.0, rc.1, url, &format)?;
 
     Ok(())
 }

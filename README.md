@@ -82,7 +82,6 @@ Or build from source using cargo.
 
 # TODO
 - Temp: Min, Max, Avg, with links to TPoints for min and max. Geocode those.
-- HR: ditto.
 - Moving %
 - Find micro-stops
 - Reverse geocode the stopped stages and the first and last point.

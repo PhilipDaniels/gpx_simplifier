@@ -243,24 +243,17 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
         ws,
         &fc,
         (0, COL_HEART_RATE),
-        (0, COL_HEART_RATE + 6),
+        (0, COL_HEART_RATE + 3),
         "Heart Rate",
     )?;
     write_header(ws, &fc, (1, COL_HEART_RATE), "Avg")?;
     write_header(ws, &fc, (1, COL_HEART_RATE + 1), "Max")?;
-    write_header(ws, &fc, (1, COL_HEART_RATE + 2), "Speed (kmh)")?;
-    write_header(ws, &fc, (1, COL_HEART_RATE + 3), "Distance (km)")?;
-    write_header(ws, &fc, (1, COL_HEART_RATE + 4), "Lat")?;
-    write_header(ws, &fc, (1, COL_HEART_RATE + 5), "Lon")?;
-    write_header(ws, &fc, (1, COL_HEART_RATE + 6), "Map")?;
-    ws.set_column_width(COL_HEART_RATE + 2, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_HEART_RATE + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_HEART_RATE + 4, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_HEART_RATE + 5, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_HEART_RATE + 6, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    write_header(ws, &fc, (1, COL_HEART_RATE + 2), "Distance (km)")?;
+    write_header(ws, &fc, (1, COL_HEART_RATE + 3), "Point")?;
+    ws.set_column_width(COL_HEART_RATE + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     fc.increment_column();
 
-    const COL_MAX_TEMP: u16 = COL_HEART_RATE + 7;
+    const COL_MAX_TEMP: u16 = COL_HEART_RATE + 4;
     write_header_merged(ws, &fc, (0, COL_MAX_TEMP), (0, COL_MAX_TEMP + 6), "Temp °C")?;
     write_header(ws, &fc, (1, COL_MAX_TEMP), "Avg")?;
     write_header(ws, &fc, (1, COL_MAX_TEMP + 1), "Max")?;
@@ -936,29 +929,20 @@ fn write_heart_rate_data(
             .extensions
             .as_ref()
             .expect("extensions should exist for hr");
+
         if let Some(mhr) = extensions.heart_rate {
+            write_blank(ws, &fc, (rc.0, rc.1))?;
             write_integer(ws, &fc, (rc.0, rc.1 + 1), mhr as u32)?;
+            write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 2), point)?;
+            write_trackpoint_number(ws, fc, (rc.0, rc.1 + 3), point.index)?;
+            return Ok(());
         }
-        write_speed_option(ws, fc, (rc.0, rc.1 + 2), point.speed_kmh)?;
-        write_kilometres(ws, fc, (rc.0, rc.1 + 3), point.running_metres / 1000.0)?;
-        write_lat_lon(
-            ws,
-            fc,
-            (rc.0, rc.1 + 4),
-            (point.lat, point.lon),
-            Hyperlink::Yes,
-        )?;
-        return Ok(());
     }
 
     write_blank(ws, &fc, (rc.0, rc.1))?;
     write_blank(ws, &fc, (rc.0, rc.1 + 1))?;
     write_blank(ws, &fc, (rc.0, rc.1 + 2))?;
     write_blank(ws, &fc, (rc.0, rc.1 + 3))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 4))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 5))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 6))?;
-
     Ok(())
 }
 

@@ -426,68 +426,77 @@ fn write_trackpoints(
 ) -> Result<(), Box<dyn Error>> {
     let mut fc = FormatControl::new();
 
-    write_header_blank(ws, &fc, (0, 0))?;
-    write_header(ws, &fc, (1, 0), "Index")?;
+    const COL_INDEX: u16 = 0;
+    write_header_blank(ws, &fc, (0, COL_INDEX))?;
+    write_header(ws, &fc, (1, COL_INDEX), "Index")?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 1), (0, 4), "Time")?;
-    write_header(ws, &fc, (1, 1), "UTC")?;
-    write_header(ws, &fc, (1, 2), "Local")?;
-    write_header(ws, &fc, (1, 3), "Delta")?;
-    write_header(ws, &fc, (1, 4), "Running")?;
-    ws.set_column_width(1, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(2, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(3, DURATION_COLUMN_WIDTH)?;
-    ws.set_column_width(4, DURATION_COLUMN_WIDTH)?;
+    const COL_TIME: u16 = COL_INDEX + 1;
+    write_header_merged(ws, &fc, (0, COL_TIME), (0, COL_TIME + 3), "Time")?;
+    write_header(ws, &fc, (1, COL_TIME), "UTC")?;
+    write_header(ws, &fc, (1, COL_TIME + 1), "Local")?;
+    write_header(ws, &fc, (1, COL_TIME + 2), "Delta")?;
+    write_header(ws, &fc, (1, COL_TIME + 3), "Running")?;
+    ws.set_column_width(COL_TIME, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_TIME + 1, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_TIME + 2, DURATION_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_TIME + 3, DURATION_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 5), (0, 8), "Location")?;
-    write_header(ws, &fc, (1, 5), "Lat")?;
-    write_header(ws, &fc, (1, 6), "Lon")?;
-    write_header(ws, &fc, (1, 7), "Map")?;
-    write_header(ws, &fc, (1, 8), "Description")?;
-    ws.set_column_width(5, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(6, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(7, LINKED_LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(8, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
+    const COL_LOCATION: u16 = COL_TIME + 4;
+    write_header_merged(ws, &fc, (0, COL_LOCATION), (0, COL_LOCATION + 3), "Location")?;
+    write_header(ws, &fc, (1, COL_LOCATION), "Lat")?;
+    write_header(ws, &fc, (1, COL_LOCATION + 1), "Lon")?;
+    write_header(ws, &fc, (1, COL_LOCATION + 2), "Map")?;
+    write_header(ws, &fc, (1, COL_LOCATION + 3), "Description")?;
+    ws.set_column_width(COL_LOCATION, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_LOCATION + 1, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_LOCATION + 2, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_LOCATION + 3, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 9), (0, 12), "Elevation (m)")?;
-    write_header(ws, &fc, (1, 9), "Height")?;
-    write_header(ws, &fc, (1, 10), "Delta")?;
-    write_header(ws, &fc, (1, 11), "Running Ascent")?;
-    write_header(ws, &fc, (1, 12), "Running Descent")?;
-    ws.set_column_width(9, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(10, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(11, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(12, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    const COL_ELE: u16 = COL_LOCATION + 4;
+    write_header_merged(ws, &fc, (0, COL_ELE), (0, COL_ELE + 3), "Elevation (m)")?;
+    write_header(ws, &fc, (1, COL_ELE), "Height")?;
+    write_header(ws, &fc, (1, COL_ELE + 1), "Delta")?;
+    write_header(ws, &fc, (1, COL_ELE + 2), "Running Ascent")?;
+    write_header(ws, &fc, (1, COL_ELE + 3), "Running Descent")?;
+    ws.set_column_width(COL_ELE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(COL_ELE + 1, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(COL_ELE + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(COL_ELE + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     fc.increment_column();
 
-    write_header_merged(ws, &fc, (0, 13), (0, 14), "Distance")?;
-    write_header(ws, &fc, (1, 13), "Delta (m)")?;
-    write_header(ws, &fc, (1, 14), "Running (km)")?;
-    ws.set_column_width(13, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(14, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    const COL_DISTANCE: u16 = COL_ELE + 4;
+    write_header_merged(ws, &fc, (0, COL_DISTANCE), (0, COL_DISTANCE + 1), "Distance")?;
+    write_header(ws, &fc, (1, COL_DISTANCE), "Delta (m)")?;
+    write_header(ws, &fc, (1, COL_DISTANCE + 1), "Running (km)")?;
+    ws.set_column_width(COL_DISTANCE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(COL_DISTANCE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
     fc.increment_column();
 
-    write_header_blank(ws, &fc, (0, 15))?;
-    write_header(ws, &fc, (1, 15), "Speed (kmh)")?;
-    ws.set_column_width(15, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    const COL_SPEED: u16 = COL_DISTANCE + 2;
+    write_header_blank(ws, &fc, (0, COL_SPEED))?;
+    write_header(ws, &fc, (1, COL_SPEED), "Speed (kmh)")?;
+    ws.set_column_width(COL_SPEED, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
 
+    const COL_HEART_RATE: u16 = COL_SPEED + 1;
     fc.increment_column();
-    write_header_blank(ws, &fc, (0, 16))?;
-    write_header(ws, &fc, (1, 16), "Heart Rate (bpm)")?;
-    ws.set_column_width(16, HEART_RATE_WIDTH_WITH_UNITS)?;
+    write_header_blank(ws, &fc, (0, COL_HEART_RATE))?;
+    write_header(ws, &fc, (1, COL_HEART_RATE), "Heart Rate (bpm)")?;
+    ws.set_column_width(COL_HEART_RATE, HEART_RATE_WIDTH_WITH_UNITS)?;
 
+    const COL_AIR_TEMP: u16 = COL_HEART_RATE + 1;
     fc.increment_column();
-    write_header_blank(ws, &fc, (0, 17))?;
-    write_header(ws, &fc, (1, 17), "Temp (°C)")?;
-    ws.set_column_width(17, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
+    write_header_blank(ws, &fc, (0, COL_AIR_TEMP))?;
+    write_header(ws, &fc, (1, COL_AIR_TEMP), "Temp (°C)")?;
+    ws.set_column_width(COL_AIR_TEMP, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
 
+    const COL_CADENCE: u16 = COL_AIR_TEMP + 1;
     fc.increment_column();
-    write_header_blank(ws, &fc, (0, 18))?;
-    write_header(ws, &fc, (1, 18), "Cadence (rpm)")?;
-    ws.set_column_width(18, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
+    write_header_blank(ws, &fc, (0, COL_CADENCE))?;
+    write_header(ws, &fc, (1, COL_CADENCE), "Cadence (rpm)")?;
+    ws.set_column_width(COL_CADENCE, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
 
     // Regenerate this so the formatting starts at the right point.
     let mut fc = FormatControl::new();
@@ -495,66 +504,66 @@ fn write_trackpoints(
     for p in points {
         fc.reset_column();
 
-        write_integer(ws, &fc, (row, 0), p.index as u32)?;
+        write_integer(ws, &fc, (row, COL_INDEX), p.index as u32)?;
         fc.increment_column();
 
         match p.time {
             Some(time) => {
-                write_utc_date(ws, &fc, (row, 1), time)?;
-                write_utc_date_as_local(ws, &fc, (row, 2), time)?;
+                write_utc_date(ws, &fc, (row, COL_TIME), time)?;
+                write_utc_date_as_local(ws, &fc, (row, COL_TIME + 1), time)?;
             }
             None => {
-                write_blank(ws, &fc, (row, 1))?;
-                write_blank(ws, &fc, (row, 2))?;
+                write_blank(ws, &fc, (row, COL_TIME))?;
+                write_blank(ws, &fc, (row, COL_TIME + 1))?;
             }
         }
-        write_duration_option(ws, &fc, (row, 3), p.delta_time)?;
-        write_duration_option(ws, &fc, (row, 4), p.running_delta_time)?;
+        write_duration_option(ws, &fc, (row, COL_TIME + 2), p.delta_time)?;
+        write_duration_option(ws, &fc, (row, COL_TIME + 3), p.running_delta_time)?;
         fc.increment_column();
 
-        write_lat_lon(ws, &fc, (row, 5), (p.lat, p.lon), hyperlink)?;
-        write_location_description(ws, &fc, (row, 8), &p.location)?;
+        write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyperlink)?;
+        write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
         fc.increment_column();
 
         match p.ele {
             Some(ele) => {
-                write_metres(ws, &fc, (row, 9), ele)?;
+                write_metres(ws, &fc, (row, COL_ELE), ele)?;
             }
             None => {
-                write_blank(ws, &fc, (row, 9))?;
+                write_blank(ws, &fc, (row, COL_ELE))?;
             }
         }
 
-        write_metres_option(ws, &fc, (row, 10), p.ele_delta_metres)?;
-        write_metres_option(ws, &fc, (row, 11), p.running_ascent_metres)?;
-        write_metres_option(ws, &fc, (row, 12), p.running_descent_metres)?;
+        write_metres_option(ws, &fc, (row, COL_ELE + 1), p.ele_delta_metres)?;
+        write_metres_option(ws, &fc, (row, COL_ELE + 2), p.running_ascent_metres)?;
+        write_metres_option(ws, &fc, (row, COL_ELE + 3), p.running_descent_metres)?;
         fc.increment_column();
 
-        write_metres(ws, &fc, (row, 13), p.delta_metres)?;
-        write_kilometres(ws, &fc, (row, 14), p.running_metres / 1000.0)?;
+        write_metres(ws, &fc, (row, COL_DISTANCE), p.delta_metres)?;
+        write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), p.running_metres / 1000.0)?;
         fc.increment_column();
 
-        write_speed_option(ws, &fc, (row, 15), p.speed_kmh)?;
+        write_speed_option(ws, &fc, (row, COL_SPEED), p.speed_kmh)?;
         fc.increment_column();
 
         if let Some(Some(hr)) = p.extensions.as_ref().map(|ex| ex.heart_rate) {
-            write_integer(ws, &fc, (row, 16), hr.into())?;
+            write_integer(ws, &fc, (row, COL_HEART_RATE), hr.into())?;
         } else {
-            write_blank(ws, &fc, (row, 16))?;
+            write_blank(ws, &fc, (row, COL_HEART_RATE))?;
         }
         fc.increment_column();
 
         if let Some(Some(at)) = p.extensions.as_ref().map(|ex| ex.air_temp) {
-            write_temperature(ws, &fc, (row, 17), at)?;
+            write_temperature(ws, &fc, (row, COL_AIR_TEMP), at)?;
         } else {
-            write_blank(ws, &fc, (row, 17))?;
+            write_blank(ws, &fc, (row, COL_AIR_TEMP))?;
         }
         fc.increment_column();
 
         if let Some(Some(cadence)) = p.extensions.as_ref().map(|ex| ex.cadence) {
-            write_integer(ws, &fc, (row, 18), cadence.into())?;
+            write_integer(ws, &fc, (row, COL_CADENCE), cadence.into())?;
         } else {
-            write_blank(ws, &fc, (row, 18))?;
+            write_blank(ws, &fc, (row, COL_CADENCE))?;
         }
         fc.increment_column();
 
@@ -562,7 +571,7 @@ fn write_trackpoints(
         fc.increment_row();
     }
 
-    ws.autofilter(1, 0, row - 1, 15)?;
+    ws.autofilter(1, 0, row - 1, COL_CADENCE)?;
     ws.set_freeze_panes(2, 0)?;
 
     Ok(())

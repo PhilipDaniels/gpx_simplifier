@@ -81,7 +81,11 @@ Or build from source using cargo.
 
 
 # TODO
-- Include hr, temperature in the xlsx.
+- Temp: Min, Max, Avg, with links to TPoints for min and max. Geocode those.
+- HR: ditto.
+- Need to remove the option to write the trackpoints.
+- Moving %
+- Find micro-stops
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be

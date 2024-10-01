@@ -339,6 +339,16 @@ impl<'gpx> StageList<'gpx> {
 
         max_stage.max_speed
     }
+
+    /// Returns the point of maximum heart rate across all the stages.
+    pub fn max_heart_rate(&self) -> Option<&EnrichedTrackPoint> {
+        None
+    }
+
+    /// Returns the point of maximum temperature across all the stages.
+    pub fn max_temperature(&self) -> Option<&EnrichedTrackPoint> {
+        None
+    }
 }
 
 /// Calculate a set of enriched TrackPoint information (distances, speed, climb).

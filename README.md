@@ -81,8 +81,6 @@ Or build from source using cargo.
 
 
 # TODO
-- Max ele overall is wrong.
-- Same for max speed
 - Temp: Min, Max, Avg, with links to TPoints for min and max. Geocode those.
 - HR: ditto.
 - Moving %

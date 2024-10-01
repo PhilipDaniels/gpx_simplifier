@@ -228,22 +228,17 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
         ws,
         &fc,
         (0, COL_MAX_SPEED),
-        (0, COL_MAX_SPEED + 4),
+        (0, COL_MAX_SPEED + 2),
         "Max Speed",
     )?;
     write_header(ws, &fc, (1, COL_MAX_SPEED), "Speed (kmh)")?;
     write_header(ws, &fc, (1, COL_MAX_SPEED + 1), "Distance (km)")?;
-    write_header(ws, &fc, (1, COL_MAX_SPEED + 2), "Lat")?;
-    write_header(ws, &fc, (1, COL_MAX_SPEED + 3), "Lon")?;
-    write_header(ws, &fc, (1, COL_MAX_SPEED + 4), "Map")?;
+    write_header(ws, &fc, (1, COL_MAX_SPEED + 2), "Point")?;
     ws.set_column_width(COL_MAX_SPEED, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(COL_MAX_SPEED + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MAX_SPEED + 2, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_SPEED + 3, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_SPEED + 4, LINKED_LAT_LON_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    const COL_HEART_RATE: u16 = COL_MAX_SPEED + 5;
+    const COL_HEART_RATE: u16 = COL_MAX_SPEED + 3;
     write_header_merged(
         ws,
         &fc,
@@ -393,7 +388,7 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
             write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stage.max_speed)?;
         } else {
             // Write blanks so that the banding formatting is applied.
-            for col in COL_DISTANCE..=(COL_MAX_SPEED + 4) {
+            for col in COL_DISTANCE..=(COL_MAX_SPEED + 2) {
                 write_blank(ws, &fc, (row, col))?;
             }
         }
@@ -908,7 +903,7 @@ fn write_elevation_data(
     Ok(())
 }
 
-/// Writes an max speed data block (min or max) as found on the Stages tab.
+/// Writes a max speed data block as found on the Stages tab.
 fn write_max_speed_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
@@ -919,22 +914,14 @@ fn write_max_speed_data(
         write_blank(ws, fc, (rc.0, rc.1))?;
         write_blank(ws, fc, (rc.0, rc.1 + 1))?;
         write_blank(ws, fc, (rc.0, rc.1 + 2))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 3))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 4))?;
         return Ok(());
     }
 
     let point = point.unwrap();
 
     write_speed_option(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
-    write_kilometres(ws, &fc, (rc.0, rc.1 + 1), point.running_metres / 1000.0)?;
-    write_lat_lon(
-        ws,
-        &fc,
-        (rc.0, rc.1 + 2),
-        (point.lat, point.lon),
-        Hyperlink::Yes,
-    )?;
+    write_kilometres_running_with_map_hyperlink(ws, &fc, (rc.0, rc.1 + 1), point)?;
+    write_trackpoint_number(ws, fc, (rc.0, rc.1 + 2), point.index)?;
     Ok(())
 }
 

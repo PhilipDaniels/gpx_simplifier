@@ -346,7 +346,7 @@ impl<'gpx> StageList<'gpx> {
         for stage in self.iter() {
             if stage.max_elevation.is_none() {
                 return None;
-            } else if stage.max_elevation.unwrap().ele < max_stage.max_elevation.unwrap().ele {
+            } else if stage.max_elevation.unwrap().ele > max_stage.max_elevation.unwrap().ele {
                 // The unwraps are safe because we are iterating across all
                 // stages, so max being None will be trapped.
                 max_stage = stage;

@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path};
+use std::{collections::HashSet, error::Error, path::Path};
 
 use logging_timer::time;
 use rust_xlsxwriter::{
@@ -48,7 +48,12 @@ pub fn create_summary_xlsx<'gpx>(
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
-    write_trackpoints(tp_ws, trackpoint_hyperlinks, &gpx.points)?;
+    write_trackpoints(
+        tp_ws,
+        trackpoint_hyperlinks,
+        &gpx.points,
+        stages.highlighted_trackpoints(),
+    )?;
 
     Ok(workbook)
 }
@@ -488,7 +493,7 @@ fn write_stages<'gpx>(
         (row, COL_MAX_TEMP),
         stages.min_temperature(),
         stages.max_temperature(),
-        avg_temp                
+        avg_temp,
     )?;
     fc.increment_column();
     write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stages.first_point().index)?;
@@ -512,6 +517,7 @@ fn write_trackpoints(
     ws: &mut Worksheet,
     hyperlink: Hyperlink,
     points: &[EnrichedTrackPoint],
+    mandatory_hyperlinks: HashSet<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let mut fc = FormatControl::new();
 
@@ -622,7 +628,18 @@ fn write_trackpoints(
         write_duration_option(ws, &fc, (row, COL_TIME + 3), p.running_delta_time)?;
         fc.increment_column();
 
-        write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyperlink)?;
+        let hyp = match hyperlink {
+            Hyperlink::Yes => Hyperlink::Yes,
+            Hyperlink::No => {
+                if mandatory_hyperlinks.contains(&p.index) {
+                    Hyperlink::Yes
+                } else {
+                    Hyperlink::No
+                }
+            }
+        };
+
+        write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyp)?;
         write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
         fc.increment_column();
 

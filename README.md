@@ -81,8 +81,10 @@ Or build from source using cargo.
 
 
 # TODO
-- Temp: Min, Max, Avg, with links to TPoints for min and max. Geocode those.
 - Moving %
+- Ascent rate (m/km)
+- Use helpers for air_temp and heart_rate everywhere. See use of flat_map.
+- Stopped -> Controlled
 - Find micro-stops
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.

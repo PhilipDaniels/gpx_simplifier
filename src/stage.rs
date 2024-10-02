@@ -55,6 +55,8 @@ pub struct Stage<'gpx> {
     pub max_elevation: Option<&'gpx EnrichedTrackPoint>,
     pub max_speed: Option<&'gpx EnrichedTrackPoint>,
     pub max_heart_rate: Option<&'gpx EnrichedTrackPoint>,
+    pub avg_air_temp: Option<f64>,
+    pub min_air_temp: Option<&'gpx EnrichedTrackPoint>,
     pub max_air_temp: Option<&'gpx EnrichedTrackPoint>,
 }
 
@@ -89,9 +91,11 @@ impl<'gpx> Stage<'gpx> {
     /// of min elevation. This is so we can force a hyperlink
     /// to Google Maps for the special points.
     pub fn highlighted_trackpoints(&self) -> Vec<usize> {
-        let mut idxs = vec![self.track_start_point.index,
+        let mut idxs = vec![
+            self.track_start_point.index,
             self.start.index,
-            self.end.index];
+            self.end.index,
+        ];
 
         if let Some(p) = self.min_elevation {
             idxs.push(p.index);
@@ -395,9 +399,26 @@ impl<'gpx> StageList<'gpx> {
         None
     }
 
+    /// Returns the point of minimum temperature across all the stages.
+    pub fn min_temperature(&self) -> Option<&EnrichedTrackPoint> {
+        let min_temp = self
+            .0
+            .iter()
+            .filter_map(|s| s.min_air_temp)
+            .min_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()));
+
+        min_temp
+    }
+
     /// Returns the point of maximum temperature across all the stages.
     pub fn max_temperature(&self) -> Option<&EnrichedTrackPoint> {
-        None
+        let max_temp = self
+            .0
+            .iter()
+            .filter_map(|s| s.min_air_temp)
+            .max_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()));
+
+        max_temp
     }
 }
 
@@ -527,11 +548,7 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     let mut stages = StageList::default();
 
     // If we don't have time there is nothing we can do.
-    if gpx
-        .points
-        .iter()
-        .any(|p| p.time.is_none())
-    {
+    if gpx.points.iter().any(|p| p.time.is_none()) {
         return stages;
     }
 
@@ -639,7 +656,7 @@ fn get_next_stage<'gpx>(
 
     let (min_elevation, max_elevation) = find_min_and_max_elevation_points(gpx, start_idx, end_idx);
     let max_heart_rate = find_max_heart_rate(gpx, start_idx, end_idx);
-    let max_air_temp = find_max_air_temp(gpx, start_idx, end_idx);
+    let (min_air_temp, max_air_temp, avg_air_temp) = find_air_temps(gpx, start_idx, end_idx);
 
     let stage = Stage {
         stage_type,
@@ -650,7 +667,9 @@ fn get_next_stage<'gpx>(
         max_elevation,
         max_speed: find_max_speed(gpx, start_idx, end_idx),
         max_heart_rate,
-        max_air_temp
+        min_air_temp,
+        max_air_temp,
+        avg_air_temp,
     };
 
     // Just check we created everything correctly.
@@ -865,14 +884,11 @@ fn find_max_heart_rate<'gpx>(
     start_idx: usize,
     end_idx: usize,
 ) -> Option<&'gpx EnrichedTrackPoint> {
-
-    let point = &gpx.points[start_idx..=end_idx].iter()
-        .max_by(|a, b| {
-            let hr1 = a.extensions.as_ref().map(|ex| ex.heart_rate);
-            let hr2 = b.extensions.as_ref().map(|ex| ex.heart_rate);
-            hr1.cmp(&hr2)
-            }
-        );
+    let point = &gpx.points[start_idx..=end_idx].iter().max_by(|a, b| {
+        let hr1 = a.extensions.as_ref().map(|ex| ex.heart_rate);
+        let hr2 = b.extensions.as_ref().map(|ex| ex.heart_rate);
+        hr1.cmp(&hr2)
+    });
 
     if let Some(p) = point {
         if p.extensions.is_none() {
@@ -885,23 +901,42 @@ fn find_max_heart_rate<'gpx>(
     }
 }
 
-/// Within a given range of trackpoints, finds the one with the
-/// maximum air temperature
-fn find_max_air_temp<'gpx>(
+/// Finds the min, max and avg air temp over the stage.
+fn find_air_temps<'gpx>(
     gpx: &'gpx EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> Option<&'gpx EnrichedTrackPoint> {
+) -> (
+    Option<&'gpx EnrichedTrackPoint>,
+    Option<&'gpx EnrichedTrackPoint>,
+    Option<f64>,
+) {
+    let mut sum: Option<f64> = None;
+    let mut min: Option<&'gpx EnrichedTrackPoint> = None;
+    let mut max: Option<&'gpx EnrichedTrackPoint> = None;
+    let mut count = 0;
 
-    let point = &gpx.points[start_idx..=end_idx].iter()
-        .max_by(|a, b| {
-            let temp1 = a.extensions.as_ref().map(|ex| ex.air_temp);
-            let temp2 = b.extensions.as_ref().map(|ex| ex.air_temp);
-            temp1.partial_cmp(&temp2).unwrap()
+    for idx in start_idx..=end_idx {
+        if let Some(at) = gpx.points[idx].air_temp() {
+            count += 1;
+            sum = Some(sum.unwrap_or_default() + at);
+
+            if min.is_none() || min.unwrap().air_temp().unwrap() > at {
+                min = Some(&gpx.points[idx]);
             }
-        );
 
-    *point        
+            if max.is_none() || max.unwrap().air_temp().unwrap() < at {
+                max = Some(&gpx.points[idx]);
+            }
+        }
+    }
+
+    let avg = match sum {
+        Some(s) => Some(s / count as f64),
+        None => None,
+    };
+
+    (min, max, avg)
 }
 
 /// Calculate distance between two points in metres.

@@ -152,12 +152,27 @@ impl EnrichedGpx {
     pub fn last_valid_idx(&self) -> usize {
         self.points.len() - 1
     }
+
+
+    /// Returns the average temperature across all the track.
+    pub fn avg_temperature(&self) -> Option<f64> {
+        let sum: f64 = self.points.iter()
+            .flat_map(|p| p.extensions.as_ref())
+            .flat_map(|ext| ext.air_temp)
+            .sum();
+
+        if sum == 0.0 {
+            None
+        } else {
+            Some(sum / self.points.len() as f64)
+        }
+    }
 }
 
 /// A TrackPoint with lots of extra stuff calculated. We need the extras
 /// to find the stages.
 #[derive(Debug)]
-pub struct EnrichedTrackPoint {
+pub struct  EnrichedTrackPoint {
     /// The index of the original trackpoint we used to create this value.
     pub index: usize,
     /// The latitude, read from the "lat" attribute.
@@ -242,6 +257,18 @@ impl EnrichedTrackPoint {
     /// distances are wrong - a lot wrong.
     pub fn as_geo_point(&self) -> Point {
         point! { x: self.lon, y: self.lat }
+    }
+
+    /// Convenience function to extract the air_temp from
+    /// the Garmin extensions.
+    pub fn air_temp(&self) -> Option<f64> {
+        self.extensions.as_ref().and_then(|ext| ext.air_temp)
+    }
+
+    /// Convenience function to extract the heart_rate from
+    /// the Garmin extensions.
+    pub fn heart_rate(&self) -> Option<u16> {
+        self.extensions.as_ref().and_then(|ext| ext.heart_rate)
     }
 }
 

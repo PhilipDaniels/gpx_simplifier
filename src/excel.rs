@@ -42,7 +42,8 @@ pub fn create_summary_xlsx<'gpx>(
     // This will appear as the first sheet in the workbook.
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
-    write_stages(stages_ws, stages)?;
+    let avg_temp = gpx.avg_temperature();
+    write_stages(stages_ws, stages, avg_temp)?;
 
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
@@ -65,7 +66,11 @@ pub fn write_summary_file<'gpx>(
     Ok(())
 }
 
-fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<(), Box<dyn Error>> {
+fn write_stages<'gpx>(
+    ws: &mut Worksheet,
+    stages: &StageList<'gpx>,
+    avg_temp: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
     if stages.len() == 0 {
         // TODO: Write something.
         return Ok(());
@@ -214,9 +219,9 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
         &fc,
         (0, COL_MAX_ELE),
         (0, COL_MAX_ELE + 2),
-        "Maximum Elevation (m)",
+        "Maximum Elevation",
     )?;
-    write_header(ws, &fc, (1, COL_MAX_ELE), "Elevation")?;
+    write_header(ws, &fc, (1, COL_MAX_ELE), "Elevation (m)")?;
     write_header(ws, &fc, (1, COL_MAX_ELE + 1), "Distance (km)")?;
     write_header(ws, &fc, (1, COL_MAX_ELE + 2), "Point")?;
     ws.set_column_width(COL_MAX_ELE, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
@@ -256,17 +261,14 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
     const COL_MAX_TEMP: u16 = COL_HEART_RATE + 4;
     write_header_merged(ws, &fc, (0, COL_MAX_TEMP), (0, COL_MAX_TEMP + 6), "Temp °C")?;
     write_header(ws, &fc, (1, COL_MAX_TEMP), "Avg")?;
-    write_header(ws, &fc, (1, COL_MAX_TEMP + 1), "Max")?;
-    write_header(ws, &fc, (1, COL_MAX_TEMP + 2), "Speed (kmh)")?;
-    write_header(ws, &fc, (1, COL_MAX_TEMP + 3), "Distance (km)")?;
-    write_header(ws, &fc, (1, COL_MAX_TEMP + 4), "Lat")?;
-    write_header(ws, &fc, (1, COL_MAX_TEMP + 5), "Lon")?;
-    write_header(ws, &fc, (1, COL_MAX_TEMP + 6), "Map")?;
-    ws.set_column_width(COL_MAX_TEMP + 2, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MAX_TEMP + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MAX_TEMP + 4, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_TEMP + 5, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_TEMP + 6, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    write_header(ws, &fc, (1, COL_MAX_TEMP + 1), "Min")?;
+    write_header(ws, &fc, (1, COL_MAX_TEMP + 2), "Time (local)")?;
+    write_header(ws, &fc, (1, COL_MAX_TEMP + 3), "Point")?;
+    write_header(ws, &fc, (1, COL_MAX_TEMP + 4), "Max")?;
+    write_header(ws, &fc, (1, COL_MAX_TEMP + 5), "Time (local)")?;
+    write_header(ws, &fc, (1, COL_MAX_TEMP + 6), "Point")?;
+    ws.set_column_width(COL_MAX_TEMP + 2, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_MAX_TEMP + 5, DATE_COLUMN_WIDTH)?;
     fc.increment_column();
 
     const COL_TRACKPOINTS: u16 = COL_MAX_TEMP + 7;
@@ -390,7 +392,14 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
         write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stage.max_heart_rate)?;
 
         fc.increment_column();
-        write_temperature_data(ws, &fc, (row, COL_MAX_TEMP), stage.max_air_temp)?;
+        write_temperature_data(
+            ws,
+            &fc,
+            (row, COL_MAX_TEMP),
+            stage.min_air_temp,
+            stage.max_air_temp,
+            stage.avg_air_temp,
+        )?;
 
         fc.increment_column();
         write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stage.start.index)?;
@@ -473,7 +482,14 @@ fn write_stages<'gpx>(ws: &mut Worksheet, stages: &StageList<'gpx>) -> Result<()
     fc.increment_column();
     write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stages.max_heart_rate())?;
     fc.increment_column();
-    write_temperature_data(ws, &fc, (row, COL_MAX_TEMP), stages.max_temperature())?;
+    write_temperature_data(
+        ws,
+        &fc,
+        (row, COL_MAX_TEMP),
+        stages.min_temperature(),
+        stages.max_temperature(),
+        avg_temp                
+    )?;
     fc.increment_column();
     write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stages.first_point().index)?;
     write_trackpoint_number(
@@ -715,6 +731,32 @@ fn write_integer(
     Ok(())
 }
 
+/// Writes a float.
+fn write_f64(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: f64,
+) -> Result<(), Box<dyn Error>> {
+    ws.write_number_with_format(rc.0, rc.1, value, &fc.float_format())?;
+    Ok(())
+}
+
+/// Writes an optional float.
+fn write_f64_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(value) = value {
+        write_f64(ws, fc, rc, value)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
+    Ok(())
+}
+
 /// Writes a string right aligned.
 fn write_string(
     ws: &mut Worksheet,
@@ -950,35 +992,31 @@ fn write_temperature_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    point: Option<&EnrichedTrackPoint>,
+    min: Option<&EnrichedTrackPoint>,
+    max: Option<&EnrichedTrackPoint>,
+    avg: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(point) = point {
-        let extensions = point
-            .extensions
-            .as_ref()
-            .expect("extensions should exist for air_temp");
-        if let Some(at) = extensions.air_temp {
-            write_temperature(ws, &fc, (rc.0, rc.1 + 1), at)?;
-        }
-        write_speed_option(ws, fc, (rc.0, rc.1 + 2), point.speed_kmh)?;
-        write_kilometres(ws, fc, (rc.0, rc.1 + 3), point.running_metres / 1000.0)?;
-        write_lat_lon(
-            ws,
-            fc,
-            (rc.0, rc.1 + 4),
-            (point.lat, point.lon),
-            Hyperlink::Yes,
-        )?;
-        return Ok(());
+    write_f64_option(ws, fc, rc, avg)?;
+
+    if let Some(min) = min {
+        write_temperature_option(ws, fc, (rc.0, rc.1 + 1), min.air_temp())?;
+        write_utc_date_as_local_option(ws, fc, (rc.0, rc.1 + 2), min.time)?;
+        write_trackpoint_number(ws, fc, (rc.0, rc.1 + 3), min.index)?;
+    } else {
+        write_blank(ws, &fc, (rc.0, rc.1 + 1))?;
+        write_blank(ws, &fc, (rc.0, rc.1 + 2))?;
+        write_blank(ws, &fc, (rc.0, rc.1 + 3))?;
     }
 
-    write_blank(ws, &fc, (rc.0, rc.1))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 1))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 2))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 3))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 4))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 5))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 6))?;
+    if let Some(max) = max {
+        write_temperature_option(ws, fc, (rc.0, rc.1 + 4), max.air_temp())?;
+        write_utc_date_as_local_option(ws, fc, (rc.0, rc.1 + 5), max.time)?;
+        write_trackpoint_number(ws, fc, (rc.0, rc.1 + 6), max.index)?;
+    } else {
+        write_blank(ws, &fc, (rc.0, rc.1 + 4))?;
+        write_blank(ws, &fc, (rc.0, rc.1 + 5))?;
+        write_blank(ws, &fc, (rc.0, rc.1 + 6))?;
+    }
 
     Ok(())
 }
@@ -991,6 +1029,20 @@ fn write_temperature(
 ) -> Result<(), Box<dyn Error>> {
     let format = fc.temperature_format();
     ws.write_number_with_format(rc.0, rc.1, temperature, &format)?;
+    Ok(())
+}
+
+fn write_temperature_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    temperature: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(t) = temperature {
+        write_temperature(ws, fc, rc, t)?;
+    } else {
+        write_blank(ws, fc, rc)?;
+    }
     Ok(())
 }
 
@@ -1218,6 +1270,11 @@ impl FormatControl {
 
     fn integer_format(&self) -> Format {
         let format = Format::new().set_num_format("0");
+        self.apply_banding(format)
+    }
+
+    fn float_format(&self) -> Format {
+        let format = Format::new().set_num_format("0.0");
         self.apply_banding(format)
     }
 

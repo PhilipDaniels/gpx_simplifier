@@ -877,15 +877,7 @@ fn find_max_heart_rate(
         hr1.cmp(&hr2)
     });
 
-    if let Some(p) = point {
-        if p.extensions.is_none() {
-            None
-        } else {
-            Some(p)
-        }
-    } else {
-        None
-    }
+    point.filter(|p| p.extensions.is_some())
 }
 
 /// Finds the min, max and avg air temp over the stage.

@@ -510,6 +510,9 @@ fn write_stages(
         (stages.last_point().index - stages.first_point().index + 1).try_into()?,
     )?;
 
+
+    ws.set_freeze_panes(0, 2)?;
+
     Ok(())
 }
 

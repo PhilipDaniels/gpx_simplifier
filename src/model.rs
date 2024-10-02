@@ -128,7 +128,7 @@ impl Gpx {
             self.tracks.remove(idx);
         }
 
-        return self;
+        self
     }
 }
 

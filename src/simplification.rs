@@ -143,7 +143,7 @@ fn write_track<W: Write>(
 
     writeln!(w, "    <trkseg>")?;
     for p in points {
-        write_trackpoint(w, &p)?;
+        write_trackpoint(w, p)?;
     }
     writeln!(w, "    </trkseg>")?;
 

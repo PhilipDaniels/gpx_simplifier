@@ -1,3 +1,5 @@
+#![allow(clippy::single_match)]
+
 use core::{panic, str};
 use std::{
     borrow::{Borrow, Cow},
@@ -16,7 +18,7 @@ use quick_xml::{
 use time::{format_description::well_known, OffsetDateTime};
 
 use crate::model::{
-    Declaration, Extensions, Gpx, GpxInfo, Metadata, Link, Track, TrackPoint, TrackSegment,
+    Declaration, Extensions, Gpx, GpxInfo, Link, Metadata, Track, TrackPoint, TrackSegment,
 };
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
@@ -52,13 +54,13 @@ pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
                     if declaration.is_none() {
-                        return Err("Did not find the 'xml' declaration element")?;
+                        Err("Did not find the 'xml' declaration element")?;
                     }
                     if gpx_info.is_none() {
-                        return Err("Did not find the 'gpx' element")?;
+                        Err("Did not find the 'gpx' element")?;
                     }
                     if metadata.is_none() {
-                        return Err("Did not find the 'metadata' element")?;
+                        Err("Did not find the 'metadata' element")?;
                     }
 
                     let gpx = Gpx {
@@ -95,20 +97,16 @@ fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
 }
 
 fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
-    let mut attributes = parse_attributes(&tag)?;
+    let mut attributes = parse_attributes(tag)?;
 
     let creator = match attributes.entry("creator".to_string()) {
-        Entry::Occupied(occupied_entry) => {
-            occupied_entry.remove()
-        }
-        _ => return Err("Mandatory attribute 'creator' was missing on the GPX element")? 
+        Entry::Occupied(occupied_entry) => occupied_entry.remove(),
+        _ => return Err("Mandatory attribute 'creator' was missing on the GPX element")?,
     };
 
     let version = match attributes.entry("version".to_string()) {
-        Entry::Occupied(occupied_entry) => {
-            occupied_entry.remove()
-        }
-        _ => return Err("Mandatory attribute 'version' was missing on the GPX element")? 
+        Entry::Occupied(occupied_entry) => occupied_entry.remove(),
+        _ => return Err("Mandatory attribute 'version' was missing on the GPX element")?,
     };
 
     Ok(GpxInfo {
@@ -144,22 +142,22 @@ fn parse_metadata(
                 b"time" => {
                     time = Some(read_inner_as_time(buf, reader)?);
                 }
-                e @ _ => panic!("Unexpected element {:?}", e),
+                e => panic!("Unexpected element {:?}", e),
             },
             Ok(Event::End(e)) => {
                 match e.name().as_ref() {
                     b"metadata" => {
-                        if href.is_none() {
-                            return Err("href attribute not found, but it is mandatory according to the XSD")?;
-                        } else {
+                        if let Some(href) = href {
                             return Ok(Metadata {
                                 link: Link {
-                                    href: href.unwrap(),
+                                    href,
                                     text,
                                     r#type: mime_type,
                                 },
                                 time,
                             });
+                        } else {
+                            Err("href attribute not found, but it is mandatory according to the XSD")?;
                         }
                     }
                     _ => {}
@@ -167,7 +165,7 @@ fn parse_metadata(
             }
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e @ _ => panic!("Unexpected element {:?}", e),
+            e => panic!("Unexpected element {:?}", e),
         }
     }
 }
@@ -193,7 +191,7 @@ fn parse_track(
                     let segment = parse_track_segment(buf, reader)?;
                     segments.push(segment);
                 }
-                e @ _ => panic!("Unexpected element {:?}", e),
+                e => panic!("Unexpected element {:?}", e),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trk" => {
@@ -207,7 +205,7 @@ fn parse_track(
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e @ _ => panic!("Unexpected element {:?}", e),
+            e => panic!("Unexpected element {:?}", e),
         }
     }
 }
@@ -223,7 +221,7 @@ fn parse_track_segment(
         points.push(point);
     }
 
-    return Ok(TrackSegment { points });
+    Ok(TrackSegment { points })
 }
 
 fn parse_trackpoint(
@@ -261,7 +259,7 @@ fn parse_trackpoint(
                     Ok(ext) => extensions = Some(ext),
                     Err(err) => return Some(Err(err)),
                 },
-                e @ _ => panic!("Unexpected element {:?}", e),
+                e => panic!("Unexpected element {:?}", e),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trkpt" => {
@@ -281,7 +279,7 @@ fn parse_trackpoint(
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e @ _ => panic!("Unexpected element {:?}", e),
+            e => panic!("Unexpected element {:?}", e),
         }
     }
 }
@@ -315,7 +313,7 @@ fn parse_trackpoint_extensions(
                 b"cad" => {
                     cadence = Some(read_inner_as_u16(buf, reader)?);
                 }
-                e @ _ => panic!("Unexpected element {:?}", bytes_to_string(e)),
+                e => panic!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.local_name().as_ref() {
                 b"TrackPointExtension" => { /* ignore, just a container element */ }
@@ -330,11 +328,11 @@ fn parse_trackpoint_extensions(
                 }
                 b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */
                 }
-                e @ _ => panic!("Unexpected element {:?}", bytes_to_string(e)),
+                e => panic!("Unexpected element {:?}", bytes_to_string(e)),
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e @ _ => panic!("Unexpected element {:?}", e),
+            e => panic!("Unexpected element {:?}", e),
         }
     }
 }
@@ -380,7 +378,7 @@ fn read_inner_as_string(
 ) -> Result<String, Box<dyn Error>> {
     match reader.read_event_into(buf) {
         Ok(Event::Text(ele)) => Ok(bytes_to_string(ele.as_ref())?),
-        e @ _ => Err(format!(
+        e => Err(format!(
             "Got unexpected XML node, document is probably corrupt: {:?}",
             e
         )

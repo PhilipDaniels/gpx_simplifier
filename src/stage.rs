@@ -161,19 +161,15 @@ impl<'gpx> Stage<'gpx> {
 
     /// Returns the average speed of the stage, in kmh.
     pub fn average_speed_kmh(&self) -> Option<f64> {
-        match self.duration() {
-            Some(dur) => Some(speed_kmh_from_duration(self.distance_metres(), dur)),
-            _ => None,
-        }
+        self.duration()
+            .map(|dur| speed_kmh_from_duration(self.distance_metres(), dur))
     }
 
     /// Returns the average speed, calculated over the distance from
     /// the start of the track to the end of the stage.
     pub fn running_average_speed_kmh(&self) -> Option<f64> {
-        match self.running_duration() {
-            Some(dur) => Some(speed_kmh_from_duration(self.end.running_metres, dur)),
-            _ => None,
-        }
+        self.running_duration()
+            .map(|dur| speed_kmh_from_duration(self.end.running_metres, dur))
     }
 
     /// Returns the total ascent in metres over the stage.
@@ -313,19 +309,15 @@ impl<'gpx> StageList<'gpx> {
     /// Returns the average moving speed over the whole track,
     /// this excludes stopped time.
     pub fn average_moving_speed(&self) -> Option<f64> {
-        match self.total_moving_time() {
-            Some(tmt) => Some(speed_kmh_from_duration(self.distance_metres(), tmt)),
-            None => None,
-        }
+        self.total_moving_time()
+            .map(|tmt| speed_kmh_from_duration(self.distance_metres(), tmt))
     }
 
     /// Returns the overall average moving speed over the whole track,
     /// this includes stopped time.
     pub fn average_overall_speed(&self) -> Option<f64> {
-        match self.duration() {
-            Some(dur) => Some(speed_kmh_from_duration(self.distance_metres(), dur)),
-            None => None,
-        }
+        self.duration()
+            .map(|dur| speed_kmh_from_duration(self.distance_metres(), dur))
     }
 
     /// Returns the point of minimum elevation across all the stages.
@@ -679,7 +671,7 @@ fn get_next_stage<'gpx>(
     assert!(stage.end.time >= stage.start.time);
     assert!(stage.start.index >= stage.track_start_point.index);
 
-    return Some(stage);
+    Some(stage)
 }
 
 /// A Moving stage is ended when we stop. This occurs when we drop below the
@@ -825,14 +817,11 @@ fn find_resume_index(
 
 /// Within a given range of trackpoints, finds the ones with the minimum
 /// and maximum elevation.
-fn find_min_and_max_elevation_points<'gpx>(
-    gpx: &'gpx EnrichedGpx,
+fn find_min_and_max_elevation_points(
+    gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> (
-    Option<&'gpx EnrichedTrackPoint>,
-    Option<&'gpx EnrichedTrackPoint>,
-) {
+) -> (Option<&EnrichedTrackPoint>, Option<&EnrichedTrackPoint>) {
     let mut min = &gpx.points[start_idx];
     let mut max = &gpx.points[start_idx];
 
@@ -856,18 +845,16 @@ fn find_min_and_max_elevation_points<'gpx>(
 
 /// Within a given range of trackpoints, finds the one with the
 /// maximum speed.
-fn find_max_speed<'gpx>(
-    gpx: &'gpx EnrichedGpx,
+fn find_max_speed(
+    gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> Option<&'gpx EnrichedTrackPoint> {
+) -> Option<&EnrichedTrackPoint> {
     let mut max = &gpx.points[start_idx];
 
     for tp in &gpx.points[start_idx..=end_idx] {
-        if tp.speed_kmh.is_none() {
-            // Any missing speed invalidates the calculation.
-            return None;
-        }
+        // Any missing speed invalidates the calculation.
+        tp.speed_kmh?;
 
         if tp.speed_kmh > max.speed_kmh {
             max = tp;
@@ -879,11 +866,11 @@ fn find_max_speed<'gpx>(
 
 /// Within a given range of trackpoints, finds the one with the
 /// maximum heart rate.
-fn find_max_heart_rate<'gpx>(
-    gpx: &'gpx EnrichedGpx,
+fn find_max_heart_rate(
+    gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> Option<&'gpx EnrichedTrackPoint> {
+) -> Option<&EnrichedTrackPoint> {
     let point = &gpx.points[start_idx..=end_idx].iter().max_by(|a, b| {
         let hr1 = a.extensions.as_ref().map(|ex| ex.heart_rate);
         let hr2 = b.extensions.as_ref().map(|ex| ex.heart_rate);
@@ -902,18 +889,18 @@ fn find_max_heart_rate<'gpx>(
 }
 
 /// Finds the min, max and avg air temp over the stage.
-fn find_air_temps<'gpx>(
-    gpx: &'gpx EnrichedGpx,
+fn find_air_temps(
+    gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
 ) -> (
-    Option<&'gpx EnrichedTrackPoint>,
-    Option<&'gpx EnrichedTrackPoint>,
+    Option<&EnrichedTrackPoint>,
+    Option<&EnrichedTrackPoint>,
     Option<f64>,
 ) {
     let mut sum: Option<f64> = None;
-    let mut min: Option<&'gpx EnrichedTrackPoint> = None;
-    let mut max: Option<&'gpx EnrichedTrackPoint> = None;
+    let mut min: Option<&EnrichedTrackPoint> = None;
+    let mut max: Option<&EnrichedTrackPoint> = None;
     let mut count = 0;
 
     for idx in start_idx..=end_idx {
@@ -931,10 +918,7 @@ fn find_air_temps<'gpx>(
         }
     }
 
-    let avg = match sum {
-        Some(s) => Some(s / count as f64),
-        None => None,
-    };
+    let avg = sum.map(|s| s / count as f64);
 
     (min, max, avg)
 }

@@ -60,7 +60,7 @@ pub fn create_summary_xlsx<'gpx>(
 
 /// Writes the summary workbook to file.
 #[time]
-pub fn write_summary_file<'gpx>(
+pub fn write_summary_file(
     summary_filename: &Path,
     mut workbook: Workbook,
 ) -> Result<(), Box<dyn Error>> {
@@ -71,9 +71,9 @@ pub fn write_summary_file<'gpx>(
     Ok(())
 }
 
-fn write_stages<'gpx>(
+fn write_stages(
     ws: &mut Worksheet,
-    stages: &StageList<'gpx>,
+    stages: &StageList,
     avg_temp: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
     if stages.len() == 0 {
@@ -637,7 +637,7 @@ fn write_trackpoints(
                     Hyperlink::No
                 }
             }
-        };
+        };      
 
         write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyp)?;
         write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
@@ -835,7 +835,7 @@ fn write_utc_date_as_local(
 ) -> Result<(), Box<dyn Error>> {
     assert!(utc_date.offset().is_utc());
     let excel_date = date_to_excel_date(to_local_date(utc_date))?;
-    ws.write_with_format(rc.0, rc.1, &excel_date, &&fc.local_date_format())?;
+    ws.write_with_format(rc.0, rc.1, &excel_date, &fc.local_date_format())?;
     Ok(())
 }
 
@@ -856,7 +856,7 @@ fn write_utc_date_as_local_option(
 fn date_to_excel_date(date: OffsetDateTime) -> Result<ExcelDateTime, Box<dyn Error>> {
     let excel_date = ExcelDateTime::from_ymd(
         date.year().try_into()?,
-        date.month().try_into()?,
+        date.month().into(),
         date.day(),
     )?;
 
@@ -915,10 +915,10 @@ fn duration_to_excel_date(duration: Duration) -> Result<ExcelDateTime, Box<dyn E
 
     let mut all_secs: u32 = duration.as_seconds_f64() as u32;
     let hours: u16 = (all_secs / SECONDS_PER_HOUR).try_into()?;
-    all_secs = all_secs - (hours as u32 * SECONDS_PER_HOUR);
+    all_secs -= hours as u32 * SECONDS_PER_HOUR;
 
     let minutes: u8 = (all_secs / SECONDS_PER_MINUTE).try_into()?;
-    all_secs = all_secs - (minutes as u32 * SECONDS_PER_MINUTE);
+    all_secs -= minutes as u32 * SECONDS_PER_MINUTE;
 
     let seconds: u16 = all_secs.try_into()?;
 
@@ -943,7 +943,7 @@ fn write_elevation_data(
 
     match point.ele {
         Some(ele) => {
-            write_metres(ws, &fc, (rc.0, rc.1), ele)?;
+            write_metres(ws, fc, (rc.0, rc.1), ele)?;
         }
         None => {
             write_blank(ws, fc, (rc.0, rc.1))?;
@@ -971,8 +971,8 @@ fn write_max_speed_data(
 
     let point = point.unwrap();
 
-    write_speed_option(ws, &fc, (rc.0, rc.1), point.speed_kmh)?;
-    write_kilometres_running_with_map_hyperlink(ws, &fc, (rc.0, rc.1 + 1), point)?;
+    write_speed_option(ws, fc, (rc.0, rc.1), point.speed_kmh)?;
+    write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 1), point)?;
     write_trackpoint_number(ws, fc, (rc.0, rc.1 + 2), point.index)?;
     Ok(())
 }
@@ -990,18 +990,18 @@ fn write_heart_rate_data(
             .expect("extensions should exist for hr");
 
         if let Some(mhr) = extensions.heart_rate {
-            write_blank(ws, &fc, (rc.0, rc.1))?;
-            write_integer(ws, &fc, (rc.0, rc.1 + 1), mhr as u32)?;
+            write_blank(ws, fc, (rc.0, rc.1))?;
+            write_integer(ws, fc, (rc.0, rc.1 + 1), mhr as u32)?;
             write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 2), point)?;
             write_trackpoint_number(ws, fc, (rc.0, rc.1 + 3), point.index)?;
             return Ok(());
         }
     }
 
-    write_blank(ws, &fc, (rc.0, rc.1))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 1))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 2))?;
-    write_blank(ws, &fc, (rc.0, rc.1 + 3))?;
+    write_blank(ws, fc, (rc.0, rc.1))?;
+    write_blank(ws, fc, (rc.0, rc.1 + 1))?;
+    write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+    write_blank(ws, fc, (rc.0, rc.1 + 3))?;
     Ok(())
 }
 
@@ -1020,9 +1020,9 @@ fn write_temperature_data(
         write_utc_date_as_local_option(ws, fc, (rc.0, rc.1 + 2), min.time)?;
         write_trackpoint_number(ws, fc, (rc.0, rc.1 + 3), min.index)?;
     } else {
-        write_blank(ws, &fc, (rc.0, rc.1 + 1))?;
-        write_blank(ws, &fc, (rc.0, rc.1 + 2))?;
-        write_blank(ws, &fc, (rc.0, rc.1 + 3))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 1))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 3))?;
     }
 
     if let Some(max) = max {
@@ -1030,9 +1030,9 @@ fn write_temperature_data(
         write_utc_date_as_local_option(ws, fc, (rc.0, rc.1 + 5), max.time)?;
         write_trackpoint_number(ws, fc, (rc.0, rc.1 + 6), max.index)?;
     } else {
-        write_blank(ws, &fc, (rc.0, rc.1 + 4))?;
-        write_blank(ws, &fc, (rc.0, rc.1 + 5))?;
-        write_blank(ws, &fc, (rc.0, rc.1 + 6))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 4))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 5))?;
+        write_blank(ws, fc, (rc.0, rc.1 + 6))?;
     }
 
     Ok(())

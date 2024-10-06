@@ -190,6 +190,11 @@ impl<'gpx> Stage<'gpx> {
         self.end.running_ascent_metres
     }
 
+    /// Returns the ascent rate in m/km over the stage.
+    pub fn ascent_rate_per_km(&self) -> Option<f64> {
+        self.ascent_metres().and_then(|a| Some(a / self.distance_km()))
+    }
+
     /// Returns the total descent in metres over the stage.
     pub fn descent_metres(&self) -> Option<f64> {
         match (
@@ -205,6 +210,11 @@ impl<'gpx> Stage<'gpx> {
     /// the beginning of the track.
     pub fn running_descent_metres(&self) -> Option<f64> {
         self.end.running_descent_metres
+    }
+
+    /// Returns the descent rate in m/km over the stage.
+    pub fn descent_rate_per_km(&self) -> Option<f64> {
+        self.descent_metres().and_then(|a| Some(a / self.distance_km()))
     }
 }
 

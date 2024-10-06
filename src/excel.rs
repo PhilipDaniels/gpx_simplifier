@@ -184,28 +184,32 @@ fn write_stages(
     fc.increment_column();
 
     const COL_ASCENT: u16 = COL_AVG_SPEED + 2;
-    write_header_merged(ws, &fc, (0, COL_ASCENT), (0, COL_ASCENT + 1), "Ascent (m)")?;
+    write_header_merged(ws, &fc, (0, COL_ASCENT), (0, COL_ASCENT + 2), "Ascent (m)")?;
     write_header(ws, &fc, (1, COL_ASCENT), "Stage")?;
     write_header(ws, &fc, (1, COL_ASCENT + 1), "Running")?;
+    write_header(ws, &fc, (1, COL_ASCENT + 2), "m/km")?;
     ws.set_column_width(COL_ASCENT, METRES_COLUMN_WIDTH)?;
     ws.set_column_width(COL_ASCENT + 1, METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_ASCENT + 2, METRES_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    const COL_DESCENT: u16 = COL_ASCENT + 2;
+    const COL_DESCENT: u16 = COL_ASCENT + 3;
     write_header_merged(
         ws,
         &fc,
         (0, COL_DESCENT),
-        (0, COL_DESCENT + 1),
+        (0, COL_DESCENT + 2),
         "Descent (m)",
     )?;
     write_header(ws, &fc, (1, COL_DESCENT), "Stage")?;
     write_header(ws, &fc, (1, COL_DESCENT + 1), "Running")?;
+    write_header(ws, &fc, (1, COL_DESCENT + 2), "m/km")?;
     ws.set_column_width(COL_DESCENT, METRES_COLUMN_WIDTH)?;
     ws.set_column_width(COL_DESCENT + 1, METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(COL_DESCENT + 2, METRES_COLUMN_WIDTH)?;
     fc.increment_column();
 
-    const COL_MIN_ELE: u16 = COL_DESCENT + 2;
+    const COL_MIN_ELE: u16 = COL_DESCENT + 3;
     write_header_merged(
         ws,
         &fc,
@@ -374,6 +378,7 @@ fn write_stages(
                 (row, COL_ASCENT + 1),
                 stage.running_ascent_metres(),
             )?;
+            write_metres_option(ws, &fc, (row, COL_ASCENT + 2), stage.ascent_rate_per_km())?;
             fc.increment_column();
             write_metres_option(ws, &fc, (row, COL_DESCENT), stage.descent_metres())?;
             write_metres_option(
@@ -382,6 +387,7 @@ fn write_stages(
                 (row, COL_DESCENT + 1),
                 stage.running_descent_metres(),
             )?;
+            write_metres_option(ws, &fc, (row, COL_DESCENT + 2), stage.descent_rate_per_km())?;
             fc.increment_column();
             write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stage.min_elevation)?;
             fc.increment_column();
@@ -396,7 +402,13 @@ fn write_stages(
         }
 
         fc.increment_column();
-        write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stage.max_heart_rate, stage.avg_heart_rate)?;
+        write_heart_rate_data(
+            ws,
+            &fc,
+            (row, COL_HEART_RATE),
+            stage.max_heart_rate,
+            stage.avg_heart_rate,
+        )?;
 
         fc.increment_column();
         write_temperature_data(
@@ -472,6 +484,14 @@ fn write_stages(
     fc.increment_column();
     write_blank(ws, &fc, (row, COL_ASCENT))?;
     write_metres_option(ws, &fc, (row, COL_ASCENT + 1), stages.total_ascent_metres())?;
+    write_metres_option(
+        ws,
+        &fc,
+        (row, COL_ASCENT + 2),
+        stages
+            .total_ascent_metres()
+            .and_then(|a| Some(a / stages.distance_km())),
+    )?;
     fc.increment_column();
     write_blank(ws, &fc, (row, COL_DESCENT))?;
     write_metres_option(
@@ -480,6 +500,14 @@ fn write_stages(
         (row, COL_DESCENT + 1),
         stages.total_descent_metres(),
     )?;
+    write_metres_option(
+        ws,
+        &fc,
+        (row, COL_DESCENT + 2),
+        stages
+            .total_descent_metres()
+            .and_then(|a| Some(a / stages.distance_km())),
+    )?;
     fc.increment_column();
     write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stages.min_elevation())?;
     fc.increment_column();
@@ -487,7 +515,13 @@ fn write_stages(
     fc.increment_column();
     write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
     fc.increment_column();
-    write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stages.max_heart_rate(), avg_heart_rate)?;
+    write_heart_rate_data(
+        ws,
+        &fc,
+        (row, COL_HEART_RATE),
+        stages.max_heart_rate(),
+        avg_heart_rate,
+    )?;
     fc.increment_column();
     write_temperature_data(
         ws,
@@ -511,7 +545,6 @@ fn write_stages(
         (row, COL_TRACKPOINTS + 2),
         (stages.last_point().index - stages.first_point().index + 1).try_into()?,
     )?;
-
 
     ws.set_freeze_panes(0, 2)?;
 
@@ -642,7 +675,7 @@ fn write_trackpoints(
                     Hyperlink::No
                 }
             }
-        };      
+        };
 
         write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyp)?;
         write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
@@ -859,11 +892,8 @@ fn write_utc_date_as_local_option(
 }
 
 fn date_to_excel_date(date: OffsetDateTime) -> Result<ExcelDateTime, Box<dyn Error>> {
-    let excel_date = ExcelDateTime::from_ymd(
-        date.year().try_into()?,
-        date.month().into(),
-        date.day(),
-    )?;
+    let excel_date =
+        ExcelDateTime::from_ymd(date.year().try_into()?, date.month().into(), date.day())?;
 
     // Clamp these values to the values Excel will take.
     // Issue a warning if out of bounds.

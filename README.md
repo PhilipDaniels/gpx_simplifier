@@ -83,14 +83,13 @@ Or build from source using cargo.
 # TODO
 - Moving %
 - Ascent rate (m/km)
-- Use helpers for air_temp and heart_rate everywhere. See use of flat_map.
-- Stopped -> Controlled
 - Find micro-stops
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
-
+- Track splitting
+- Waypoint processing
 
 
 # Bugs

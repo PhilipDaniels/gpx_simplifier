@@ -88,11 +88,15 @@ pub struct Extensions {
 impl Gpx {
     /// Returns the total number of points across all tracks and segments.
     pub fn num_points(&self) -> usize {
-        self.tracks.iter()
-            .map(|track|
-                    track.segments.iter().map(
-                        |segment| segment.points.len()
-                    ).sum::<usize>())
+        self.tracks
+            .iter()
+            .map(|track| {
+                track
+                    .segments
+                    .iter()
+                    .map(|segment| segment.points.len())
+                    .sum::<usize>()
+            })
             .sum()
     }
 
@@ -153,12 +157,29 @@ impl EnrichedGpx {
         self.points.len() - 1
     }
 
-
-    /// Returns the average temperature across all the track.
+    /// Returns the average temperature across the entire track.
     pub fn avg_temperature(&self) -> Option<f64> {
-        let sum: f64 = self.points.iter()
+        let sum: f64 = self
+            .points
+            .iter()
             .flat_map(|p| p.extensions.as_ref())
             .flat_map(|ext| ext.air_temp)
+            .sum();
+
+        if sum == 0.0 {
+            None
+        } else {
+            Some(sum / self.points.len() as f64)
+        }
+    }
+
+    /// Returns the average heart rate across the entire track.
+    pub fn avg_heart_rate(&self) -> Option<f64> {
+        let sum: f64 = self
+            .points
+            .iter()
+            .flat_map(|p| p.extensions.as_ref())
+            .flat_map(|ext| ext.heart_rate.and_then(|hr| Some(hr as f64)))
             .sum();
 
         if sum == 0.0 {
@@ -172,7 +193,7 @@ impl EnrichedGpx {
 /// A TrackPoint with lots of extra stuff calculated. We need the extras
 /// to find the stages.
 #[derive(Debug)]
-pub struct  EnrichedTrackPoint {
+pub struct EnrichedTrackPoint {
     /// The index of the original trackpoint we used to create this value.
     pub index: usize,
     /// The latitude, read from the "lat" attribute.
@@ -187,7 +208,6 @@ pub struct  EnrichedTrackPoint {
     pub extensions: Option<Extensions>,
 
     // All the below fields are the 'enriched' ones.
-
     /// The amount of time between this trackpoint and the previous one.
     pub delta_time: Option<Duration>,
     /// The distance between this trackpoint and the previous one.
@@ -238,7 +258,7 @@ impl EnrichedTrackPoint {
     ///
     /// Note that we can't work out the start time for the first point
     /// since it has no delta_time.
-    /// 
+    ///
     /// It is important to use start_time() when calculating things like
     /// durations of stages.
     pub fn start_time(&self) -> Option<OffsetDateTime> {
@@ -248,7 +268,7 @@ impl EnrichedTrackPoint {
 
         match (self.time, self.delta_time) {
             (Some(t), Some(dt)) => Some(t - dt),
-            _ => None
+            _ => None,
         }
     }
 
@@ -283,9 +303,8 @@ impl From<Gpx> for EnrichedGpx {
             metadata: value.metadata,
             track_name: value.tracks[0].name.clone(),
             track_type: value.tracks[0].r#type.clone(),
-            points: value
-                .tracks[0]
-                .segments[0].points
+            points: value.tracks[0].segments[0]
+                .points
                 .iter()
                 .enumerate()
                 .map(|(idx, tp)| EnrichedTrackPoint::new(idx, tp))

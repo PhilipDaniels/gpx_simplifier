@@ -4,7 +4,7 @@
 //! other metrics fairly easily.
 
 use core::{fmt, slice};
-use std::{collections::HashSet, ops::Index};
+use std::{collections::HashSet, ops::Index, usize};
 
 use geo::{GeodesicDistance, Point};
 use log::{debug, info, warn};
@@ -54,6 +54,7 @@ pub struct Stage<'gpx> {
     pub min_elevation: Option<&'gpx EnrichedTrackPoint>,
     pub max_elevation: Option<&'gpx EnrichedTrackPoint>,
     pub max_speed: Option<&'gpx EnrichedTrackPoint>,
+    pub avg_heart_rate: Option<f64>,
     pub max_heart_rate: Option<&'gpx EnrichedTrackPoint>,
     pub avg_air_temp: Option<f64>,
     pub min_air_temp: Option<&'gpx EnrichedTrackPoint>,
@@ -388,18 +389,20 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the point of maximum heart rate across all the stages.
     pub fn max_heart_rate(&self) -> Option<&EnrichedTrackPoint> {
-        None
+        self
+            .0
+            .iter()
+            .filter_map(|s| s.max_heart_rate)
+            .max_by(|a, b| a.heart_rate().unwrap().cmp(&b.heart_rate().unwrap()))
     }
 
     /// Returns the point of minimum temperature across all the stages.
     pub fn min_temperature(&self) -> Option<&EnrichedTrackPoint> {
-        let min_temp = self
+        self
             .0
             .iter()
             .filter_map(|s| s.min_air_temp)
-            .min_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()));
-
-        min_temp
+            .min_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
     }
 
     /// Returns the point of maximum temperature across all the stages.
@@ -647,7 +650,7 @@ fn get_next_stage<'gpx>(
     );
 
     let (min_elevation, max_elevation) = find_min_and_max_elevation_points(gpx, start_idx, end_idx);
-    let max_heart_rate = find_max_heart_rate(gpx, start_idx, end_idx);
+    let (max_heart_rate, avg_heart_rate) = find_heart_rates(gpx, start_idx, end_idx);
     let (min_air_temp, max_air_temp, avg_air_temp) = find_air_temps(gpx, start_idx, end_idx);
 
     let stage = Stage {
@@ -658,6 +661,7 @@ fn get_next_stage<'gpx>(
         min_elevation,
         max_elevation,
         max_speed: find_max_speed(gpx, start_idx, end_idx),
+        avg_heart_rate,
         max_heart_rate,
         min_air_temp,
         max_air_temp,
@@ -864,20 +868,36 @@ fn find_max_speed(
     Some(max)
 }
 
-/// Within a given range of trackpoints, finds the one with the
-/// maximum heart rate.
-fn find_max_heart_rate(
+/// Within a given range of trackpoints, finds the point of
+/// maximum heart rate and the average heart rate.
+fn find_heart_rates(
     gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> Option<&EnrichedTrackPoint> {
-    let point = &gpx.points[start_idx..=end_idx].iter().max_by(|a, b| {
-        let hr1 = a.extensions.as_ref().map(|ex| ex.heart_rate);
-        let hr2 = b.extensions.as_ref().map(|ex| ex.heart_rate);
-        hr1.cmp(&hr2)
-    });
+) -> (Option<&EnrichedTrackPoint>, Option<f64>) {
 
-    point.filter(|p| p.extensions.is_some())
+    let mut sum: f64 = 0.0;
+    let mut count = 0;
+    let mut max: Option<&EnrichedTrackPoint> = None;
+
+    for point in &gpx.points[start_idx..=end_idx] {
+        if let Some(hr) = point.heart_rate() {
+            sum += hr as f64;
+            count += 1;
+
+            if max.is_none() || hr > max.unwrap().heart_rate().unwrap() {
+                max = Some(point);
+            }
+        }
+    }
+
+    let avg = if sum == 0.0 {
+        None
+    } else {
+        Some(sum / count as f64)
+    };
+
+    (max, avg)
 }
 
 /// Finds the min, max and avg air temp over the stage.

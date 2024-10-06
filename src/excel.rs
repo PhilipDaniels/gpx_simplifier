@@ -43,7 +43,8 @@ pub fn create_summary_xlsx<'gpx>(
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
     let avg_temp = gpx.avg_temperature();
-    write_stages(stages_ws, stages, avg_temp)?;
+    let avg_heart_rate = gpx.avg_heart_rate();
+    write_stages(stages_ws, stages, avg_temp, avg_heart_rate)?;
 
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
@@ -75,6 +76,7 @@ fn write_stages(
     ws: &mut Worksheet,
     stages: &StageList,
     avg_temp: Option<f64>,
+    avg_heart_rate: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
     if stages.len() == 0 {
         // TODO: Write something.
@@ -394,7 +396,7 @@ fn write_stages(
         }
 
         fc.increment_column();
-        write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stage.max_heart_rate)?;
+        write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stage.max_heart_rate, stage.avg_heart_rate)?;
 
         fc.increment_column();
         write_temperature_data(
@@ -485,7 +487,7 @@ fn write_stages(
     fc.increment_column();
     write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
     fc.increment_column();
-    write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stages.max_heart_rate())?;
+    write_heart_rate_data(ws, &fc, (row, COL_HEART_RATE), stages.max_heart_rate(), avg_heart_rate)?;
     fc.increment_column();
     write_temperature_data(
         ws,
@@ -984,16 +986,13 @@ fn write_heart_rate_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
-    point: Option<&EnrichedTrackPoint>,
+    max_hr_point: Option<&EnrichedTrackPoint>,
+    avg_hr: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(point) = point {
-        let extensions = point
-            .extensions
-            .as_ref()
-            .expect("extensions should exist for hr");
+    write_f64_option(ws, fc, rc, avg_hr)?;
 
-        if let Some(mhr) = extensions.heart_rate {
-            write_blank(ws, fc, (rc.0, rc.1))?;
+    if let Some(point) = max_hr_point {
+        if let Some(mhr) = point.heart_rate() {
             write_integer(ws, fc, (rc.0, rc.1 + 1), mhr as u32)?;
             write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 2), point)?;
             write_trackpoint_number(ws, fc, (rc.0, rc.1 + 3), point.index)?;
@@ -1001,7 +1000,6 @@ fn write_heart_rate_data(
         }
     }
 
-    write_blank(ws, fc, (rc.0, rc.1))?;
     write_blank(ws, fc, (rc.0, rc.1 + 1))?;
     write_blank(ws, fc, (rc.0, rc.1 + 2))?;
     write_blank(ws, fc, (rc.0, rc.1 + 3))?;

@@ -98,6 +98,9 @@ fn write_stages2(
     output_end_time(ws, &mut fc, stages)?;
     output_duration(ws, &mut fc, stages)?;
     output_distance(ws, &mut fc, stages)?;
+    output_average_speed(ws, &mut fc, stages)?;
+    output_ascent(ws, &mut fc, stages)?;
+    output_descent(ws, &mut fc, stages)?;
 
     Ok(())
 }
@@ -271,6 +274,110 @@ fn output_distance(
     Ok(())
 }
 
+fn output_average_speed(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(
+        ws,
+        &fc,
+        (0, fc.col()),
+        (0, fc.col() + 1),
+        "Avg Speed (km/h)",
+    )?;
+    write_headers(ws, &fc, &["Stage", "Running"])?;
+    ws.set_column_width(fc.col(), SPEED_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col() + 1, SPEED_COLUMN_WIDTH)?;
+
+    for stage in stages.iter() {
+        if stage.stage_type == StageType::Moving {
+            write_speed_option(ws, &fc, (fc.row(), fc.col()), stage.average_speed_kmh())?;
+            write_speed_option(
+                ws,
+                &fc,
+                (fc.row(), fc.col() + 1),
+                stage.running_average_speed_kmh(),
+            )?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(2);
+    Ok(())
+}
+
+fn output_ascent(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(ws, &fc, (0, fc.col()), (0, fc.col() + 2), "Ascent (m)")?;
+    write_headers(ws, &fc, &["Stage", "Running", "m/km"])?;
+    ws.set_column_width(fc.col(), METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col() + 1, METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col() + 2, METRES_COLUMN_WIDTH)?;
+
+    for stage in stages.iter() {
+        if stage.stage_type == StageType::Moving {
+            write_metres_option(ws, &fc, (fc.row(), fc.col()), stage.ascent_metres())?;
+            write_metres_option(
+                ws,
+                &fc,
+                (fc.row(), fc.col() + 1),
+                stage.running_ascent_metres(),
+            )?;
+            write_metres_option(
+                ws,
+                &fc,
+                (fc.row(), fc.col() + 2),
+                stage.ascent_rate_per_km(),
+            )?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(3);
+    Ok(())
+}
+
+fn output_descent(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(ws, &fc, (0, fc.col()), (0, fc.col() + 2), "Descent (m)")?;
+    write_headers(ws, &fc, &["Stage", "Running", "m/km"])?;
+    ws.set_column_width(fc.col(), METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col() + 1, METRES_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col() + 2, METRES_COLUMN_WIDTH)?;
+
+    for stage in stages.iter() {
+        if stage.stage_type == StageType::Moving {
+            write_metres_option(ws, &fc, (fc.row(), fc.col()), stage.descent_metres())?;
+            write_metres_option(
+                ws,
+                &fc,
+                (fc.row(), fc.col() + 1),
+                stage.running_descent_metres(),
+            )?;
+            write_metres_option(
+                ws,
+                &fc,
+                (fc.row(), fc.col() + 2),
+                stage.descent_rate_per_km(),
+            )?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(3);
+    Ok(())
+}
+
 fn write_stages(
     ws: &mut Worksheet,
     stages: &StageList,
@@ -287,45 +394,8 @@ fn write_stages(
     const COL_DURATION: u16 = COL_END_TIME + 2;
     const COL_DISTANCE: u16 = COL_DURATION + 2;
     const COL_AVG_SPEED: u16 = COL_DISTANCE + 2;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_AVG_SPEED),
-        (0, COL_AVG_SPEED + 1),
-        "Avg Speed (kmh)",
-    )?;
-    //write_header(ws, &fc, (1, COL_AVG_SPEED), "Stage")?;
-    //write_header(ws, &fc, (1, COL_AVG_SPEED + 1), "Running")?;
-    ws.set_column_width(COL_AVG_SPEED, SPEED_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_AVG_SPEED + 1, SPEED_COLUMN_WIDTH)?;
-    fc.increment_column();
-
     const COL_ASCENT: u16 = COL_AVG_SPEED + 2;
-    write_header_merged(ws, &fc, (0, COL_ASCENT), (0, COL_ASCENT + 2), "Ascent (m)")?;
-    //write_header(ws, &fc, (1, COL_ASCENT), "Stage")?;
-    //write_header(ws, &fc, (1, COL_ASCENT + 1), "Running")?;
-    //write_header(ws, &fc, (1, COL_ASCENT + 2), "m/km")?;
-    ws.set_column_width(COL_ASCENT, METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_ASCENT + 1, METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_ASCENT + 2, METRES_COLUMN_WIDTH)?;
-    fc.increment_column();
-
     const COL_DESCENT: u16 = COL_ASCENT + 3;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_DESCENT),
-        (0, COL_DESCENT + 2),
-        "Descent (m)",
-    )?;
-    //write_header(ws, &fc, (1, COL_DESCENT), "Stage")?;
-    //write_header(ws, &fc, (1, COL_DESCENT + 1), "Running")?;
-    //write_header(ws, &fc, (1, COL_DESCENT + 2), "m/km")?;
-    ws.set_column_width(COL_DESCENT, METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_DESCENT + 1, METRES_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_DESCENT + 2, METRES_COLUMN_WIDTH)?;
-    fc.increment_column();
-
     const COL_MIN_ELE: u16 = COL_DESCENT + 3;
     write_header_merged(
         ws,
@@ -421,32 +491,6 @@ fn write_stages(
     let mut row = 2;
     for (idx, stage) in stages.iter().enumerate() {
         if stage.stage_type == StageType::Moving {
-            write_speed_option(ws, &fc, (row, COL_AVG_SPEED), stage.average_speed_kmh())?;
-            write_speed_option(
-                ws,
-                &fc,
-                (row, COL_AVG_SPEED + 1),
-                stage.running_average_speed_kmh(),
-            )?;
-            fc.increment_column();
-            write_metres_option(ws, &fc, (row, COL_ASCENT), stage.ascent_metres())?;
-            write_metres_option(
-                ws,
-                &fc,
-                (row, COL_ASCENT + 1),
-                stage.running_ascent_metres(),
-            )?;
-            write_metres_option(ws, &fc, (row, COL_ASCENT + 2), stage.ascent_rate_per_km())?;
-            fc.increment_column();
-            write_metres_option(ws, &fc, (row, COL_DESCENT), stage.descent_metres())?;
-            write_metres_option(
-                ws,
-                &fc,
-                (row, COL_DESCENT + 1),
-                stage.running_descent_metres(),
-            )?;
-            write_metres_option(ws, &fc, (row, COL_DESCENT + 2), stage.descent_rate_per_km())?;
-            fc.increment_column();
             write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stage.min_elevation)?;
             fc.increment_column();
             write_elevation_data(ws, &fc, (row, COL_MAX_ELE), stage.max_elevation)?;

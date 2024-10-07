@@ -44,10 +44,6 @@ pub fn create_summary_xlsx<'gpx>(
     stages_ws.set_name("Stages")?;
     write_stages2(stages_ws, gpx, stages)?;
 
-    // let avg_temp = gpx.avg_temperature();
-    // let avg_heart_rate = gpx.avg_heart_rate();
-    // write_stages(stages_ws, stages, avg_temp, avg_heart_rate)?;
-
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
     tp_ws.set_name("Track Points")?;
@@ -98,6 +94,8 @@ fn write_stages2(
 
     ws.set_freeze_panes(0, 2)?;
     ws.set_freeze_panes(2, 0)?;
+    let avg_heart_rate = gpx.avg_heart_rate();
+    let avg_temp = gpx.avg_temperature();
 
     output_stage_number(ws, &mut fc, stages)?;
     output_stage_type(ws, &mut fc, stages)?;
@@ -112,8 +110,8 @@ fn write_stages2(
     output_min_elevation(ws, &mut fc, stages)?;
     output_max_elevation(ws, &mut fc, stages)?;
     output_max_speed(ws, &mut fc, stages)?;
-    output_heart_rate(ws, &mut fc, stages)?;
-    output_temperature(ws, &mut fc, stages)?;
+    output_heart_rate(ws, &mut fc, stages, avg_heart_rate)?;
+    output_temperature(ws, &mut fc, stages, avg_temp)?;
     output_track_points(ws, &mut fc, stages)?;
 
     Ok(())
@@ -178,6 +176,9 @@ fn output_stage_location(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_string_bold(ws, fc, fc.offset(3), "SUMMARY")?;
+
     fc.next_column(4);
     Ok(())
 }
@@ -206,6 +207,10 @@ fn output_start_time(
 
         fc.increment_row();
     }
+
+    fc.start_summary_row();
+    write_utc_date_option(ws, fc, fc.rowcol(), stages.start_time())?;
+    write_utc_date_as_local_option(ws, fc, fc.offset(1), stages.start_time())?;
 
     fc.next_column(2);
     Ok(())
@@ -236,6 +241,10 @@ fn output_end_time(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_utc_date_option(ws, fc, fc.rowcol(), stages.end_time())?;
+    write_utc_date_as_local_option(ws, fc, fc.offset(1), stages.end_time())?;
+
     fc.next_column(2);
     Ok(())
 }
@@ -255,6 +264,26 @@ fn output_duration(
         write_duration_option(ws, fc, fc.offset(1), stage.running_duration())?;
         fc.increment_row();
     }
+
+    fc.start_summary_row();
+    write_string(ws, fc, "Total")?;
+    write_duration_option(ws, fc, fc.offset(1), stages.duration())?;
+
+    write_string2(ws, fc, (fc.row() + 1, fc.col()), "Stopped")?;
+    write_duration_option(
+        ws,
+        fc,
+        (fc.row() + 1, fc.col() + 1),
+        stages.total_stopped_time(),
+    )?;
+
+    write_string2(ws, fc, (fc.row() + 2, fc.col()), "Moving")?;
+    write_duration_option(
+        ws,
+        fc,
+        (fc.row() + 2, fc.col() + 1),
+        stages.total_moving_time(),
+    )?;
 
     fc.next_column(2);
     Ok(())
@@ -281,6 +310,10 @@ fn output_distance(
 
         fc.increment_row();
     }
+
+    fc.start_summary_row();
+    write_blank(ws, fc, fc.rowcol())?;
+    write_kilometres(ws, fc, fc.offset(1), stages.distance_km())?;
 
     fc.next_column(2);
     Ok(())
@@ -314,6 +347,17 @@ fn output_average_speed(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_string(ws, fc, "Overall")?;
+    write_speed_option(ws, fc, fc.offset(1), stages.average_overall_speed())?;
+    write_string2(ws, fc, (fc.row() + 1, fc.col()), "Moving")?;
+    write_speed_option(
+        ws,
+        fc,
+        (fc.row() + 1, fc.col() + 1),
+        stages.average_moving_speed(),
+    )?;
+
     fc.next_column(2);
     Ok(())
 }
@@ -342,6 +386,14 @@ fn output_ascent(
 
         fc.increment_row();
     }
+
+    fc.start_summary_row();
+    write_blank(ws, fc, fc.rowcol())?;
+    write_metres_option(ws, fc, fc.offset(1), stages.total_ascent_metres())?;
+    let rate = stages
+        .total_ascent_metres()
+        .and_then(|a| Some(a / stages.distance_km()));
+    write_metres_option(ws, fc, fc.offset(2), rate)?;
 
     fc.next_column(3);
     Ok(())
@@ -372,6 +424,14 @@ fn output_descent(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_blank(ws, fc, fc.rowcol())?;
+    write_metres_option(ws, fc, fc.offset(1), stages.total_descent_metres())?;
+    let rate = stages
+        .total_descent_metres()
+        .and_then(|a| Some(a / stages.distance_km()));
+    write_metres_option(ws, fc, fc.offset(2), rate)?;
+
     fc.next_column(3);
     Ok(())
 }
@@ -397,6 +457,9 @@ fn output_min_elevation(
 
         fc.increment_row();
     }
+
+    fc.start_summary_row();
+    write_elevation_data(ws, fc, stages.min_elevation())?;
 
     fc.next_column(3);
     Ok(())
@@ -424,6 +487,9 @@ fn output_max_elevation(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_elevation_data(ws, fc, stages.max_elevation())?;
+
     fc.next_column(3);
     Ok(())
 }
@@ -450,6 +516,9 @@ fn output_max_speed(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_max_speed_data(ws, fc, stages.max_speed())?;
+
     fc.next_column(3);
     Ok(())
 }
@@ -458,6 +527,7 @@ fn output_heart_rate(
     ws: &mut Worksheet,
     fc: &mut FormatControl,
     stages: &StageList,
+    avg_heart_rate: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
     write_header_merged(ws, fc, (0, fc.col()), (0, fc.col() + 3), "Heart Rate")?;
     write_headers(ws, fc, &["Avg", "Max", "Distance (km)", "Point"])?;
@@ -468,6 +538,9 @@ fn output_heart_rate(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_heart_rate_data(ws, fc, stages.max_heart_rate(), avg_heart_rate)?;
+
     fc.next_column(4);
     Ok(())
 }
@@ -476,6 +549,7 @@ fn output_temperature(
     ws: &mut Worksheet,
     fc: &mut FormatControl,
     stages: &StageList,
+    avg_temp: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
     write_header_merged(ws, fc, (0, fc.col()), (0, fc.col() + 6), "Temp °C")?;
     write_headers(
@@ -506,6 +580,15 @@ fn output_temperature(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_temperature_data(
+        ws,
+        fc,
+        stages.min_temperature(),
+        stages.max_temperature(),
+        avg_temp,
+    )?;
+
     fc.next_column(7);
     Ok(())
 }
@@ -531,127 +614,17 @@ fn output_track_points(
         fc.increment_row();
     }
 
+    fc.start_summary_row();
+    write_trackpoint_number(ws, fc, fc.rowcol(), stages.first_point().index)?;
+    write_trackpoint_number(ws, fc, fc.offset(1), stages.last_point().index)?;
+    write_integer2(
+        ws,
+        fc,
+        fc.offset(2),
+        (stages.last_point().index - stages.first_point().index + 1).try_into()?,
+    )?;
+
     fc.next_column(3);
-    Ok(())
-}
-
-fn write_stages(
-    ws: &mut Worksheet,
-    stages: &StageList,
-    avg_temp: Option<f64>,
-    avg_heart_rate: Option<f64>,
-) -> Result<(), Box<dyn Error>> {
-    // Now write an overall summary row.
-    // let mut fc = FormatControl::new();
-    // row += 2;
-    // write_string_bold(ws, &fc, (row, COL_START_TIME - 1), "SUMMARY")?;
-    // fc.increment_column();
-    // write_utc_date_option(ws, &fc, (row, COL_START_TIME), stages.start_time())?;
-    // write_utc_date_as_local_option(ws, &fc, (row, COL_START_TIME + 1), stages.start_time())?;
-    // fc.increment_column();
-    // write_utc_date_option(ws, &fc, (row, COL_END_TIME), stages.end_time())?;
-    // write_utc_date_as_local_option(ws, &fc, (row, COL_END_TIME + 1), stages.end_time())?;
-    // fc.increment_column();
-    // //write_string(ws, &fc, (row, COL_DURATION), "Total")?;
-    // write_duration_option(ws, &fc, (row, COL_DURATION + 1), stages.duration())?;
-    // //write_string(ws, &fc, (row + 1, COL_DURATION), "Stopped")?;
-    // write_duration_option(
-    //     ws,
-    //     &fc,
-    //     (row + 1, COL_DURATION + 1),
-    //     stages.total_stopped_time(),
-    // )?;
-    // //write_string(ws, &fc, (row + 2, COL_DURATION), "Moving")?;
-    // write_duration_option(
-    //     ws,
-    //     &fc,
-    //     (row + 2, COL_DURATION + 1),
-    //     stages.total_moving_time(),
-    // )?;
-    // fc.increment_column();
-    // write_blank(ws, &fc, (row, COL_DISTANCE))?;
-    // write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), stages.distance_km())?;
-    // fc.increment_column();
-    // //write_string(ws, &fc, (row, COL_AVG_SPEED), "Overall")?;
-    // write_speed_option(
-    //     ws,
-    //     &fc,
-    //     (row, COL_AVG_SPEED + 1),
-    //     stages.average_overall_speed(),
-    // )?;
-    // //write_string(ws, &fc, (row + 1, COL_AVG_SPEED), "Moving")?;
-    // write_speed_option(
-    //     ws,
-    //     &fc,
-    //     (row + 1, COL_AVG_SPEED + 1),
-    //     stages.average_moving_speed(),
-    // )?;
-    // fc.increment_column();
-    // write_blank(ws, &fc, (row, COL_ASCENT))?;
-    // write_metres_option(ws, &fc, (row, COL_ASCENT + 1), stages.total_ascent_metres())?;
-    // write_metres_option(
-    //     ws,
-    //     &fc,
-    //     (row, COL_ASCENT + 2),
-    //     stages
-    //         .total_ascent_metres()
-    //         .and_then(|a| Some(a / stages.distance_km())),
-    // )?;
-    // fc.increment_column();
-    // write_blank(ws, &fc, (row, COL_DESCENT))?;
-    // write_metres_option(
-    //     ws,
-    //     &fc,
-    //     (row, COL_DESCENT + 1),
-    //     stages.total_descent_metres(),
-    // )?;
-    // write_metres_option(
-    //     ws,
-    //     &fc,
-    //     (row, COL_DESCENT + 2),
-    //     stages
-    //         .total_descent_metres()
-    //         .and_then(|a| Some(a / stages.distance_km())),
-    // )?;
-    // fc.increment_column();
-    // write_elevation_data(ws, &fc, stages.min_elevation())?;
-    // fc.increment_column();
-    // write_elevation_data(ws, &fc, stages.max_elevation())?;
-    // fc.increment_column();
-    // //write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
-    // fc.increment_column();
-    // // write_heart_rate_data(
-    // //     ws,
-    // //     &fc,
-    // //     (row, COL_HEART_RATE),
-    // //     stages.max_heart_rate(),
-    // //     avg_heart_rate,
-    // // )?;
-    // fc.increment_column();
-    // write_temperature_data(
-    //     ws,
-    //     &fc,
-    //     stages.min_temperature(),
-    //     stages.max_temperature(),
-    //     avg_temp,
-    // )?;
-    // fc.increment_column();
-    // write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stages.first_point().index)?;
-    // write_trackpoint_number(
-    //     ws,
-    //     &fc,
-    //     (row, COL_TRACKPOINTS + 1),
-    //     stages.last_point().index,
-    // )?;
-    // // write_integer(
-    // //     ws,
-    // //     &fc,
-    // //     (row, COL_TRACKPOINTS + 2),
-    // //     (stages.last_point().index - stages.first_point().index + 1).try_into()?,
-    // // )?;
-
-    
-
     Ok(())
 }
 
@@ -986,7 +959,18 @@ fn write_elevation_data(
 
 /// Writes a string right aligned.
 fn write_string(ws: &mut Worksheet, fc: &FormatControl, value: &str) -> Result<(), Box<dyn Error>> {
-    ws.write_string_with_format(fc.row(), fc.col(), value, &fc.string_format())?;
+    write_string2(ws, fc, fc.rowcol(), value)?;
+    Ok(())
+}
+
+/// Writes a string right aligned.
+fn write_string2(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: &str,
+) -> Result<(), Box<dyn Error>> {
+    ws.write_string_with_format(rc.0, rc.1, value, &fc.string_format())?;
     Ok(())
 }
 
@@ -1359,7 +1343,8 @@ fn write_speed_option(
 }
 
 struct FormatControl {
-    current_column_color: Color,
+    always_set_background_color: bool,
+    current_background_color: Color,
     row: u32,
     col: u16,
 }
@@ -1371,9 +1356,10 @@ impl FormatControl {
 
     fn new() -> Self {
         Self {
-            current_column_color: Self::COLOR1,
+            current_background_color: Self::COLOR1,
             col: 0,
             row: Self::STARTING_ROW,
+            always_set_background_color: false,
         }
     }
 
@@ -1385,11 +1371,14 @@ impl FormatControl {
         self.row
     }
 
+    /// Returns the current row and column as a tuple.
     fn rowcol(&self) -> (u32, u16) {
         (self.row, self.col)
     }
 
-    /// Same as rowcol(), but with a column offset applied.
+    /// Returns the current row and column as a tuple, but
+    /// with an offset applied to the column.
+    /// TODO: Create a (r,c) offset method.
     fn offset(&self, offset: u16) -> (u32, u16) {
         (self.row, self.col + offset)
     }
@@ -1398,17 +1387,25 @@ impl FormatControl {
         self.row += 1;
     }
 
+    /// This is used to get to a good row to show the summary.
+    /// We want the banding colours to be "on" for this row.
+    fn start_summary_row(&mut self) {
+        self.increment_row();
+        self.increment_row();
+        self.always_set_background_color = true;
+    }
+
     // TODO: Remove this. Not needed now we are going vertically.
     fn reset_column(&mut self) {
-        self.current_column_color = Self::COLOR1;
+        self.current_background_color = Self::COLOR1;
     }
 
     // TODO: Remove this function when no callers.
     fn increment_column(&mut self) {
-        if self.current_column_color == Self::COLOR1 {
-            self.current_column_color = Self::COLOR2;
+        if self.current_background_color == Self::COLOR1 {
+            self.current_background_color = Self::COLOR2;
         } else {
-            self.current_column_color = Self::COLOR1;
+            self.current_background_color = Self::COLOR1;
         }
     }
 
@@ -1416,6 +1413,7 @@ impl FormatControl {
         self.increment_column();
         self.col += col_increment;
         self.row = Self::STARTING_ROW;
+        self.always_set_background_color = false;
     }
 
     fn minor_header_format(&self) -> Format {
@@ -1426,74 +1424,78 @@ impl FormatControl {
             .set_border_color(Color::Gray)
             .set_align(FormatAlign::Center)
             .set_pattern(FormatPattern::Solid)
-            .set_background_color(self.current_column_color)
+            .set_background_color(self.current_background_color)
     }
 
     fn speed_format(&self) -> Format {
         let format = Format::new().set_num_format("0.##");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn lat_lon_format(&self) -> Format {
         let format = Format::new().set_num_format("0.000000");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn integer_format(&self) -> Format {
         let format = Format::new().set_num_format("0");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn float_format(&self) -> Format {
         let format = Format::new().set_num_format("0.0");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn string_format(&self) -> Format {
         let format = Format::new().set_align(FormatAlign::Right);
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn location_format(&self) -> Format {
         let format = Format::new().set_align(FormatAlign::Left);
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn utc_date_format(&self) -> Format {
         let format = Format::new().set_num_format("yyyy-mm-ddThh:mm:ssZ");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn local_date_format(&self) -> Format {
         let format = Format::new().set_num_format("yyyy-mm-dd hh:mm:ss");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn duration_format(&self) -> Format {
         let format = Format::new().set_num_format("hh:mm:ss");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn metres_format(&self) -> Format {
         let format = Format::new().set_num_format("0.##");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn temperature_format(&self) -> Format {
         let format = Format::new().set_num_format("0.#");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
     }
 
     fn kilometres_format(&self) -> Format {
         let format = Format::new().set_num_format("0.000");
-        self.apply_banding(format)
+        self.apply_background_color_if_needed(format)
+    }
+
+    fn background_color_required(&self) -> bool {
+        self.row % 2 == 0 || self.always_set_background_color
     }
 
     /// Helper method.
-    fn apply_banding(&self, format: Format) -> Format {
+    fn apply_background_color_if_needed(&self, format: Format) -> Format {
         let mut format = format;
-        if self.row % 2 == 0 {
-            format = format.set_background_color(self.current_column_color);
+        if self.background_color_required() {
+            format = format.set_background_color(self.current_background_color);
         }
         format
     }

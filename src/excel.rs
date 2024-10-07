@@ -42,9 +42,11 @@ pub fn create_summary_xlsx<'gpx>(
     // This will appear as the first sheet in the workbook.
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
-    let avg_temp = gpx.avg_temperature();
-    let avg_heart_rate = gpx.avg_heart_rate();
-    write_stages(stages_ws, stages, avg_temp, avg_heart_rate)?;
+    write_stages2(stages_ws, gpx, stages)?;
+
+    // let avg_temp = gpx.avg_temperature();
+    // let avg_heart_rate = gpx.avg_heart_rate();
+    // write_stages(stages_ws, stages, avg_temp, avg_heart_rate)?;
 
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
@@ -72,6 +74,66 @@ pub fn write_summary_file(
     Ok(())
 }
 
+/// Write the "Stages" tab of the summary spreadsheet.
+/// 
+/// We write the data in vertical fashion to keep headers and their
+/// corresponding data together. Doing it horizontally leads to a very
+/// large function with the headers and the data far separated.
+fn write_stages2(
+    ws: &mut Worksheet,
+    gpx: &EnrichedGpx,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    let mut fc = FormatControl::new();
+
+    if stages.len() == 0 {
+        write_string(ws, &fc, (0, 0), "No stages detected")?;
+        return Ok(());
+    }
+
+    output_stage_number(ws, &mut fc, stages)?;
+    output_stage_type(ws, &mut fc, stages)?;
+
+    Ok(())
+}
+
+fn output_stage_number(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList
+) -> Result<(), Box<dyn Error>> {
+    write_header_blank(ws, &fc, (0, fc.col()))?;
+    write_header(ws, &fc, (1, fc.col()), "Stage")?;
+
+    for _ in stages.iter() {
+        write_integer(ws, &fc, (fc.row(), fc.col()), fc.row() - 1)?;
+        fc.increment_row();
+    }
+
+    fc.next_column(1);
+    Ok(())
+}
+
+fn output_stage_type(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList
+) -> Result<(), Box<dyn Error>> {
+    write_header_blank(ws, &fc, (0, fc.col()))?;
+    write_header(ws, &fc, (1, fc.col()), "Type")?;
+
+    for stage in stages.iter() {
+        write_string(ws, &fc, (fc.row(), fc.col()), &stage.stage_type.to_string())?;        
+        fc.increment_row();
+    }
+
+    fc.next_column(1);
+    Ok(())
+}
+
+
+
+
 fn write_stages(
     ws: &mut Worksheet,
     stages: &StageList,
@@ -86,14 +148,7 @@ fn write_stages(
     let mut fc = FormatControl::new();
 
     const COL_STAGE: u16 = 0;
-    write_header_blank(ws, &fc, (0, COL_STAGE))?;
-    write_header(ws, &fc, (1, COL_STAGE), "Stage")?;
-    fc.increment_column();
-
     const COL_TYPE: u16 = COL_STAGE + 1;
-    write_header_blank(ws, &fc, (0, COL_TYPE))?;
-    write_header(ws, &fc, (1, COL_TYPE), "Type")?;
-    fc.increment_column();
 
     const COL_STAGE_LOCATION: u16 = COL_TYPE + 1;
     write_header_merged(
@@ -303,14 +358,6 @@ fn write_stages(
     let mut fc = FormatControl::new();
     let mut row = 2;
     for (idx, stage) in stages.iter().enumerate() {
-        fc.reset_column();
-
-        write_integer(ws, &fc, (row, COL_STAGE), (idx + 1) as u32)?;
-        fc.increment_column();
-
-        write_string(ws, &fc, (row, COL_TYPE), &stage.stage_type.to_string())?;
-        fc.increment_column();
-
         write_lat_lon(
             ws,
             &fc,
@@ -1264,35 +1311,54 @@ fn write_speed_option(
 }
 
 struct FormatControl {
-    current_color: Color,
-    row_alt: bool,
+    current_column_color: Color,
+    row_idx: u32,
+    col_idx: u16,
 }
 
 impl FormatControl {
     const COLOR1: Color = Color::Theme(3, 1);
     const COLOR2: Color = Color::Theme(2, 1);
+    const STARTING_ROW: u32 = 2;
 
     fn new() -> Self {
         Self {
-            current_color: Self::COLOR1,
-            row_alt: false,
+            current_column_color: Self::COLOR1,
+            col_idx: 0,
+            row_idx: Self::STARTING_ROW,
         }
+    }
+
+    fn col(&self) -> u16 {
+        self.col_idx
+    }
+
+    fn row(&self) -> u32 {
+        self.row_idx
     }
 
     fn increment_row(&mut self) {
-        self.row_alt = !self.row_alt;
+        self.row_idx += 1;
     }
 
+    // TODO: Remove this. Not needed now we are going vertically.
     fn reset_column(&mut self) {
-        self.current_color = Self::COLOR1;
+        self.current_column_color = Self::COLOR1;
     }
 
+    // TODO: Remove this function when no callers.
     fn increment_column(&mut self) {
-        if self.current_color == Self::COLOR1 {
-            self.current_color = Self::COLOR2;
+        if self.current_column_color == Self::COLOR1 {
+            self.current_column_color = Self::COLOR2;
         } else {
-            self.current_color = Self::COLOR1;
+            self.current_column_color = Self::COLOR1;
         }
+    }
+
+    fn next_column(&mut self, col_increment: u16) {
+        self.increment_column();
+        self.col_idx += col_increment;
+        self.row_idx = Self::STARTING_ROW;
     }
 
     fn minor_header_format(&self) -> Format {
@@ -1303,7 +1369,7 @@ impl FormatControl {
             .set_border_color(Color::Gray)
             .set_align(FormatAlign::Center)
             .set_pattern(FormatPattern::Solid)
-            .set_background_color(self.current_color)
+            .set_background_color(self.current_column_color)
     }
 
     fn speed_format(&self) -> Format {
@@ -1369,8 +1435,8 @@ impl FormatControl {
     /// Helper method.
     fn apply_banding(&self, format: Format) -> Format {
         let mut format = format;
-        if !self.row_alt {
-            format = format.set_background_color(self.current_color);
+        if self.row_idx % 2 == 0 {
+            format = format.set_background_color(self.current_column_color);
         }
         format
     }

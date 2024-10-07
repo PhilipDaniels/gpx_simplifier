@@ -79,6 +79,11 @@ pub fn write_summary_file(
 /// We write the data in vertical fashion to keep headers and their
 /// corresponding data together. Doing it horizontally leads to a very
 /// large function with the headers and the data far separated.
+///
+/// Regarding lat-lon hyperlinks: on the summary tab we generally always
+/// write them, because they are few in number and so don't slow down Calc.
+/// But they are optional on the Track Points tab because there are thousands
+/// of them and they really slow down Calc.
 fn write_stages2(
     ws: &mut Worksheet,
     gpx: &EnrichedGpx,
@@ -91,6 +96,8 @@ fn write_stages2(
         return Ok(());
     }
 
+    ws.set_freeze_panes(2, 0)?;
+
     output_stage_number(ws, &mut fc, stages)?;
     output_stage_type(ws, &mut fc, stages)?;
     output_stage_location(ws, &mut fc, stages)?;
@@ -101,6 +108,12 @@ fn write_stages2(
     output_average_speed(ws, &mut fc, stages)?;
     output_ascent(ws, &mut fc, stages)?;
     output_descent(ws, &mut fc, stages)?;
+    output_min_elevation(ws, &mut fc, stages)?;
+    output_max_elevation(ws, &mut fc, stages)?;
+    output_max_speed(ws, &mut fc, stages)?;
+    output_heart_rate(ws, &mut fc, stages)?;
+    output_temperature(ws, &mut fc, stages)?;
+    output_track_points(ws, &mut fc, stages)?;
 
     Ok(())
 }
@@ -181,12 +194,12 @@ fn output_start_time(
     for stage in stages.iter() {
         match stage.start.time {
             Some(start_time) => {
-                write_utc_date(ws, &fc, (fc.row(), fc.col()), start_time)?;
-                write_utc_date_as_local(ws, &fc, (fc.row(), fc.col() + 1), start_time)?;
+                write_utc_date(ws, &fc, fc.rowcol(), start_time)?;
+                write_utc_date_as_local(ws, &fc, fc.offset(1), start_time)?;
             }
             None => {
-                write_blank(ws, &fc, (fc.row(), fc.col()))?;
-                write_blank(ws, &fc, (fc.row(), fc.col() + 1))?;
+                write_blank(ws, &fc, fc.rowcol())?;
+                write_blank(ws, &fc, fc.offset(1))?;
             }
         };
 
@@ -210,12 +223,12 @@ fn output_end_time(
     for stage in stages.iter() {
         match stage.end.time {
             Some(end_time) => {
-                write_utc_date(ws, &fc, (fc.row(), fc.col()), end_time)?;
-                write_utc_date_as_local(ws, &fc, (fc.row(), fc.col() + 1), end_time)?;
+                write_utc_date(ws, &fc, fc.rowcol(), end_time)?;
+                write_utc_date_as_local(ws, &fc, fc.offset(1), end_time)?;
             }
             None => {
-                write_blank(ws, &fc, (fc.row(), fc.col()))?;
-                write_blank(ws, &fc, (fc.row(), fc.col() + 1))?;
+                write_blank(ws, &fc, fc.rowcol())?;
+                write_blank(ws, &fc, fc.offset(1))?;
             }
         };
 
@@ -237,8 +250,8 @@ fn output_duration(
     ws.set_column_width(fc.col() + 1, DURATION_COLUMN_WIDTH)?;
 
     for stage in stages.iter() {
-        write_duration_option(ws, &fc, (fc.row(), fc.col()), stage.duration())?;
-        write_duration_option(ws, &fc, (fc.row(), fc.col() + 1), stage.running_duration())?;
+        write_duration_option(ws, &fc, fc.rowcol(), stage.duration())?;
+        write_duration_option(ws, &fc, fc.offset(1), stage.running_duration())?;
         fc.increment_row();
     }
 
@@ -258,13 +271,8 @@ fn output_distance(
 
     for stage in stages.iter() {
         if stage.stage_type == StageType::Moving {
-            write_kilometres(ws, &fc, (fc.row(), fc.col()), stage.distance_km())?;
-            write_kilometres(
-                ws,
-                &fc,
-                (fc.row(), fc.col() + 1),
-                stage.running_distance_km(),
-            )?;
+            write_kilometres(ws, &fc, fc.rowcol(), stage.distance_km())?;
+            write_kilometres(ws, &fc, fc.offset(1), stage.running_distance_km())?;
         }
 
         fc.increment_row();
@@ -292,13 +300,8 @@ fn output_average_speed(
 
     for stage in stages.iter() {
         if stage.stage_type == StageType::Moving {
-            write_speed_option(ws, &fc, (fc.row(), fc.col()), stage.average_speed_kmh())?;
-            write_speed_option(
-                ws,
-                &fc,
-                (fc.row(), fc.col() + 1),
-                stage.running_average_speed_kmh(),
-            )?;
+            write_speed_option(ws, &fc, fc.rowcol(), stage.average_speed_kmh())?;
+            write_speed_option(ws, &fc, fc.offset(1), stage.running_average_speed_kmh())?;
         }
 
         fc.increment_row();
@@ -321,19 +324,9 @@ fn output_ascent(
 
     for stage in stages.iter() {
         if stage.stage_type == StageType::Moving {
-            write_metres_option(ws, &fc, (fc.row(), fc.col()), stage.ascent_metres())?;
-            write_metres_option(
-                ws,
-                &fc,
-                (fc.row(), fc.col() + 1),
-                stage.running_ascent_metres(),
-            )?;
-            write_metres_option(
-                ws,
-                &fc,
-                (fc.row(), fc.col() + 2),
-                stage.ascent_rate_per_km(),
-            )?;
+            write_metres_option(ws, &fc, fc.rowcol(), stage.ascent_metres())?;
+            write_metres_option(ws, &fc, fc.offset(1), stage.running_ascent_metres())?;
+            write_metres_option(ws, &fc, fc.offset(2), stage.ascent_rate_per_km())?;
         }
 
         fc.increment_row();
@@ -356,20 +349,170 @@ fn output_descent(
 
     for stage in stages.iter() {
         if stage.stage_type == StageType::Moving {
-            write_metres_option(ws, &fc, (fc.row(), fc.col()), stage.descent_metres())?;
-            write_metres_option(
-                ws,
-                &fc,
-                (fc.row(), fc.col() + 1),
-                stage.running_descent_metres(),
-            )?;
-            write_metres_option(
-                ws,
-                &fc,
-                (fc.row(), fc.col() + 2),
-                stage.descent_rate_per_km(),
-            )?;
+            write_metres_option(ws, &fc, fc.rowcol(), stage.descent_metres())?;
+            write_metres_option(ws, &fc, fc.offset(1), stage.running_descent_metres())?;
+            write_metres_option(ws, &fc, fc.offset(2), stage.descent_rate_per_km())?;
         }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(3);
+    Ok(())
+}
+
+fn output_min_elevation(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(
+        ws,
+        &fc,
+        (0, fc.col()),
+        (0, fc.col() + 2),
+        "Minimum Elevation",
+    )?;
+    write_headers(ws, &fc, &["Elevation (m)", "Distance (km)", "Point"])?;
+    ws.set_column_width(fc.col(), ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col() + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for stage in stages.iter() {
+        if stage.stage_type == StageType::Moving {
+            write_elevation_data(ws, &fc, stage.min_elevation)?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(3);
+    Ok(())
+}
+
+fn output_max_elevation(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(
+        ws,
+        &fc,
+        (0, fc.col()),
+        (0, fc.col() + 2),
+        "Maximum Elevation",
+    )?;
+    write_headers(ws, &fc, &["Elevation (m)", "Distance (km)", "Point"])?;
+    ws.set_column_width(fc.col(), ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col() + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for stage in stages.iter() {
+        if stage.stage_type == StageType::Moving {
+            write_elevation_data(ws, &fc, stage.max_elevation)?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(3);
+    Ok(())
+}
+
+fn output_max_speed(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(ws, &fc, (0, fc.col()), (0, fc.col() + 2), "Maximum Speed")?;
+    write_headers(ws, &fc, &["Speed (km/h)", "Distance (km)", "Point"])?;
+    ws.set_column_width(fc.col(), SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col() + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for stage in stages.iter() {
+        if stage.stage_type == StageType::Moving {
+            write_max_speed_data(ws, &fc, stage.max_speed)?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_column(3);
+    Ok(())
+}
+
+fn output_heart_rate(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(ws, &fc, (0, fc.col()), (0, fc.col() + 3), "Heart Rate")?;
+    write_headers(ws, &fc, &["Avg", "Max", "Distance (km)", "Point"])?;
+    ws.set_column_width(fc.col() + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for stage in stages.iter() {
+        write_heart_rate_data(ws, &fc, stage.max_heart_rate, stage.avg_heart_rate)?;
+        fc.increment_row();
+    }
+
+    fc.next_column(4);
+    Ok(())
+}
+
+fn output_temperature(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(ws, &fc, (0, fc.col()), (0, fc.col() + 6), "Temp °C")?;
+    write_headers(
+        ws,
+        &fc,
+        &[
+            "Avg",
+            "Min",
+            "Time (local)",
+            "Point",
+            "Max",
+            "Time (local)",
+            "Point",
+        ],
+    )?;
+    ws.set_column_width(fc.col() + 2, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col() + 5, DATE_COLUMN_WIDTH)?;
+
+    for stage in stages.iter() {
+        write_temperature_data(
+            ws,
+            &fc,
+            fc.rowcol(),
+            stage.min_air_temp,
+            stage.max_air_temp,
+            stage.avg_air_temp,
+        )?;
+
+        fc.increment_row();
+    }
+
+    fc.next_column(7);
+    Ok(())
+}
+
+fn output_track_points(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    stages: &StageList,
+) -> Result<(), Box<dyn Error>> {
+    write_header_merged(ws, &fc, (0, fc.col()), (0, fc.col() + 2), "Track Points")?;
+    write_headers(ws, &fc, &["First", "Last", "Count"])?;
+
+    for stage in stages.iter() {
+        write_trackpoint_number(ws, &fc, fc.rowcol(), stage.start.index)?;
+        write_trackpoint_number(ws, &fc, fc.offset(1), stage.end.index)?;
+        write_integer2(
+            ws,
+            &fc,
+            fc.offset(2),
+            (stage.end.index - stage.start.index + 1).try_into()?,
+        )?;
 
         fc.increment_row();
     }
@@ -397,89 +540,11 @@ fn write_stages(
     const COL_ASCENT: u16 = COL_AVG_SPEED + 2;
     const COL_DESCENT: u16 = COL_ASCENT + 3;
     const COL_MIN_ELE: u16 = COL_DESCENT + 3;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_MIN_ELE),
-        (0, COL_MIN_ELE + 2),
-        "Minimum Elevation",
-    )?;
-    //write_header(ws, &fc, (1, COL_MIN_ELE), "Elevation (m)")?;
-    //write_header(ws, &fc, (1, COL_MIN_ELE + 1), "Distance (km)")?;
-    //write_header(ws, &fc, (1, COL_MIN_ELE + 2), "Point")?;
-    ws.set_column_width(COL_MIN_ELE, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MIN_ELE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    fc.increment_column();
-
     const COL_MAX_ELE: u16 = COL_MIN_ELE + 3;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_MAX_ELE),
-        (0, COL_MAX_ELE + 2),
-        "Maximum Elevation",
-    )?;
-    //write_header(ws, &fc, (1, COL_MAX_ELE), "Elevation (m)")?;
-    //write_header(ws, &fc, (1, COL_MAX_ELE + 1), "Distance (km)")?;
-    //write_header(ws, &fc, (1, COL_MAX_ELE + 2), "Point")?;
-    ws.set_column_width(COL_MAX_ELE, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MAX_ELE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    fc.increment_column();
-
     const COL_MAX_SPEED: u16 = COL_MAX_ELE + 3;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_MAX_SPEED),
-        (0, COL_MAX_SPEED + 2),
-        "Max Speed",
-    )?;
-    //write_header(ws, &fc, (1, COL_MAX_SPEED), "Speed (kmh)")?;
-    //write_header(ws, &fc, (1, COL_MAX_SPEED + 1), "Distance (km)")?;
-    //write_header(ws, &fc, (1, COL_MAX_SPEED + 2), "Point")?;
-    ws.set_column_width(COL_MAX_SPEED, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_MAX_SPEED + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    fc.increment_column();
-
     const COL_HEART_RATE: u16 = COL_MAX_SPEED + 3;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_HEART_RATE),
-        (0, COL_HEART_RATE + 3),
-        "Heart Rate",
-    )?;
-    //write_header(ws, &fc, (1, COL_HEART_RATE), "Avg")?;
-    //write_header(ws, &fc, (1, COL_HEART_RATE + 1), "Max")?;
-    //write_header(ws, &fc, (1, COL_HEART_RATE + 2), "Distance (km)")?;
-    //write_header(ws, &fc, (1, COL_HEART_RATE + 3), "Point")?;
-    ws.set_column_width(COL_HEART_RATE + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    fc.increment_column();
-
     const COL_MAX_TEMP: u16 = COL_HEART_RATE + 4;
-    write_header_merged(ws, &fc, (0, COL_MAX_TEMP), (0, COL_MAX_TEMP + 6), "Temp °C")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP), "Avg")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP + 1), "Min")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP + 2), "Time (local)")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP + 3), "Point")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP + 4), "Max")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP + 5), "Time (local)")?;
-    // write_header(ws, &fc, (1, COL_MAX_TEMP + 6), "Point")?;
-    ws.set_column_width(COL_MAX_TEMP + 2, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_MAX_TEMP + 5, DATE_COLUMN_WIDTH)?;
-    fc.increment_column();
-
     const COL_TRACKPOINTS: u16 = COL_MAX_TEMP + 7;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_TRACKPOINTS),
-        (0, COL_TRACKPOINTS + 2),
-        "Track Points",
-    )?;
-    // write_header(ws, &fc, (1, COL_TRACKPOINTS), "First")?;
-    // write_header(ws, &fc, (1, COL_TRACKPOINTS + 1), "Last")?;
-    // write_header(ws, &fc, (1, COL_TRACKPOINTS + 2), "Count")?;
 
     // Regarding lat-lon hyperlinks: on the summary tab we generally always
     // write them, because they are few in number and so don't slow down Calc.
@@ -491,52 +556,13 @@ fn write_stages(
     let mut row = 2;
     for (idx, stage) in stages.iter().enumerate() {
         if stage.stage_type == StageType::Moving {
-            write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stage.min_elevation)?;
-            fc.increment_column();
-            write_elevation_data(ws, &fc, (row, COL_MAX_ELE), stage.max_elevation)?;
-            fc.increment_column();
-            write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stage.max_speed)?;
         } else {
             // Write blanks so that the banding formatting is applied.
             for col in COL_DISTANCE..=(COL_MAX_SPEED + 2) {
                 write_blank(ws, &fc, (row, col))?;
             }
         }
-
-        fc.increment_column();
-        write_heart_rate_data(
-            ws,
-            &fc,
-            (row, COL_HEART_RATE),
-            stage.max_heart_rate,
-            stage.avg_heart_rate,
-        )?;
-
-        fc.increment_column();
-        write_temperature_data(
-            ws,
-            &fc,
-            (row, COL_MAX_TEMP),
-            stage.min_air_temp,
-            stage.max_air_temp,
-            stage.avg_air_temp,
-        )?;
-
-        fc.increment_column();
-        write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stage.start.index)?;
-        write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS + 1), stage.end.index)?;
-        // write_integer(
-        //     ws,
-        //     &fc,
-        //     (row, COL_TRACKPOINTS + 2),
-        //     (stage.end.index - stage.start.index + 1).try_into()?,
-        // )?;
-
-        row += 1;
-        fc.increment_row();
     }
-
-    ws.set_freeze_panes(2, 0)?;
 
     // Now write an overall summary row.
     let mut fc = FormatControl::new();
@@ -611,19 +637,19 @@ fn write_stages(
             .and_then(|a| Some(a / stages.distance_km())),
     )?;
     fc.increment_column();
-    write_elevation_data(ws, &fc, (row, COL_MIN_ELE), stages.min_elevation())?;
+    write_elevation_data(ws, &fc, stages.min_elevation())?;
     fc.increment_column();
-    write_elevation_data(ws, &fc, (row, COL_MAX_ELE), stages.max_elevation())?;
+    write_elevation_data(ws, &fc, stages.max_elevation())?;
     fc.increment_column();
-    write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
+    //write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
     fc.increment_column();
-    write_heart_rate_data(
-        ws,
-        &fc,
-        (row, COL_HEART_RATE),
-        stages.max_heart_rate(),
-        avg_heart_rate,
-    )?;
+    // write_heart_rate_data(
+    //     ws,
+    //     &fc,
+    //     (row, COL_HEART_RATE),
+    //     stages.max_heart_rate(),
+    //     avg_heart_rate,
+    // )?;
     fc.increment_column();
     write_temperature_data(
         ws,
@@ -891,6 +917,16 @@ fn write_integer(ws: &mut Worksheet, fc: &FormatControl, value: u32) -> Result<(
     Ok(())
 }
 
+fn write_integer2(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: u32,
+) -> Result<(), Box<dyn Error>> {
+    ws.write_number_with_format(rc.0, rc.1, value, &fc.integer_format())?;
+    Ok(())
+}
+
 /// Writes a lat-lon pair with the lat in the first cell as specified
 /// by 'rc' and the lon in the next column. If 'hyperlink' is yes then
 /// a hyperlink to Google Maps is written into the third column.
@@ -942,29 +978,32 @@ fn write_blank(
     Ok(())
 }
 
-/// Writes a float.
-fn write_f64(
+/// Writes an elevation data block (min or max) as found on the Stages tab.
+fn write_elevation_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
-    rc: (u32, u16),
-    value: f64,
+    point: Option<&EnrichedTrackPoint>,
 ) -> Result<(), Box<dyn Error>> {
-    ws.write_number_with_format(rc.0, rc.1, value, &fc.float_format())?;
-    Ok(())
-}
-
-/// Writes an optional float.
-fn write_f64_option(
-    ws: &mut Worksheet,
-    fc: &FormatControl,
-    rc: (u32, u16),
-    value: Option<f64>,
-) -> Result<(), Box<dyn Error>> {
-    if let Some(value) = value {
-        write_f64(ws, fc, rc, value)?;
-    } else {
-        write_blank(ws, fc, rc)?;
+    if point.is_none() {
+        write_blank(ws, fc, (fc.row(), fc.col()))?;
+        write_blank(ws, fc, (fc.row(), fc.col() + 1))?;
+        write_blank(ws, fc, (fc.row(), fc.col() + 2))?;
+        return Ok(());
     }
+
+    let point = point.unwrap();
+
+    match point.ele {
+        Some(ele) => {
+            write_metres(ws, fc, (fc.row(), fc.col()), ele)?;
+        }
+        None => {
+            write_blank(ws, fc, (fc.row(), fc.col()))?;
+        }
+    }
+
+    write_kilometres_running_with_map_hyperlink(ws, fc, (fc.row(), fc.col() + 1), point)?;
+    write_trackpoint_number(ws, fc, (fc.row(), fc.col() + 2), point.index)?;
     Ok(())
 }
 
@@ -983,6 +1022,26 @@ fn write_string_bold(
 ) -> Result<(), Box<dyn Error>> {
     let format = fc.string_format().set_bold();
     ws.write_string_with_format(rc.0, rc.1, value, &format)?;
+    Ok(())
+}
+
+/// Writes a float.
+fn write_f64(ws: &mut Worksheet, fc: &FormatControl, value: f64) -> Result<(), Box<dyn Error>> {
+    ws.write_number_with_format(fc.row(), fc.col(), value, &fc.float_format())?;
+    Ok(())
+}
+
+/// Writes an optional float.
+fn write_f64_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    value: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(value) = value {
+        write_f64(ws, fc, value)?;
+    } else {
+        write_blank(ws, fc, (fc.row(), fc.col()))?;
+    }
     Ok(())
 }
 
@@ -1111,79 +1170,47 @@ fn duration_to_excel_date(duration: Duration) -> Result<ExcelDateTime, Box<dyn E
     Ok(ExcelDateTime::from_hms(hours, minutes, seconds)?)
 }
 
-/// Writes an elevation data block (min or max) as found on the Stages tab.
-fn write_elevation_data(
-    ws: &mut Worksheet,
-    fc: &FormatControl,
-    rc: (u32, u16),
-    point: Option<&EnrichedTrackPoint>,
-) -> Result<(), Box<dyn Error>> {
-    if point.is_none() {
-        write_blank(ws, fc, (rc.0, rc.1))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 1))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 2))?;
-        return Ok(());
-    }
-
-    let point = point.unwrap();
-
-    match point.ele {
-        Some(ele) => {
-            write_metres(ws, fc, (rc.0, rc.1), ele)?;
-        }
-        None => {
-            write_blank(ws, fc, (rc.0, rc.1))?;
-        }
-    }
-
-    write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 1), point)?;
-    write_trackpoint_number(ws, fc, (rc.0, rc.1 + 2), point.index)?;
-    Ok(())
-}
-
 /// Writes a max speed data block as found on the Stages tab.
 fn write_max_speed_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
-    rc: (u32, u16),
     point: Option<&EnrichedTrackPoint>,
 ) -> Result<(), Box<dyn Error>> {
     if point.is_none() {
-        write_blank(ws, fc, (rc.0, rc.1))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 1))?;
-        write_blank(ws, fc, (rc.0, rc.1 + 2))?;
+        write_blank(ws, fc, fc.rowcol())?;
+        write_blank(ws, fc, fc.offset(1))?;
+        write_blank(ws, fc, fc.offset(2))?;
         return Ok(());
     }
 
     let point = point.unwrap();
 
-    write_speed_option(ws, fc, (rc.0, rc.1), point.speed_kmh)?;
-    write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 1), point)?;
-    write_trackpoint_number(ws, fc, (rc.0, rc.1 + 2), point.index)?;
+    write_speed_option(ws, fc, fc.rowcol(), point.speed_kmh)?;
+    write_kilometres_running_with_map_hyperlink(ws, fc, fc.offset(1), point)?;
+    write_trackpoint_number(ws, fc, fc.offset(2), point.index)?;
     Ok(())
 }
 
 fn write_heart_rate_data(
     ws: &mut Worksheet,
     fc: &FormatControl,
-    rc: (u32, u16),
     max_hr_point: Option<&EnrichedTrackPoint>,
     avg_hr: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    write_f64_option(ws, fc, rc, avg_hr)?;
+    write_f64_option(ws, fc, avg_hr)?;
 
     if let Some(point) = max_hr_point {
         if let Some(mhr) = point.heart_rate() {
-            //write_integer(ws, fc, (rc.0, rc.1 + 1), mhr as u32)?;
-            write_kilometres_running_with_map_hyperlink(ws, fc, (rc.0, rc.1 + 2), point)?;
-            write_trackpoint_number(ws, fc, (rc.0, rc.1 + 3), point.index)?;
+            write_integer2(ws, fc, fc.offset(1), mhr as u32)?;
+            write_kilometres_running_with_map_hyperlink(ws, fc, fc.offset(2), point)?;
+            write_trackpoint_number(ws, fc, fc.offset(3), point.index)?;
             return Ok(());
         }
     }
 
-    write_blank(ws, fc, (rc.0, rc.1 + 1))?;
-    write_blank(ws, fc, (rc.0, rc.1 + 2))?;
-    write_blank(ws, fc, (rc.0, rc.1 + 3))?;
+    write_blank(ws, fc, fc.offset(1))?;
+    write_blank(ws, fc, fc.offset(2))?;
+    write_blank(ws, fc, fc.offset(3))?;
     Ok(())
 }
 
@@ -1195,7 +1222,7 @@ fn write_temperature_data(
     max: Option<&EnrichedTrackPoint>,
     avg: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    write_f64_option(ws, fc, rc, avg)?;
+    write_f64_option(ws, fc, avg)?;
 
     if let Some(min) = min {
         write_temperature_option(ws, fc, (rc.0, rc.1 + 1), min.air_temp())?;
@@ -1357,8 +1384,8 @@ fn write_speed_option(
 
 struct FormatControl {
     current_column_color: Color,
-    row_idx: u32,
-    col_idx: u16,
+    row: u32,
+    col: u16,
 }
 
 impl FormatControl {
@@ -1369,21 +1396,30 @@ impl FormatControl {
     fn new() -> Self {
         Self {
             current_column_color: Self::COLOR1,
-            col_idx: 0,
-            row_idx: Self::STARTING_ROW,
+            col: 0,
+            row: Self::STARTING_ROW,
         }
     }
 
     fn col(&self) -> u16 {
-        self.col_idx
+        self.col
     }
 
     fn row(&self) -> u32 {
-        self.row_idx
+        self.row
+    }
+
+    fn rowcol(&self) -> (u32, u16) {
+        (self.row, self.col)
+    }
+
+    /// Same as rowcol(), but with a column offset applied.
+    fn offset(&self, offset: u16) -> (u32, u16) {
+        (self.row, self.col + offset)
     }
 
     fn increment_row(&mut self) {
-        self.row_idx += 1;
+        self.row += 1;
     }
 
     // TODO: Remove this. Not needed now we are going vertically.
@@ -1402,8 +1438,8 @@ impl FormatControl {
 
     fn next_column(&mut self, col_increment: u16) {
         self.increment_column();
-        self.col_idx += col_increment;
-        self.row_idx = Self::STARTING_ROW;
+        self.col += col_increment;
+        self.row = Self::STARTING_ROW;
     }
 
     fn minor_header_format(&self) -> Format {
@@ -1480,7 +1516,7 @@ impl FormatControl {
     /// Helper method.
     fn apply_banding(&self, format: Format) -> Format {
         let mut format = format;
-        if self.row_idx % 2 == 0 {
+        if self.row % 2 == 0 {
             format = format.set_background_color(self.current_column_color);
         }
         format

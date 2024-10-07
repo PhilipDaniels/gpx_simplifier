@@ -96,6 +96,7 @@ fn write_stages2(
         return Ok(());
     }
 
+    ws.set_freeze_panes(0, 2)?;
     ws.set_freeze_panes(2, 0)?;
 
     output_stage_number(ws, &mut fc, stages)?;
@@ -540,153 +541,116 @@ fn write_stages(
     avg_temp: Option<f64>,
     avg_heart_rate: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut fc = FormatControl::new();
-
-    const COL_STAGE: u16 = 0;
-    const COL_TYPE: u16 = COL_STAGE + 1;
-    const COL_STAGE_LOCATION: u16 = COL_TYPE + 1;
-    const COL_START_TIME: u16 = COL_STAGE_LOCATION + 4;
-    const COL_END_TIME: u16 = COL_START_TIME + 2;
-    const COL_DURATION: u16 = COL_END_TIME + 2;
-    const COL_DISTANCE: u16 = COL_DURATION + 2;
-    const COL_AVG_SPEED: u16 = COL_DISTANCE + 2;
-    const COL_ASCENT: u16 = COL_AVG_SPEED + 2;
-    const COL_DESCENT: u16 = COL_ASCENT + 3;
-    const COL_MIN_ELE: u16 = COL_DESCENT + 3;
-    const COL_MAX_ELE: u16 = COL_MIN_ELE + 3;
-    const COL_MAX_SPEED: u16 = COL_MAX_ELE + 3;
-    const COL_HEART_RATE: u16 = COL_MAX_SPEED + 3;
-    const COL_MAX_TEMP: u16 = COL_HEART_RATE + 4;
-    const COL_TRACKPOINTS: u16 = COL_MAX_TEMP + 7;
-
-    // Regarding lat-lon hyperlinks: on the summary tab we generally always
-    // write them, because they are few in number and so don't slow down Calc.
-    // But they are optional on the Track Points tab because there are thousands
-    // of them and they really slow down Calc.
-
-    // Regenerate this so the formatting starts at the right point.
-    let mut fc = FormatControl::new();
-    let mut row = 2;
-    for (idx, stage) in stages.iter().enumerate() {
-        if stage.stage_type == StageType::Moving {
-        } else {
-            // Write blanks so that the banding formatting is applied.
-            for col in COL_DISTANCE..=(COL_MAX_SPEED + 2) {
-                write_blank(ws, &fc, (row, col))?;
-            }
-        }
-    }
-
     // Now write an overall summary row.
-    let mut fc = FormatControl::new();
-    row += 2;
-    write_string_bold(ws, &fc, (row, COL_START_TIME - 1), "SUMMARY")?;
-    fc.increment_column();
-    write_utc_date_option(ws, &fc, (row, COL_START_TIME), stages.start_time())?;
-    write_utc_date_as_local_option(ws, &fc, (row, COL_START_TIME + 1), stages.start_time())?;
-    fc.increment_column();
-    write_utc_date_option(ws, &fc, (row, COL_END_TIME), stages.end_time())?;
-    write_utc_date_as_local_option(ws, &fc, (row, COL_END_TIME + 1), stages.end_time())?;
-    fc.increment_column();
-    //write_string(ws, &fc, (row, COL_DURATION), "Total")?;
-    write_duration_option(ws, &fc, (row, COL_DURATION + 1), stages.duration())?;
-    //write_string(ws, &fc, (row + 1, COL_DURATION), "Stopped")?;
-    write_duration_option(
-        ws,
-        &fc,
-        (row + 1, COL_DURATION + 1),
-        stages.total_stopped_time(),
-    )?;
-    //write_string(ws, &fc, (row + 2, COL_DURATION), "Moving")?;
-    write_duration_option(
-        ws,
-        &fc,
-        (row + 2, COL_DURATION + 1),
-        stages.total_moving_time(),
-    )?;
-    fc.increment_column();
-    write_blank(ws, &fc, (row, COL_DISTANCE))?;
-    write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), stages.distance_km())?;
-    fc.increment_column();
-    //write_string(ws, &fc, (row, COL_AVG_SPEED), "Overall")?;
-    write_speed_option(
-        ws,
-        &fc,
-        (row, COL_AVG_SPEED + 1),
-        stages.average_overall_speed(),
-    )?;
-    //write_string(ws, &fc, (row + 1, COL_AVG_SPEED), "Moving")?;
-    write_speed_option(
-        ws,
-        &fc,
-        (row + 1, COL_AVG_SPEED + 1),
-        stages.average_moving_speed(),
-    )?;
-    fc.increment_column();
-    write_blank(ws, &fc, (row, COL_ASCENT))?;
-    write_metres_option(ws, &fc, (row, COL_ASCENT + 1), stages.total_ascent_metres())?;
-    write_metres_option(
-        ws,
-        &fc,
-        (row, COL_ASCENT + 2),
-        stages
-            .total_ascent_metres()
-            .and_then(|a| Some(a / stages.distance_km())),
-    )?;
-    fc.increment_column();
-    write_blank(ws, &fc, (row, COL_DESCENT))?;
-    write_metres_option(
-        ws,
-        &fc,
-        (row, COL_DESCENT + 1),
-        stages.total_descent_metres(),
-    )?;
-    write_metres_option(
-        ws,
-        &fc,
-        (row, COL_DESCENT + 2),
-        stages
-            .total_descent_metres()
-            .and_then(|a| Some(a / stages.distance_km())),
-    )?;
-    fc.increment_column();
-    write_elevation_data(ws, &fc, stages.min_elevation())?;
-    fc.increment_column();
-    write_elevation_data(ws, &fc, stages.max_elevation())?;
-    fc.increment_column();
-    //write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
-    fc.increment_column();
-    // write_heart_rate_data(
+    // let mut fc = FormatControl::new();
+    // row += 2;
+    // write_string_bold(ws, &fc, (row, COL_START_TIME - 1), "SUMMARY")?;
+    // fc.increment_column();
+    // write_utc_date_option(ws, &fc, (row, COL_START_TIME), stages.start_time())?;
+    // write_utc_date_as_local_option(ws, &fc, (row, COL_START_TIME + 1), stages.start_time())?;
+    // fc.increment_column();
+    // write_utc_date_option(ws, &fc, (row, COL_END_TIME), stages.end_time())?;
+    // write_utc_date_as_local_option(ws, &fc, (row, COL_END_TIME + 1), stages.end_time())?;
+    // fc.increment_column();
+    // //write_string(ws, &fc, (row, COL_DURATION), "Total")?;
+    // write_duration_option(ws, &fc, (row, COL_DURATION + 1), stages.duration())?;
+    // //write_string(ws, &fc, (row + 1, COL_DURATION), "Stopped")?;
+    // write_duration_option(
     //     ws,
     //     &fc,
-    //     (row, COL_HEART_RATE),
-    //     stages.max_heart_rate(),
-    //     avg_heart_rate,
+    //     (row + 1, COL_DURATION + 1),
+    //     stages.total_stopped_time(),
     // )?;
-    fc.increment_column();
-    write_temperature_data(
-        ws,
-        &fc,
-        stages.min_temperature(),
-        stages.max_temperature(),
-        avg_temp,
-    )?;
-    fc.increment_column();
-    write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stages.first_point().index)?;
-    write_trackpoint_number(
-        ws,
-        &fc,
-        (row, COL_TRACKPOINTS + 1),
-        stages.last_point().index,
-    )?;
-    // write_integer(
+    // //write_string(ws, &fc, (row + 2, COL_DURATION), "Moving")?;
+    // write_duration_option(
     //     ws,
     //     &fc,
-    //     (row, COL_TRACKPOINTS + 2),
-    //     (stages.last_point().index - stages.first_point().index + 1).try_into()?,
+    //     (row + 2, COL_DURATION + 1),
+    //     stages.total_moving_time(),
     // )?;
+    // fc.increment_column();
+    // write_blank(ws, &fc, (row, COL_DISTANCE))?;
+    // write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), stages.distance_km())?;
+    // fc.increment_column();
+    // //write_string(ws, &fc, (row, COL_AVG_SPEED), "Overall")?;
+    // write_speed_option(
+    //     ws,
+    //     &fc,
+    //     (row, COL_AVG_SPEED + 1),
+    //     stages.average_overall_speed(),
+    // )?;
+    // //write_string(ws, &fc, (row + 1, COL_AVG_SPEED), "Moving")?;
+    // write_speed_option(
+    //     ws,
+    //     &fc,
+    //     (row + 1, COL_AVG_SPEED + 1),
+    //     stages.average_moving_speed(),
+    // )?;
+    // fc.increment_column();
+    // write_blank(ws, &fc, (row, COL_ASCENT))?;
+    // write_metres_option(ws, &fc, (row, COL_ASCENT + 1), stages.total_ascent_metres())?;
+    // write_metres_option(
+    //     ws,
+    //     &fc,
+    //     (row, COL_ASCENT + 2),
+    //     stages
+    //         .total_ascent_metres()
+    //         .and_then(|a| Some(a / stages.distance_km())),
+    // )?;
+    // fc.increment_column();
+    // write_blank(ws, &fc, (row, COL_DESCENT))?;
+    // write_metres_option(
+    //     ws,
+    //     &fc,
+    //     (row, COL_DESCENT + 1),
+    //     stages.total_descent_metres(),
+    // )?;
+    // write_metres_option(
+    //     ws,
+    //     &fc,
+    //     (row, COL_DESCENT + 2),
+    //     stages
+    //         .total_descent_metres()
+    //         .and_then(|a| Some(a / stages.distance_km())),
+    // )?;
+    // fc.increment_column();
+    // write_elevation_data(ws, &fc, stages.min_elevation())?;
+    // fc.increment_column();
+    // write_elevation_data(ws, &fc, stages.max_elevation())?;
+    // fc.increment_column();
+    // //write_max_speed_data(ws, &fc, (row, COL_MAX_SPEED), stages.max_speed())?;
+    // fc.increment_column();
+    // // write_heart_rate_data(
+    // //     ws,
+    // //     &fc,
+    // //     (row, COL_HEART_RATE),
+    // //     stages.max_heart_rate(),
+    // //     avg_heart_rate,
+    // // )?;
+    // fc.increment_column();
+    // write_temperature_data(
+    //     ws,
+    //     &fc,
+    //     stages.min_temperature(),
+    //     stages.max_temperature(),
+    //     avg_temp,
+    // )?;
+    // fc.increment_column();
+    // write_trackpoint_number(ws, &fc, (row, COL_TRACKPOINTS), stages.first_point().index)?;
+    // write_trackpoint_number(
+    //     ws,
+    //     &fc,
+    //     (row, COL_TRACKPOINTS + 1),
+    //     stages.last_point().index,
+    // )?;
+    // // write_integer(
+    // //     ws,
+    // //     &fc,
+    // //     (row, COL_TRACKPOINTS + 2),
+    // //     (stages.last_point().index - stages.first_point().index + 1).try_into()?,
+    // // )?;
 
-    ws.set_freeze_panes(0, 2)?;
+    
 
     Ok(())
 }

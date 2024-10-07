@@ -42,7 +42,7 @@ pub fn create_summary_xlsx<'gpx>(
     // This will appear as the first sheet in the workbook.
     let stages_ws = workbook.add_worksheet();
     stages_ws.set_name("Stages")?;
-    write_stages2(stages_ws, gpx, stages)?;
+    write_stages(stages_ws, gpx, stages)?;
 
     // This will appear as the second sheet in the workbook.
     let tp_ws = workbook.add_worksheet();
@@ -80,7 +80,7 @@ pub fn write_summary_file(
 /// write them, because they are few in number and so don't slow down Calc.
 /// But they are optional on the Track Points tab because there are thousands
 /// of them and they really slow down Calc.
-fn write_stages2(
+fn write_stages(
     ws: &mut Worksheet,
     gpx: &EnrichedGpx,
     stages: &StageList,
@@ -120,8 +120,7 @@ fn output_stage_number(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_blank(ws, &fc)?;
-    write_headers(ws, fc, &["Stage"])?;
+    write_headers(ws, fc, "", &["Stage"])?;
 
     for _ in stages.iter() {
         write_integer(ws, fc, fc.row - 1)?;
@@ -137,8 +136,7 @@ fn output_stage_type(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_blank(ws, &fc)?;
-    write_headers(ws, fc, &["Type"])?;
+    write_headers(ws, fc, "", &["Type"])?;
 
     for stage in stages.iter() {
         write_string(ws, fc, &stage.stage_type.to_string())?;
@@ -154,9 +152,12 @@ fn output_stage_location(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 3), "Stage Location")?;
-
-    write_headers(ws, fc, &["Lat", "Lon", "Map", "Description"])?;
+    write_headers(
+        ws,
+        fc,
+        "Stage Location",
+        &["Lat", "Lon", "Map", "Description"],
+    )?;
     ws.set_column_width(fc.col, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, LAT_LON_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 2, LINKED_LAT_LON_COLUMN_WIDTH)?;
@@ -186,8 +187,7 @@ fn output_start_time(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 1), "Start Time")?;
-    write_headers(ws, fc, &["UTC", "Local"])?;
+    write_headers(ws, fc, "Start Time", &["UTC", "Local"])?;
     ws.set_column_width(fc.col, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, DATE_COLUMN_WIDTH)?;
 
@@ -219,8 +219,7 @@ fn output_end_time(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 1), "End Time")?;
-    write_headers(ws, fc, &["UTC", "Local"])?;
+    write_headers(ws, fc, "End Time", &["UTC", "Local"])?;
     ws.set_column_width(fc.col, DATE_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, DATE_COLUMN_WIDTH)?;
 
@@ -252,8 +251,7 @@ fn output_duration(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 1), "Duration")?;
-    write_headers(ws, fc, &["hms", "Running"])?;
+    write_headers(ws, fc, "Duration", &["hms", "Running"])?;
     ws.set_column_width(fc.col, DURATION_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, DURATION_COLUMN_WIDTH)?;
 
@@ -282,8 +280,7 @@ fn output_distance(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 1), "Distance (km)")?;
-    write_headers(ws, fc, &["Stage", "Running"])?;
+    write_headers(ws, fc, "Distance (km)", &["Stage", "Running"])?;
     ws.set_column_width(fc.col, KILOMETRES_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, METRES_COLUMN_WIDTH)?;
 
@@ -312,8 +309,7 @@ fn output_average_speed(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, &fc, (0, fc.col), (0, fc.col + 1), "Avg Speed (km/h)")?;
-    write_headers(ws, fc, &["Stage", "Running"])?;
+    write_headers(ws, fc, "Avg Speed (km/h)", &["Stage", "Running"])?;
     ws.set_column_width(fc.col, SPEED_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, SPEED_COLUMN_WIDTH)?;
 
@@ -344,8 +340,7 @@ fn output_ascent(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 2), "Ascent (m)")?;
-    write_headers(ws, fc, &["Stage", "Running", "m/km"])?;
+    write_headers(ws, fc, "Ascent (m)", &["Stage", "Running", "m/km"])?;
     ws.set_column_width(fc.col, METRES_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, METRES_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 2, METRES_COLUMN_WIDTH)?;
@@ -381,8 +376,7 @@ fn output_descent(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 2), "Descent (m)")?;
-    write_headers(ws, fc, &["Stage", "Running", "m/km"])?;
+    write_headers(ws, fc, "Descent (m)", &["Stage", "Running", "m/km"])?;
     ws.set_column_width(fc.col, METRES_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 1, METRES_COLUMN_WIDTH)?;
     ws.set_column_width(fc.col + 2, METRES_COLUMN_WIDTH)?;
@@ -418,8 +412,12 @@ fn output_min_elevation(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, &fc, (0, fc.col), (0, fc.col + 2), "Min Elevation")?;
-    write_headers(ws, fc, &["Elevation (m)", "Distance (km)", "Point"])?;
+    write_headers(
+        ws,
+        fc,
+        "Min Elevation",
+        &["Elevation (m)", "Distance (km)", "Point"],
+    )?;
     ws.set_column_width(fc.col, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(fc.col + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
@@ -447,8 +445,12 @@ fn output_max_elevation(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 2), "Max Elevation")?;
-    write_headers(ws, fc, &["Elevation (m)", "Distance (km)", "Point"])?;
+    write_headers(
+        ws,
+        fc,
+        "Max Elevation",
+        &["Elevation (m)", "Distance (km)", "Point"],
+    )?;
     ws.set_column_width(fc.col, ELEVATION_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(fc.col + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
@@ -476,8 +478,12 @@ fn output_max_speed(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 2), "Max Speed")?;
-    write_headers(ws, fc, &["Speed (km/h)", "Distance (km)", "Point"])?;
+    write_headers(
+        ws,
+        fc,
+        "Max Speed",
+        &["Speed (km/h)", "Distance (km)", "Point"],
+    )?;
     ws.set_column_width(fc.col, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
     ws.set_column_width(fc.col + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
@@ -506,8 +512,12 @@ fn output_heart_rate(
     stages: &StageList,
     avg_heart_rate: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 3), "Heart Rate")?;
-    write_headers(ws, fc, &["Avg", "Max", "Distance (km)", "Point"])?;
+    write_headers(
+        ws,
+        fc,
+        "Heart Rate",
+        &["Avg", "Max", "Distance (km)", "Point"],
+    )?;
     ws.set_column_width(fc.col + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
     for stage in stages.iter() {
@@ -528,10 +538,10 @@ fn output_temperature(
     stages: &StageList,
     avg_temp: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, fc, (0, fc.col), (0, fc.col + 6), "Temp °C")?;
     write_headers(
         ws,
         fc,
+        "Temp °C",
         &[
             "Avg",
             "Min",
@@ -575,8 +585,7 @@ fn output_track_points(
     fc: &mut FormatControl,
     stages: &StageList,
 ) -> Result<(), Box<dyn Error>> {
-    write_header_merged(ws, &fc, (0, fc.col), (0, fc.col + 2), "Track Points")?;
-    write_headers(ws, &fc, &["First", "Last", "Count"])?;
+    write_headers(ws, fc, "Track Points", &["First", "Last", "Count"])?;
 
     for stage in stages.iter() {
         write_trackpoint_number(ws, fc, stage.start.index)?;
@@ -784,42 +793,32 @@ fn write_trackpoints(
 
 // Utility functions.
 
-/// Writes a blank minor header cell. This is always in the first row.
-fn write_header_blank(ws: &mut Worksheet, fc: &FormatControl) -> Result<(), Box<dyn Error>> {
-    ws.write_blank(0, fc.col, &fc.minor_header_format())?;
-    Ok(())
-}
-
-/// Writes formatted minor header text to a sequence of cells.
-/// This is always in the second row.
+/// Writes a main heading (which can be blank) and a set of
+/// sub-headings, and automatically merges the columns of
+/// the main heading if necessary.
 fn write_headers(
     ws: &mut Worksheet,
     fc: &FormatControl,
-    headings: &[&str],
+    main_heading: &str,
+    sub_headings: &[&str],
 ) -> Result<(), Box<dyn Error>> {
-    for (idx, &heading) in headings.iter().enumerate() {
+    if main_heading.is_empty() {
+        ws.write_blank(0, fc.col, &fc.minor_header_format())?;
+    } else {
+        ws.merge_range(
+            0,
+            fc.col,
+            0,
+            fc.col + sub_headings.len() as u16 - 1,
+            main_heading,
+            &fc.minor_header_format(),
+        )?;
+    }
+
+    for (idx, &heading) in sub_headings.iter().enumerate() {
         ws.write_string_with_format(1, fc.col + idx as u16, heading, &fc.minor_header_format())?;
     }
 
-    Ok(())
-}
-
-/// Writes formatted minor header text to a range of merged cells.
-fn write_header_merged(
-    ws: &mut Worksheet,
-    fc: &FormatControl,
-    start_rc: (u32, u16),
-    end_rc: (u32, u16),
-    heading: &str,
-) -> Result<(), Box<dyn Error>> {
-    ws.merge_range(
-        start_rc.0,
-        start_rc.1,
-        end_rc.0,
-        end_rc.1,
-        heading,
-        &fc.minor_header_format(),
-    )?;
     Ok(())
 }
 

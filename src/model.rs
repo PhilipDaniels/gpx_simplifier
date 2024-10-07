@@ -290,6 +290,12 @@ impl EnrichedTrackPoint {
     pub fn heart_rate(&self) -> Option<u16> {
         self.extensions.as_ref().and_then(|ext| ext.heart_rate)
     }
+
+    /// Convenience function to extract the air_temp from
+    /// the Garmin extensions.
+    pub fn cadence(&self) -> Option<u16> {
+        self.extensions.as_ref().and_then(|ext| ext.cadence)
+    }
 }
 
 impl From<Gpx> for EnrichedGpx {

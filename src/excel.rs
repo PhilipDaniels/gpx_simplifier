@@ -22,13 +22,13 @@ const LOCATION_DESCRIPTION_COLUMN_WIDTH: f64 = 18.0;
 const ELEVATION_COLUMN_WIDTH_WITH_UNITS: f64 = 12.0;
 const METRES_COLUMN_WIDTH_WITH_UNITS: f64 = 11.0;
 const METRES_COLUMN_WIDTH: f64 = 8.0;
-const KILOMETRES_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
+const KILOMETRES_COLUMN_WIDTH_WITH_UNITS: f64 = 14.5;
 const KILOMETRES_COLUMN_WIDTH: f64 = 8.0;
 const SPEED_COLUMN_WIDTH_WITH_UNITS: f64 = 14.0;
 const SPEED_COLUMN_WIDTH: f64 = 8.0;
-const HEART_RATE_WIDTH_WITH_UNITS: f64 = 15.0;
-const TEMPERATURE_COLUMN_WIDTH_WITH_UNITS: f64 = 10.0;
-const CADENCE_COLUMN_WIDTH_WITH_UNITS: f64 = 13.0;
+const HEART_RATE_WIDTH_WITH_UNITS: f64 = 17.5;
+const TEMPERATURE_COLUMN_WIDTH_WITH_UNITS: f64 = 12.0;
+const CADENCE_COLUMN_WIDTH_WITH_UNITS: f64 = 15.5;
 
 /// Builds the Workbook that is used for the summary.
 #[time]
@@ -49,9 +49,9 @@ pub fn create_summary_xlsx<'gpx>(
     tp_ws.set_name("Track Points")?;
     write_trackpoints(
         tp_ws,
-        trackpoint_hyperlinks,
         &gpx.points,
-        stages.highlighted_trackpoints(),
+        trackpoint_hyperlinks,
+        &stages.highlighted_trackpoints(),
     )?;
 
     Ok(workbook)
@@ -80,6 +80,7 @@ pub fn write_summary_file(
 /// write them, because they are few in number and so don't slow down Calc.
 /// But they are optional on the Track Points tab because there are thousands
 /// of them and they really slow down Calc.
+#[time]
 fn write_stages(
     ws: &mut Worksheet,
     gpx: &EnrichedGpx,
@@ -609,184 +610,241 @@ fn output_track_points(
     Ok(())
 }
 
+#[time]
 fn write_trackpoints(
     ws: &mut Worksheet,
-    hyperlink: Hyperlink,
     points: &[EnrichedTrackPoint],
-    mandatory_hyperlinks: HashSet<usize>,
+    hyperlink: Hyperlink,
+    mandatory_hyperlinks: &HashSet<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let mut fc = FormatControl::new();
 
-    // const COL_INDEX: u16 = 0;
-    // //write_header_blank(ws, &fc, (0, COL_INDEX))?;
-    // //write_header(ws, &fc, (1, COL_INDEX), "Index")?;
-    // //fc.increment_column();
+    ws.set_freeze_panes(2, 0)?;
 
-    // const COL_TIME: u16 = COL_INDEX + 1;
-    // write_header_merged(ws, &fc, (0, COL_TIME), (0, COL_TIME + 3), "Time")?;
-    // //write_header(ws, &fc, (1, COL_TIME), "UTC")?;
-    // //write_header(ws, &fc, (1, COL_TIME + 1), "Local")?;
-    // //write_header(ws, &fc, (1, COL_TIME + 2), "Delta")?;
-    // //write_header(ws, &fc, (1, COL_TIME + 3), "Running")?;
-    // ws.set_column_width(COL_TIME, DATE_COLUMN_WIDTH)?;
-    // ws.set_column_width(COL_TIME + 1, DATE_COLUMN_WIDTH)?;
-    // ws.set_column_width(COL_TIME + 2, DURATION_COLUMN_WIDTH)?;
-    // ws.set_column_width(COL_TIME + 3, DURATION_COLUMN_WIDTH)?;
-    // //fc.increment_column();
+    output_tp_index(ws, &mut fc, points)?;
+    output_tp_time(ws, &mut fc, points)?;
+    output_tp_location(ws, &mut fc, points, hyperlink, mandatory_hyperlinks)?;
+    output_tp_elevation(ws, &mut fc, points)?;
+    output_tp_distance(ws, &mut fc, points)?;
+    output_tp_speed(ws, &mut fc, points)?;
+    output_tp_heart_rate(ws, &mut fc, points)?;
+    output_tp_air_temp(ws, &mut fc, points)?;
+    output_tp_cadence(ws, &mut fc, points)?;
 
-    // const COL_LOCATION: u16 = COL_TIME + 4;
-    // write_header_merged(
-    //     ws,
-    //     &fc,
-    //     (0, COL_LOCATION),
-    //     (0, COL_LOCATION + 3),
-    //     "Location",
-    // )?;
-    // //write_header(ws, &fc, (1, COL_LOCATION), "Lat")?;
-    // //write_header(ws, &fc, (1, COL_LOCATION + 1), "Lon")?;
-    // //write_header(ws, &fc, (1, COL_LOCATION + 2), "Map")?;
-    // //write_header(ws, &fc, (1, COL_LOCATION + 3), "Description")?;
-    // ws.set_column_width(COL_LOCATION, LAT_LON_COLUMN_WIDTH)?;
-    // ws.set_column_width(COL_LOCATION + 1, LAT_LON_COLUMN_WIDTH)?;
-    // ws.set_column_width(COL_LOCATION + 2, LINKED_LAT_LON_COLUMN_WIDTH)?;
-    // ws.set_column_width(COL_LOCATION + 3, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
-    // //fc.increment_column();
+    ws.autofilter(1, 0, points.len() as u32 + 1, fc.col)?;
+    Ok(())
+}
 
-    // const COL_ELE: u16 = COL_LOCATION + 4;
-    // write_header_merged(ws, &fc, (0, COL_ELE), (0, COL_ELE + 3), "Elevation (m)")?;
-    // //write_header(ws, &fc, (1, COL_ELE), "Height")?;
-    // //write_header(ws, &fc, (1, COL_ELE + 1), "Delta")?;
-    // //write_header(ws, &fc, (1, COL_ELE + 2), "Running Ascent")?;
-    // //write_header(ws, &fc, (1, COL_ELE + 3), "Running Descent")?;
-    // ws.set_column_width(COL_ELE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    // ws.set_column_width(COL_ELE + 1, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    // ws.set_column_width(COL_ELE + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    // ws.set_column_width(COL_ELE + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    // //fc.increment_column();
+fn output_tp_index(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "", &["Index"])?;
 
-    // const COL_DISTANCE: u16 = COL_ELE + 4;
-    // write_header_merged(
-    //     ws,
-    //     &fc,
-    //     (0, COL_DISTANCE),
-    //     (0, COL_DISTANCE + 1),
-    //     "Distance",
-    // )?;
-    // //write_header(ws, &fc, (1, COL_DISTANCE), "Delta (m)")?;
-    // //write_header(ws, &fc, (1, COL_DISTANCE + 1), "Running (km)")?;
-    // ws.set_column_width(COL_DISTANCE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    // ws.set_column_width(COL_DISTANCE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    // //fc.increment_column();
+    for p in points {
+        write_integer(ws, fc, p.index as u32)?;
+        fc.increment_row();
+    }
 
-    // const COL_SPEED: u16 = COL_DISTANCE + 2;
-    // //write_header_blank(ws, &fc, (0, COL_SPEED))?;
-    // //write_header(ws, &fc, (1, COL_SPEED), "Speed (kmh)")?;
-    // ws.set_column_width(COL_SPEED, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    fc.next_colour_block(1);
+    Ok(())
+}
 
-    // const COL_HEART_RATE: u16 = COL_SPEED + 1;
-    // //fc.increment_column();
-    // //write_header_blank(ws, &fc, (0, COL_HEART_RATE))?;
-    // //write_header(ws, &fc, (1, COL_HEART_RATE), "Heart Rate (bpm)")?;
-    // ws.set_column_width(COL_HEART_RATE, HEART_RATE_WIDTH_WITH_UNITS)?;
+fn output_tp_time(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "Time", &["UTC", "Local", "Delta", "Running"])?;
+    ws.set_column_width(fc.col, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col + 1, DATE_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col + 2, DURATION_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col + 3, DURATION_COLUMN_WIDTH)?;
 
-    // const COL_AIR_TEMP: u16 = COL_HEART_RATE + 1;
-    // //fc.increment_column();
-    // //write_header_blank(ws, &fc, (0, COL_AIR_TEMP))?;
-    // //write_header(ws, &fc, (1, COL_AIR_TEMP), "Temp (°C)")?;
-    // ws.set_column_width(COL_AIR_TEMP, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
+    for p in points {
+        match p.time {
+            Some(time) => {
+                write_utc_date(ws, fc, time)?;
+                write_utc_date_as_local(ws, &fc.col_offset(1), time)?;
+            }
+            None => {
+                write_blank(ws, fc)?;
+                write_blank(ws, &fc.col_offset(1))?;
+            }
+        }
 
-    // const COL_CADENCE: u16 = COL_AIR_TEMP + 1;
-    // //fc.increment_column();
-    // //write_header_blank(ws, &fc, (0, COL_CADENCE))?;
-    // //write_header(ws, &fc, (1, COL_CADENCE), "Cadence (rpm)")?;
-    // ws.set_column_width(COL_CADENCE, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
+        write_duration_option(ws, &fc.col_offset(2), p.delta_time)?;
+        write_duration_option(ws, &fc.col_offset(3), p.running_delta_time)?;
+        fc.increment_row();
+    }
 
-    // // Regenerate this so the formatting starts at the right point.
-    // let mut fc = FormatControl::new();
-    // let mut row = 2;
-    // for p in points {
-    //     //fc.reset_column();
+    fc.next_colour_block(4);
+    Ok(())
+}
 
-    //     //write_integer(ws, &fc, (row, COL_INDEX), p.index as u32)?;
-    //     //fc.increment_column();
+fn output_tp_location(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+    hyperlink: Hyperlink,
+    mandatory_hyperlinks: &HashSet<usize>,
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "Location", &["Lat", "Lon", "Map", "Description"])?;
+    ws.set_column_width(fc.col, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col + 1, LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col + 2, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    ws.set_column_width(fc.col + 3, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
 
-    //     match p.time {
-    //         Some(time) => {
-    //             write_utc_date(ws, &fc, (row, COL_TIME), time)?;
-    //             write_utc_date_as_local(ws, &fc, (row, COL_TIME + 1), time)?;
-    //         }
-    //         None => {
-    //             write_blank(ws, fc, (row, COL_TIME))?;
-    //             write_blank(ws, fc, (row, COL_TIME + 1))?;
-    //         }
-    //     }
-    //     write_duration_option(ws, &fc, (row, COL_TIME + 2), p.delta_time)?;
-    //     write_duration_option(ws, &fc, (row, COL_TIME + 3), p.running_delta_time)?;
-    //     //fc.increment_column();
+    for p in points {
+        let hyp = match hyperlink {
+            Hyperlink::Yes => Hyperlink::Yes,
+            Hyperlink::No => {
+                if mandatory_hyperlinks.contains(&p.index) {
+                    Hyperlink::Yes
+                } else {
+                    Hyperlink::No
+                }
+            }
+        };
 
-    //     let hyp = match hyperlink {
-    //         Hyperlink::Yes => Hyperlink::Yes,
-    //         Hyperlink::No => {
-    //             if mandatory_hyperlinks.contains(&p.index) {
-    //                 Hyperlink::Yes
-    //             } else {
-    //                 Hyperlink::No
-    //             }
-    //         }
-    //     };
+        write_lat_lon(ws, fc, (p.lat, p.lon), hyp, p.location.as_ref())?;
 
-    //     //write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyp)?;
-    //     //write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
-    //     //fc.increment_column();
+        fc.increment_row();
+    }
 
-    //     match p.ele {
-    //         Some(ele) => {
-    //             write_metres(ws, &fc, (row, COL_ELE), ele)?;
-    //         }
-    //         None => {
-    //             write_blank(ws, &fc, (row, COL_ELE))?;
-    //         }
-    //     }
+    fc.next_colour_block(4);
+    Ok(())
+}
 
-    //     write_metres_option(ws, &fc, (row, COL_ELE + 1), p.ele_delta_metres)?;
-    //     write_metres_option(ws, &fc, (row, COL_ELE + 2), p.running_ascent_metres)?;
-    //     write_metres_option(ws, &fc, (row, COL_ELE + 3), p.running_descent_metres)?;
-    //     //fc.increment_column();
+fn output_tp_elevation(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(
+        ws,
+        fc,
+        "Elevation (m)",
+        &["Height", "Delta", "Running Ascent", "Running Descent"],
+    )?;
+    ws.set_column_width(fc.col, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col + 1, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
-    //     write_metres(ws, &fc, (row, COL_DISTANCE), p.delta_metres)?;
-    //     write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), p.running_metres / 1000.0)?;
-    //     //fc.increment_column();
+    for p in points {
+        match p.ele {
+            Some(ele) => {
+                write_metres(ws, fc, ele)?;
+            }
+            None => {
+                write_blank(ws, fc)?;
+            }
+        }
 
-    //     write_speed_option(ws, &fc, (row, COL_SPEED), p.speed_kmh)?;
-    //     //fc.increment_column();
+        write_metres_option(ws, &fc.col_offset(1), p.ele_delta_metres)?;
+        write_metres_option(ws, &fc.col_offset(2), p.running_ascent_metres)?;
+        write_metres_option(ws, &fc.col_offset(3), p.running_descent_metres)?;
+        fc.increment_row();
+    }
 
-    //     if let Some(Some(hr)) = p.extensions.as_ref().map(|ex| ex.heart_rate) {
-    //         //write_integer(ws, &fc, (row, COL_HEART_RATE), hr.into())?;
-    //     } else {
-    //         write_blank(ws, &fc, (row, COL_HEART_RATE))?;
-    //     }
-    //     //fc.increment_column();
+    fc.next_colour_block(4);
+    Ok(())
+}
 
-    //     if let Some(Some(at)) = p.extensions.as_ref().map(|ex| ex.air_temp) {
-    //         write_temperature(ws, &fc, (row, COL_AIR_TEMP), at)?;
-    //     } else {
-    //         write_blank(ws, &fc, (row, COL_AIR_TEMP))?;
-    //     }
-    //     //fc.increment_column();
+fn output_tp_distance(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "Distance", &["Delta (m)", "Running (km)"])?;
+    ws.set_column_width(fc.col, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    ws.set_column_width(fc.col + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
-    //     if let Some(Some(cadence)) = p.extensions.as_ref().map(|ex| ex.cadence) {
-    //         //write_integer(ws, &fc, (row, COL_CADENCE), cadence.into())?;
-    //     } else {
-    //         write_blank(ws, &fc, (row, COL_CADENCE))?;
-    //     }
-    //     //fc.increment_column();
+    for p in points {
+        write_metres(ws, fc, p.delta_metres)?;
+        write_kilometres(ws, &fc.col_offset(1), p.running_metres / 1000.0)?;
+        fc.increment_row();
+    }
 
-    //     row += 1;
-    //     fc.increment_row();
-    // }
+    fc.next_colour_block(2);
+    Ok(())
+}
 
-    // ws.autofilter(1, 0, row - 1, COL_CADENCE)?;
-    // ws.set_freeze_panes(2, 0)?;
+fn output_tp_speed(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "", &["Speed (km/h)"])?;
+    ws.set_column_width(fc.col, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for p in points {
+        write_speed_option(ws, fc, p.speed_kmh)?;
+        fc.increment_row();
+    }
+
+    fc.next_colour_block(1);
+    Ok(())
+}
+
+fn output_tp_heart_rate(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "", &["Heart Rate (bpm)"])?;
+    ws.set_column_width(fc.col, HEART_RATE_WIDTH_WITH_UNITS)?;
+
+    for p in points {
+        if let Some(hr) = p.heart_rate() {
+            write_integer(ws, fc, hr.into())?;
+        } else {
+            write_blank(ws, fc)?;
+        }
+
+        fc.increment_row();
+    }
+
+    fc.next_colour_block(1);
+    Ok(())
+}
+
+fn output_tp_air_temp(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "", &["Temp (°C)"])?;
+    ws.set_column_width(fc.col, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for p in points {
+        write_f64_option(ws, fc, p.air_temp())?;
+        fc.increment_row();
+    }
+
+    fc.next_colour_block(1);
+    Ok(())
+}
+
+fn output_tp_cadence(
+    ws: &mut Worksheet,
+    fc: &mut FormatControl,
+    points: &[EnrichedTrackPoint],
+) -> Result<(), Box<dyn Error>> {
+    write_headers(ws, fc, "", &["Cadence (rpm)"])?;
+    ws.set_column_width(fc.col, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
+
+    for p in points {
+        if let Some(cad) = p.cadence() {
+            write_integer(ws, fc, cad.into())?;
+        } else {
+            write_blank(ws, fc)?;
+        }
+        
+        fc.increment_row();
+    }
 
     Ok(())
 }

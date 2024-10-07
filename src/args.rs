@@ -65,6 +65,8 @@ pub fn parse_args() -> Args {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// Whether to include Google maps hyperlinks
+/// when writing the trackpoints.
 pub enum Hyperlink {
     Yes,
     No,

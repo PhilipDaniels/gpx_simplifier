@@ -130,7 +130,7 @@ fn output_stage_number(
         fc.increment_row();
     }
 
-    fc.next_column(1);
+    fc.next_colour_block(1);
     Ok(())
 }
 
@@ -147,7 +147,7 @@ fn output_stage_type(
         fc.increment_row();
     }
 
-    fc.next_column(1);
+    fc.next_colour_block(1);
     Ok(())
 }
 
@@ -179,7 +179,7 @@ fn output_stage_location(
     fc.start_summary_row();
     write_string_bold(ws, fc, fc.col_offset(3), "SUMMARY")?;
 
-    fc.next_column(4);
+    fc.next_colour_block(4);
     Ok(())
 }
 
@@ -212,7 +212,7 @@ fn output_start_time(
     write_utc_date_option(ws, fc, fc.rowcol(), stages.start_time())?;
     write_utc_date_as_local_option(ws, fc, fc.col_offset(1), stages.start_time())?;
 
-    fc.next_column(2);
+    fc.next_colour_block(2);
     Ok(())
 }
 
@@ -245,7 +245,7 @@ fn output_end_time(
     write_utc_date_option(ws, fc, fc.rowcol(), stages.end_time())?;
     write_utc_date_as_local_option(ws, fc, fc.col_offset(1), stages.end_time())?;
 
-    fc.next_column(2);
+    fc.next_colour_block(2);
     Ok(())
 }
 
@@ -280,7 +280,7 @@ fn output_duration(
     write_string2(ws, fc, (fc.row + 2, fc.col), "Moving")?;
     write_duration_option(ws, fc, (fc.row + 2, fc.col + 1), stages.total_moving_time())?;
 
-    fc.next_column(2);
+    fc.next_colour_block(2);
     Ok(())
 }
 
@@ -310,7 +310,7 @@ fn output_distance(
     write_blank(ws, fc)?;
     write_kilometres(ws, fc, fc.col_offset(1), stages.distance_km())?;
 
-    fc.next_column(2);
+    fc.next_colour_block(2);
     Ok(())
 }
 
@@ -347,7 +347,7 @@ fn output_average_speed(
         stages.average_moving_speed(),
     )?;
 
-    fc.next_column(2);
+    fc.next_colour_block(2);
     Ok(())
 }
 
@@ -384,7 +384,7 @@ fn output_ascent(
         .and_then(|a| Some(a / stages.distance_km()));
     write_metres_option(ws, fc, fc.col_offset(2), rate)?;
 
-    fc.next_column(3);
+    fc.next_colour_block(3);
     Ok(())
 }
 
@@ -421,7 +421,7 @@ fn output_descent(
         .and_then(|a| Some(a / stages.distance_km()));
     write_metres_option(ws, fc, fc.col_offset(2), rate)?;
 
-    fc.next_column(3);
+    fc.next_colour_block(3);
     Ok(())
 }
 
@@ -450,7 +450,7 @@ fn output_min_elevation(
     fc.start_summary_row();
     write_elevation_data(ws, fc, stages.min_elevation())?;
 
-    fc.next_column(3);
+    fc.next_colour_block(3);
     Ok(())
 }
 
@@ -479,7 +479,7 @@ fn output_max_elevation(
     fc.start_summary_row();
     write_elevation_data(ws, fc, stages.max_elevation())?;
 
-    fc.next_column(3);
+    fc.next_colour_block(3);
     Ok(())
 }
 
@@ -508,7 +508,7 @@ fn output_max_speed(
     fc.start_summary_row();
     write_max_speed_data(ws, fc, stages.max_speed())?;
 
-    fc.next_column(3);
+    fc.next_colour_block(3);
     Ok(())
 }
 
@@ -530,7 +530,7 @@ fn output_heart_rate(
     fc.start_summary_row();
     write_heart_rate_data(ws, fc, stages.max_heart_rate(), avg_heart_rate)?;
 
-    fc.next_column(4);
+    fc.next_colour_block(4);
     Ok(())
 }
 
@@ -578,7 +578,7 @@ fn output_temperature(
         avg_temp,
     )?;
 
-    fc.next_column(7);
+    fc.next_colour_block(7);
     Ok(())
 }
 
@@ -613,7 +613,7 @@ fn output_track_points(
         (stages.last_point().index - stages.first_point().index + 1).try_into()?,
     )?;
 
-    fc.next_column(3);
+    fc.next_colour_block(3);
     Ok(())
 }
 
@@ -1386,7 +1386,7 @@ impl FormatControl {
         self.always_set_background_color = true;
     }
 
-    fn next_column(&mut self, col_increment: u16) {
+    fn next_colour_block(&mut self, col_increment: u16) {
         if self.current_background_color == Self::COLOR1 {
             self.current_background_color = Self::COLOR2;
         } else {

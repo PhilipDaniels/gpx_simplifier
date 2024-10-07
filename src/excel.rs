@@ -200,8 +200,8 @@ fn output_start_time(
                 write_utc_date_as_local(ws, fc, fc.col_offset(1), start_time)?;
             }
             None => {
-                write_blank(ws, fc, fc.rowcol())?;
-                write_blank(ws, fc, fc.col_offset(1))?;
+                write_blank(ws, fc)?;
+                write_blank2(ws, fc, fc.col_offset(1))?;
             }
         };
 
@@ -233,8 +233,8 @@ fn output_end_time(
                 write_utc_date_as_local(ws, fc, fc.col_offset(1), end_time)?;
             }
             None => {
-                write_blank(ws, fc, fc.rowcol())?;
-                write_blank(ws, fc, fc.col_offset(1))?;
+                write_blank(ws, fc)?;
+                write_blank2(ws, fc, fc.col_offset(1))?;
             }
         };
 
@@ -299,15 +299,15 @@ fn output_distance(
             write_kilometres(ws, fc, fc.rowcol(), stage.distance_km())?;
             write_kilometres(ws, fc, fc.col_offset(1), stage.running_distance_km())?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
         }
 
         fc.increment_row();
     }
 
     fc.start_summary_row();
-    write_blank(ws, fc, fc.rowcol())?;
+    write_blank(ws, fc)?;
     write_kilometres(ws, fc, fc.col_offset(1), stages.distance_km())?;
 
     fc.next_column(2);
@@ -329,8 +329,8 @@ fn output_average_speed(
             write_speed_option(ws, fc, fc.rowcol(), stage.average_speed_kmh())?;
             write_speed_option(ws, fc, fc.col_offset(1), stage.running_average_speed_kmh())?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
         }
 
         fc.increment_row();
@@ -368,16 +368,16 @@ fn output_ascent(
             write_metres_option(ws, fc, fc.col_offset(1), stage.running_ascent_metres())?;
             write_metres_option(ws, fc, fc.col_offset(2), stage.ascent_rate_per_km())?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
-            write_blank(ws, fc, fc.col_offset(2))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
+            write_blank2(ws, fc, fc.col_offset(2))?;
         }
 
         fc.increment_row();
     }
 
     fc.start_summary_row();
-    write_blank(ws, fc, fc.rowcol())?;
+    write_blank(ws, fc)?;
     write_metres_option(ws, fc, fc.col_offset(1), stages.total_ascent_metres())?;
     let rate = stages
         .total_ascent_metres()
@@ -405,16 +405,16 @@ fn output_descent(
             write_metres_option(ws, fc, fc.col_offset(1), stage.running_descent_metres())?;
             write_metres_option(ws, fc, fc.col_offset(2), stage.descent_rate_per_km())?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
-            write_blank(ws, fc, fc.col_offset(2))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
+            write_blank2(ws, fc, fc.col_offset(2))?;
         }
 
         fc.increment_row();
     }
 
     fc.start_summary_row();
-    write_blank(ws, fc, fc.rowcol())?;
+    write_blank(ws, fc)?;
     write_metres_option(ws, fc, fc.col_offset(1), stages.total_descent_metres())?;
     let rate = stages
         .total_descent_metres()
@@ -439,9 +439,9 @@ fn output_min_elevation(
         if stage.stage_type == StageType::Moving {
             write_elevation_data(ws, fc, stage.min_elevation)?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
-            write_blank(ws, fc, fc.col_offset(2))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
+            write_blank2(ws, fc, fc.col_offset(2))?;
         }
 
         fc.increment_row();
@@ -468,9 +468,9 @@ fn output_max_elevation(
         if stage.stage_type == StageType::Moving {
             write_elevation_data(ws, fc, stage.max_elevation)?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
-            write_blank(ws, fc, fc.col_offset(2))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
+            write_blank2(ws, fc, fc.col_offset(2))?;
         }
 
         fc.increment_row();
@@ -497,9 +497,9 @@ fn output_max_speed(
         if stage.stage_type == StageType::Moving {
             write_max_speed_data(ws, fc, stage.max_speed)?;
         } else {
-            write_blank(ws, fc, fc.rowcol())?;
-            write_blank(ws, fc, fc.col_offset(1))?;
-            write_blank(ws, fc, fc.col_offset(2))?;
+            write_blank(ws, fc)?;
+            write_blank2(ws, fc, fc.col_offset(1))?;
+            write_blank2(ws, fc, fc.col_offset(2))?;
         }
 
         fc.increment_row();
@@ -591,8 +591,8 @@ fn output_track_points(
     write_headers(ws, &fc, &["First", "Last", "Count"])?;
 
     for stage in stages.iter() {
-        write_trackpoint_number(ws, &fc, fc.rowcol(), stage.start.index)?;
-        write_trackpoint_number(ws, &fc, fc.col_offset(1), stage.end.index)?;
+        write_trackpoint_number(ws, fc, fc.rowcol(), stage.start.index)?;
+        write_trackpoint_number(ws, fc, fc.col_offset(1), stage.end.index)?;
         write_integer2(
             ws,
             &fc,
@@ -625,176 +625,176 @@ fn write_trackpoints(
 ) -> Result<(), Box<dyn Error>> {
     let mut fc = FormatControl::new();
 
-    const COL_INDEX: u16 = 0;
-    //write_header_blank(ws, &fc, (0, COL_INDEX))?;
-    //write_header(ws, &fc, (1, COL_INDEX), "Index")?;
-    //fc.increment_column();
+    // const COL_INDEX: u16 = 0;
+    // //write_header_blank(ws, &fc, (0, COL_INDEX))?;
+    // //write_header(ws, &fc, (1, COL_INDEX), "Index")?;
+    // //fc.increment_column();
 
-    const COL_TIME: u16 = COL_INDEX + 1;
-    write_header_merged(ws, &fc, (0, COL_TIME), (0, COL_TIME + 3), "Time")?;
-    //write_header(ws, &fc, (1, COL_TIME), "UTC")?;
-    //write_header(ws, &fc, (1, COL_TIME + 1), "Local")?;
-    //write_header(ws, &fc, (1, COL_TIME + 2), "Delta")?;
-    //write_header(ws, &fc, (1, COL_TIME + 3), "Running")?;
-    ws.set_column_width(COL_TIME, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_TIME + 1, DATE_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_TIME + 2, DURATION_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_TIME + 3, DURATION_COLUMN_WIDTH)?;
-    //fc.increment_column();
+    // const COL_TIME: u16 = COL_INDEX + 1;
+    // write_header_merged(ws, &fc, (0, COL_TIME), (0, COL_TIME + 3), "Time")?;
+    // //write_header(ws, &fc, (1, COL_TIME), "UTC")?;
+    // //write_header(ws, &fc, (1, COL_TIME + 1), "Local")?;
+    // //write_header(ws, &fc, (1, COL_TIME + 2), "Delta")?;
+    // //write_header(ws, &fc, (1, COL_TIME + 3), "Running")?;
+    // ws.set_column_width(COL_TIME, DATE_COLUMN_WIDTH)?;
+    // ws.set_column_width(COL_TIME + 1, DATE_COLUMN_WIDTH)?;
+    // ws.set_column_width(COL_TIME + 2, DURATION_COLUMN_WIDTH)?;
+    // ws.set_column_width(COL_TIME + 3, DURATION_COLUMN_WIDTH)?;
+    // //fc.increment_column();
 
-    const COL_LOCATION: u16 = COL_TIME + 4;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_LOCATION),
-        (0, COL_LOCATION + 3),
-        "Location",
-    )?;
-    //write_header(ws, &fc, (1, COL_LOCATION), "Lat")?;
-    //write_header(ws, &fc, (1, COL_LOCATION + 1), "Lon")?;
-    //write_header(ws, &fc, (1, COL_LOCATION + 2), "Map")?;
-    //write_header(ws, &fc, (1, COL_LOCATION + 3), "Description")?;
-    ws.set_column_width(COL_LOCATION, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_LOCATION + 1, LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_LOCATION + 2, LINKED_LAT_LON_COLUMN_WIDTH)?;
-    ws.set_column_width(COL_LOCATION + 3, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
-    //fc.increment_column();
+    // const COL_LOCATION: u16 = COL_TIME + 4;
+    // write_header_merged(
+    //     ws,
+    //     &fc,
+    //     (0, COL_LOCATION),
+    //     (0, COL_LOCATION + 3),
+    //     "Location",
+    // )?;
+    // //write_header(ws, &fc, (1, COL_LOCATION), "Lat")?;
+    // //write_header(ws, &fc, (1, COL_LOCATION + 1), "Lon")?;
+    // //write_header(ws, &fc, (1, COL_LOCATION + 2), "Map")?;
+    // //write_header(ws, &fc, (1, COL_LOCATION + 3), "Description")?;
+    // ws.set_column_width(COL_LOCATION, LAT_LON_COLUMN_WIDTH)?;
+    // ws.set_column_width(COL_LOCATION + 1, LAT_LON_COLUMN_WIDTH)?;
+    // ws.set_column_width(COL_LOCATION + 2, LINKED_LAT_LON_COLUMN_WIDTH)?;
+    // ws.set_column_width(COL_LOCATION + 3, LOCATION_DESCRIPTION_COLUMN_WIDTH)?;
+    // //fc.increment_column();
 
-    const COL_ELE: u16 = COL_LOCATION + 4;
-    write_header_merged(ws, &fc, (0, COL_ELE), (0, COL_ELE + 3), "Elevation (m)")?;
-    //write_header(ws, &fc, (1, COL_ELE), "Height")?;
-    //write_header(ws, &fc, (1, COL_ELE + 1), "Delta")?;
-    //write_header(ws, &fc, (1, COL_ELE + 2), "Running Ascent")?;
-    //write_header(ws, &fc, (1, COL_ELE + 3), "Running Descent")?;
-    ws.set_column_width(COL_ELE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_ELE + 1, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_ELE + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_ELE + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    //fc.increment_column();
+    // const COL_ELE: u16 = COL_LOCATION + 4;
+    // write_header_merged(ws, &fc, (0, COL_ELE), (0, COL_ELE + 3), "Elevation (m)")?;
+    // //write_header(ws, &fc, (1, COL_ELE), "Height")?;
+    // //write_header(ws, &fc, (1, COL_ELE + 1), "Delta")?;
+    // //write_header(ws, &fc, (1, COL_ELE + 2), "Running Ascent")?;
+    // //write_header(ws, &fc, (1, COL_ELE + 3), "Running Descent")?;
+    // ws.set_column_width(COL_ELE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    // ws.set_column_width(COL_ELE + 1, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    // ws.set_column_width(COL_ELE + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    // ws.set_column_width(COL_ELE + 3, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    // //fc.increment_column();
 
-    const COL_DISTANCE: u16 = COL_ELE + 4;
-    write_header_merged(
-        ws,
-        &fc,
-        (0, COL_DISTANCE),
-        (0, COL_DISTANCE + 1),
-        "Distance",
-    )?;
-    //write_header(ws, &fc, (1, COL_DISTANCE), "Delta (m)")?;
-    //write_header(ws, &fc, (1, COL_DISTANCE + 1), "Running (km)")?;
-    ws.set_column_width(COL_DISTANCE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
-    ws.set_column_width(COL_DISTANCE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
-    //fc.increment_column();
+    // const COL_DISTANCE: u16 = COL_ELE + 4;
+    // write_header_merged(
+    //     ws,
+    //     &fc,
+    //     (0, COL_DISTANCE),
+    //     (0, COL_DISTANCE + 1),
+    //     "Distance",
+    // )?;
+    // //write_header(ws, &fc, (1, COL_DISTANCE), "Delta (m)")?;
+    // //write_header(ws, &fc, (1, COL_DISTANCE + 1), "Running (km)")?;
+    // ws.set_column_width(COL_DISTANCE, METRES_COLUMN_WIDTH_WITH_UNITS)?;
+    // ws.set_column_width(COL_DISTANCE + 1, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
+    // //fc.increment_column();
 
-    const COL_SPEED: u16 = COL_DISTANCE + 2;
-    //write_header_blank(ws, &fc, (0, COL_SPEED))?;
-    //write_header(ws, &fc, (1, COL_SPEED), "Speed (kmh)")?;
-    ws.set_column_width(COL_SPEED, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
+    // const COL_SPEED: u16 = COL_DISTANCE + 2;
+    // //write_header_blank(ws, &fc, (0, COL_SPEED))?;
+    // //write_header(ws, &fc, (1, COL_SPEED), "Speed (kmh)")?;
+    // ws.set_column_width(COL_SPEED, SPEED_COLUMN_WIDTH_WITH_UNITS)?;
 
-    const COL_HEART_RATE: u16 = COL_SPEED + 1;
-    //fc.increment_column();
-    //write_header_blank(ws, &fc, (0, COL_HEART_RATE))?;
-    //write_header(ws, &fc, (1, COL_HEART_RATE), "Heart Rate (bpm)")?;
-    ws.set_column_width(COL_HEART_RATE, HEART_RATE_WIDTH_WITH_UNITS)?;
+    // const COL_HEART_RATE: u16 = COL_SPEED + 1;
+    // //fc.increment_column();
+    // //write_header_blank(ws, &fc, (0, COL_HEART_RATE))?;
+    // //write_header(ws, &fc, (1, COL_HEART_RATE), "Heart Rate (bpm)")?;
+    // ws.set_column_width(COL_HEART_RATE, HEART_RATE_WIDTH_WITH_UNITS)?;
 
-    const COL_AIR_TEMP: u16 = COL_HEART_RATE + 1;
-    //fc.increment_column();
-    //write_header_blank(ws, &fc, (0, COL_AIR_TEMP))?;
-    //write_header(ws, &fc, (1, COL_AIR_TEMP), "Temp (°C)")?;
-    ws.set_column_width(COL_AIR_TEMP, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
+    // const COL_AIR_TEMP: u16 = COL_HEART_RATE + 1;
+    // //fc.increment_column();
+    // //write_header_blank(ws, &fc, (0, COL_AIR_TEMP))?;
+    // //write_header(ws, &fc, (1, COL_AIR_TEMP), "Temp (°C)")?;
+    // ws.set_column_width(COL_AIR_TEMP, TEMPERATURE_COLUMN_WIDTH_WITH_UNITS)?;
 
-    const COL_CADENCE: u16 = COL_AIR_TEMP + 1;
-    //fc.increment_column();
-    //write_header_blank(ws, &fc, (0, COL_CADENCE))?;
-    //write_header(ws, &fc, (1, COL_CADENCE), "Cadence (rpm)")?;
-    ws.set_column_width(COL_CADENCE, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
+    // const COL_CADENCE: u16 = COL_AIR_TEMP + 1;
+    // //fc.increment_column();
+    // //write_header_blank(ws, &fc, (0, COL_CADENCE))?;
+    // //write_header(ws, &fc, (1, COL_CADENCE), "Cadence (rpm)")?;
+    // ws.set_column_width(COL_CADENCE, CADENCE_COLUMN_WIDTH_WITH_UNITS)?;
 
-    // Regenerate this so the formatting starts at the right point.
-    let mut fc = FormatControl::new();
-    let mut row = 2;
-    for p in points {
-        //fc.reset_column();
+    // // Regenerate this so the formatting starts at the right point.
+    // let mut fc = FormatControl::new();
+    // let mut row = 2;
+    // for p in points {
+    //     //fc.reset_column();
 
-        //write_integer(ws, &fc, (row, COL_INDEX), p.index as u32)?;
-        //fc.increment_column();
+    //     //write_integer(ws, &fc, (row, COL_INDEX), p.index as u32)?;
+    //     //fc.increment_column();
 
-        match p.time {
-            Some(time) => {
-                write_utc_date(ws, &fc, (row, COL_TIME), time)?;
-                write_utc_date_as_local(ws, &fc, (row, COL_TIME + 1), time)?;
-            }
-            None => {
-                write_blank(ws, &fc, (row, COL_TIME))?;
-                write_blank(ws, &fc, (row, COL_TIME + 1))?;
-            }
-        }
-        write_duration_option(ws, &fc, (row, COL_TIME + 2), p.delta_time)?;
-        write_duration_option(ws, &fc, (row, COL_TIME + 3), p.running_delta_time)?;
-        //fc.increment_column();
+    //     match p.time {
+    //         Some(time) => {
+    //             write_utc_date(ws, &fc, (row, COL_TIME), time)?;
+    //             write_utc_date_as_local(ws, &fc, (row, COL_TIME + 1), time)?;
+    //         }
+    //         None => {
+    //             write_blank(ws, fc, (row, COL_TIME))?;
+    //             write_blank(ws, fc, (row, COL_TIME + 1))?;
+    //         }
+    //     }
+    //     write_duration_option(ws, &fc, (row, COL_TIME + 2), p.delta_time)?;
+    //     write_duration_option(ws, &fc, (row, COL_TIME + 3), p.running_delta_time)?;
+    //     //fc.increment_column();
 
-        let hyp = match hyperlink {
-            Hyperlink::Yes => Hyperlink::Yes,
-            Hyperlink::No => {
-                if mandatory_hyperlinks.contains(&p.index) {
-                    Hyperlink::Yes
-                } else {
-                    Hyperlink::No
-                }
-            }
-        };
+    //     let hyp = match hyperlink {
+    //         Hyperlink::Yes => Hyperlink::Yes,
+    //         Hyperlink::No => {
+    //             if mandatory_hyperlinks.contains(&p.index) {
+    //                 Hyperlink::Yes
+    //             } else {
+    //                 Hyperlink::No
+    //             }
+    //         }
+    //     };
 
-        //write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyp)?;
-        //write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
-        //fc.increment_column();
+    //     //write_lat_lon(ws, &fc, (row, COL_LOCATION), (p.lat, p.lon), hyp)?;
+    //     //write_location_description(ws, &fc, (row, COL_LOCATION + 3), &p.location)?;
+    //     //fc.increment_column();
 
-        match p.ele {
-            Some(ele) => {
-                write_metres(ws, &fc, (row, COL_ELE), ele)?;
-            }
-            None => {
-                write_blank(ws, &fc, (row, COL_ELE))?;
-            }
-        }
+    //     match p.ele {
+    //         Some(ele) => {
+    //             write_metres(ws, &fc, (row, COL_ELE), ele)?;
+    //         }
+    //         None => {
+    //             write_blank(ws, &fc, (row, COL_ELE))?;
+    //         }
+    //     }
 
-        write_metres_option(ws, &fc, (row, COL_ELE + 1), p.ele_delta_metres)?;
-        write_metres_option(ws, &fc, (row, COL_ELE + 2), p.running_ascent_metres)?;
-        write_metres_option(ws, &fc, (row, COL_ELE + 3), p.running_descent_metres)?;
-        //fc.increment_column();
+    //     write_metres_option(ws, &fc, (row, COL_ELE + 1), p.ele_delta_metres)?;
+    //     write_metres_option(ws, &fc, (row, COL_ELE + 2), p.running_ascent_metres)?;
+    //     write_metres_option(ws, &fc, (row, COL_ELE + 3), p.running_descent_metres)?;
+    //     //fc.increment_column();
 
-        write_metres(ws, &fc, (row, COL_DISTANCE), p.delta_metres)?;
-        write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), p.running_metres / 1000.0)?;
-        //fc.increment_column();
+    //     write_metres(ws, &fc, (row, COL_DISTANCE), p.delta_metres)?;
+    //     write_kilometres(ws, &fc, (row, COL_DISTANCE + 1), p.running_metres / 1000.0)?;
+    //     //fc.increment_column();
 
-        write_speed_option(ws, &fc, (row, COL_SPEED), p.speed_kmh)?;
-        //fc.increment_column();
+    //     write_speed_option(ws, &fc, (row, COL_SPEED), p.speed_kmh)?;
+    //     //fc.increment_column();
 
-        if let Some(Some(hr)) = p.extensions.as_ref().map(|ex| ex.heart_rate) {
-            //write_integer(ws, &fc, (row, COL_HEART_RATE), hr.into())?;
-        } else {
-            write_blank(ws, &fc, (row, COL_HEART_RATE))?;
-        }
-        //fc.increment_column();
+    //     if let Some(Some(hr)) = p.extensions.as_ref().map(|ex| ex.heart_rate) {
+    //         //write_integer(ws, &fc, (row, COL_HEART_RATE), hr.into())?;
+    //     } else {
+    //         write_blank(ws, &fc, (row, COL_HEART_RATE))?;
+    //     }
+    //     //fc.increment_column();
 
-        if let Some(Some(at)) = p.extensions.as_ref().map(|ex| ex.air_temp) {
-            write_temperature(ws, &fc, (row, COL_AIR_TEMP), at)?;
-        } else {
-            write_blank(ws, &fc, (row, COL_AIR_TEMP))?;
-        }
-        //fc.increment_column();
+    //     if let Some(Some(at)) = p.extensions.as_ref().map(|ex| ex.air_temp) {
+    //         write_temperature(ws, &fc, (row, COL_AIR_TEMP), at)?;
+    //     } else {
+    //         write_blank(ws, &fc, (row, COL_AIR_TEMP))?;
+    //     }
+    //     //fc.increment_column();
 
-        if let Some(Some(cadence)) = p.extensions.as_ref().map(|ex| ex.cadence) {
-            //write_integer(ws, &fc, (row, COL_CADENCE), cadence.into())?;
-        } else {
-            write_blank(ws, &fc, (row, COL_CADENCE))?;
-        }
-        //fc.increment_column();
+    //     if let Some(Some(cadence)) = p.extensions.as_ref().map(|ex| ex.cadence) {
+    //         //write_integer(ws, &fc, (row, COL_CADENCE), cadence.into())?;
+    //     } else {
+    //         write_blank(ws, &fc, (row, COL_CADENCE))?;
+    //     }
+    //     //fc.increment_column();
 
-        row += 1;
-        fc.increment_row();
-    }
+    //     row += 1;
+    //     fc.increment_row();
+    // }
 
-    ws.autofilter(1, 0, row - 1, COL_CADENCE)?;
-    ws.set_freeze_panes(2, 0)?;
+    // ws.autofilter(1, 0, row - 1, COL_CADENCE)?;
+    // ws.set_freeze_panes(2, 0)?;
 
     Ok(())
 }
@@ -840,22 +840,6 @@ fn write_header_merged(
     Ok(())
 }
 
-/// Writes an integer.
-fn write_integer(ws: &mut Worksheet, fc: &FormatControl, value: u32) -> Result<(), Box<dyn Error>> {
-    ws.write_number_with_format(fc.row, fc.col, value, &fc.integer_format())?;
-    Ok(())
-}
-
-fn write_integer2(
-    ws: &mut Worksheet,
-    fc: &FormatControl,
-    rc: (u32, u16),
-    value: u32,
-) -> Result<(), Box<dyn Error>> {
-    ws.write_number_with_format(rc.0, rc.1, value, &fc.integer_format())?;
-    Ok(())
-}
-
 /// Writes a lat-lon pair with the lat in the first cell as specified
 /// by 'rc' and the lon in the next column. If 'hyperlink' is yes then
 /// a hyperlink to Google Maps is written into the third column.
@@ -879,7 +863,7 @@ fn write_lat_lon(
             ws.write_url_with_format(fc.row, fc.col + 2, url, &format)?;
         }
         Hyperlink::No => {
-            write_blank(ws, fc, fc.col_offset(2))?;
+            write_blank2(ws, fc, fc.col_offset(2))?;
         }
     };
 
@@ -888,18 +872,42 @@ fn write_lat_lon(
         if !location.is_empty() {
             ws.write_string_with_format(rc.0, rc.1, location, &fc.location_format())?;
         } else {
-            write_blank(ws, fc, rc)?;
+            write_blank2(ws, fc, rc)?;
         }
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
 
+    Ok(())
+}
+
+/// Writes an integer.
+fn write_integer(ws: &mut Worksheet, fc: &FormatControl, value: u32) -> Result<(), Box<dyn Error>> {
+    write_integer2(ws, fc, fc.rowcol(), value)?;
+    Ok(())
+}
+
+fn write_integer2(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    rc: (u32, u16),
+    value: u32,
+) -> Result<(), Box<dyn Error>> {
+    ws.write_number_with_format(rc.0, rc.1, value, &fc.integer_format())?;
     Ok(())
 }
 
 /// Writes a blank into a cell. We often want to do this when there is no data
 /// so that banding formatting is applied to the cell.
 fn write_blank(
+    ws: &mut Worksheet,
+    fc: &FormatControl
+) -> Result<(), Box<dyn Error>> {
+    write_blank2(ws, fc, fc.rowcol())?;
+    Ok(())
+}
+
+fn write_blank2(
     ws: &mut Worksheet,
     fc: &FormatControl,
     rc: (u32, u16),
@@ -915,9 +923,9 @@ fn write_elevation_data(
     point: Option<&EnrichedTrackPoint>,
 ) -> Result<(), Box<dyn Error>> {
     if point.is_none() {
-        write_blank(ws, fc, (fc.row, fc.col))?;
-        write_blank(ws, fc, (fc.row, fc.col + 1))?;
-        write_blank(ws, fc, (fc.row, fc.col + 2))?;
+        write_blank(ws, fc)?;
+        write_blank2(ws, fc, fc.col_offset(1))?;
+        write_blank2(ws, fc, fc.col_offset(2))?;
         return Ok(());
     }
 
@@ -925,10 +933,10 @@ fn write_elevation_data(
 
     match point.ele {
         Some(ele) => {
-            write_metres(ws, fc, (fc.row, fc.col), ele)?;
+            write_metres(ws, fc, fc.rowcol(), ele)?;
         }
         None => {
-            write_blank(ws, fc, (fc.row, fc.col))?;
+            write_blank(ws, fc)?;
         }
     }
 
@@ -981,7 +989,7 @@ fn write_f64_option(
     if let Some(value) = value {
         write_f64(ws, fc, value)?;
     } else {
-        write_blank(ws, fc, (fc.row, fc.col))?;
+        write_blank(ws, fc)?;
     }
     Ok(())
 }
@@ -1009,7 +1017,7 @@ fn write_utc_date_option(
     if let Some(d) = utc_date {
         write_utc_date(ws, fc, rc, d)?;
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
     Ok(())
 }
@@ -1037,7 +1045,7 @@ fn write_utc_date_as_local_option(
     if let Some(d) = utc_date {
         write_utc_date_as_local(ws, fc, rc, d)?;
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
     Ok(())
 }
@@ -1089,7 +1097,7 @@ fn write_duration_option(
     if let Some(dur) = duration {
         write_duration(ws, fc, rc, dur)?;
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
 
     Ok(())
@@ -1118,9 +1126,9 @@ fn write_max_speed_data(
     point: Option<&EnrichedTrackPoint>,
 ) -> Result<(), Box<dyn Error>> {
     if point.is_none() {
-        write_blank(ws, fc, fc.rowcol())?;
-        write_blank(ws, fc, fc.col_offset(1))?;
-        write_blank(ws, fc, fc.col_offset(2))?;
+        write_blank(ws, fc)?;
+        write_blank2(ws, fc, fc.col_offset(1))?;
+        write_blank2(ws, fc, fc.col_offset(2))?;
         return Ok(());
     }
 
@@ -1149,9 +1157,9 @@ fn write_heart_rate_data(
         }
     }
 
-    write_blank(ws, fc, fc.col_offset(1))?;
-    write_blank(ws, fc, fc.col_offset(2))?;
-    write_blank(ws, fc, fc.col_offset(3))?;
+    write_blank2(ws, fc, fc.col_offset(1))?;
+    write_blank2(ws, fc, fc.col_offset(2))?;
+    write_blank2(ws, fc, fc.col_offset(3))?;
     Ok(())
 }
 
@@ -1169,9 +1177,9 @@ fn write_temperature_data(
         write_utc_date_as_local_option(ws, fc, fc.col_offset(2), min.time)?;
         write_trackpoint_number(ws, fc, fc.col_offset(3), min.index)?;
     } else {
-        write_blank(ws, fc, fc.col_offset(1))?;
-        write_blank(ws, fc, fc.col_offset(2))?;
-        write_blank(ws, fc, fc.col_offset(3))?;
+        write_blank2(ws, fc, fc.col_offset(1))?;
+        write_blank2(ws, fc, fc.col_offset(2))?;
+        write_blank2(ws, fc, fc.col_offset(3))?;
     }
 
     if let Some(max) = max {
@@ -1179,9 +1187,9 @@ fn write_temperature_data(
         write_utc_date_as_local_option(ws, fc, fc.col_offset(5), max.time)?;
         write_trackpoint_number(ws, fc, fc.col_offset(6), max.index)?;
     } else {
-        write_blank(ws, fc, fc.col_offset(4))?;
-        write_blank(ws, fc, fc.col_offset(5))?;
-        write_blank(ws, fc, fc.col_offset(6))?;
+        write_blank2(ws, fc, fc.col_offset(4))?;
+        write_blank2(ws, fc, fc.col_offset(5))?;
+        write_blank2(ws, fc, fc.col_offset(6))?;
     }
 
     Ok(())
@@ -1207,7 +1215,7 @@ fn write_temperature_option(
     if let Some(t) = temperature {
         write_temperature(ws, fc, rc, t)?;
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
     Ok(())
 }
@@ -1268,7 +1276,7 @@ fn write_metres_option(
     if let Some(m) = metres {
         write_metres(ws, fc, rc, m)?;
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
     Ok(())
 }
@@ -1316,7 +1324,7 @@ fn write_speed_option(
     if let Some(s) = speed {
         write_speed(ws, fc, rc, s)?;
     } else {
-        write_blank(ws, fc, rc)?;
+        write_blank2(ws, fc, rc)?;
     }
 
     Ok(())

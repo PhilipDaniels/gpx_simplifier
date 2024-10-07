@@ -1256,8 +1256,11 @@ fn write_speed_option(
     Ok(())
 }
 
-/// Little struct to control the colours and banding of the Excel output.
-/// 16 bytes in size = 128 bits. These will fit into 2 registers.
+/// Little struct to control the colours and banding of the Excel output. 16
+/// bytes in size = 128 bits. These will fit into 2 registers, but if you change
+/// the write* methods to do pass-by-value you have to de-reference in a million
+/// places in the output* methods. So it's best to leave it all as pass by
+/// reference.
 struct FormatControl {
     row: u32,
     col: u16,

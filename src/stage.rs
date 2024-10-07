@@ -65,14 +65,14 @@ pub struct Stage<'gpx> {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum StageType {
     Moving,
-    Stopped,
+    Control,
 }
 
 impl fmt::Display for StageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StageType::Moving => write!(f, "Moving"),
-            StageType::Stopped => write!(f, "Stopped"),
+            StageType::Control => write!(f, "Control"),
         }
     }
 }
@@ -80,8 +80,8 @@ impl fmt::Display for StageType {
 impl StageType {
     fn toggle(self) -> Self {
         match self {
-            StageType::Moving => StageType::Stopped,
-            StageType::Stopped => StageType::Moving,
+            StageType::Moving => StageType::Control,
+            StageType::Control => StageType::Moving,
         }
     }
 }
@@ -290,21 +290,21 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the total time Moving across all the stages.
     pub fn total_moving_time(&self) -> Option<Duration> {
-        match (self.duration(), self.total_stopped_time()) {
+        match (self.duration(), self.total_control_time()) {
             (Some(dur), Some(tst)) => Some(dur - tst),
             _ => None,
         }
     }
 
-    /// Returns the total time Stopped across all the stages.
-    pub fn total_stopped_time(&self) -> Option<Duration> {
+    /// Returns the total time Control across all the stages.
+    pub fn total_control_time(&self) -> Option<Duration> {
         self.0
             .iter()
             .filter_map(|stage| match stage.stage_type {
                 StageType::Moving => None,
-                StageType::Stopped => Some(stage.duration()),
+                StageType::Control => Some(stage.duration()),
             })
-            .sum() // TODO: Correct?
+            .sum()
     }
 
     /// Returns the total distance of all the stages in metres.
@@ -646,7 +646,7 @@ fn get_next_stage<'gpx>(
     // A Stopped stage ends when we have moved some distance.
     let end_idx = match stage_type {
         StageType::Moving => find_stop_index(gpx, start_idx, last_valid_idx, params),
-        StageType::Stopped => {
+        StageType::Control => {
             find_resume_index(gpx, start_idx, last_valid_idx, params.min_metres_to_resume)
         }
     };
@@ -815,7 +815,7 @@ fn find_resume_index(
         let moved_metres =
             distance_between_points_metres(start_pt, gpx.points[end_index].as_geo_point());
         if moved_metres > min_metres_to_resume {
-            debug!("find_resume_index(start_idx={start_idx}) Returning end_idx={end_index} due to having moved {moved_metres:.2}m");
+            debug!("find_resume_index(start_idx={start_idx}) Returning end_idx={end_index} due to having moved {moved_metres:.2}m as the crow flies");
             return end_index;
         }
         end_index += 1;
@@ -992,7 +992,7 @@ fn classify_stage(start_point: &EnrichedTrackPoint, last_point: &EnrichedTrackPo
 
     if speed < 5.0 {
         // Less than walking pace? Assume you're stopped.
-        StageType::Stopped
+        StageType::Control
     } else {
         StageType::Moving
     }

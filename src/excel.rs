@@ -266,8 +266,8 @@ fn output_duration(
     write_string(ws, fc, "Total")?;
     write_duration_option(ws, &fc.col_offset(1), stages.duration())?;
 
-    write_string(ws, &fc.row_offset(1), "Stopped")?;
-    write_duration_option(ws, &fc.offset(1, 1), stages.total_stopped_time())?;
+    write_string(ws, &fc.row_offset(1), "Control")?;
+    write_duration_option(ws, &fc.offset(1, 1), stages.total_control_time())?;
 
     write_string(ws, &fc.row_offset(2), "Moving")?;
     write_duration_option(ws, &fc.offset(2, 1), stages.total_moving_time())?;

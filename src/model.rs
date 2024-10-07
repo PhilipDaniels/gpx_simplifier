@@ -179,7 +179,7 @@ impl EnrichedGpx {
             .points
             .iter()
             .flat_map(|p| p.extensions.as_ref())
-            .flat_map(|ext| ext.heart_rate.and_then(|hr| Some(hr as f64)))
+            .flat_map(|ext| ext.heart_rate.map(|hr| hr as f64))
             .sum();
 
         if sum == 0.0 {

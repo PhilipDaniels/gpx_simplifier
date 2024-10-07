@@ -72,14 +72,14 @@ pub fn write_summary_file(
 
 /// Write the "Stages" tab of the summary spreadsheet.
 ///
-/// We write the data in vertical fashion to keep headers and their
-/// corresponding data together. Doing it horizontally leads to a very
-/// large function with the headers and the data far separated.
+/// We write the data in vertical fashion to keep the code for the headers and
+/// their corresponding data together. Doing it horizontally leads to a very
+/// large function with the headers and the data separated by a large distance.
 ///
-/// Regarding lat-lon hyperlinks: on the summary tab we generally always
-/// write them, because they are few in number and so don't slow down Calc.
-/// But they are optional on the Track Points tab because there are thousands
-/// of them and they really slow down Calc.
+/// Regarding lat-lon hyperlinks: on the summary tab we generally always write
+/// them, because they are few in number and so don't slow down Calc. But they
+/// are optional on the Track Points tab because there are thousands of them and
+/// they really slow down Calc.
 #[time]
 fn write_stages(
     ws: &mut Worksheet,
@@ -365,7 +365,7 @@ fn output_ascent(
     write_metres_option(ws, &fc.col_offset(1), stages.total_ascent_metres())?;
     let rate = stages
         .total_ascent_metres()
-        .and_then(|a| Some(a / stages.distance_km()));
+        .map(|a| a / stages.distance_km());
     write_metres_option(ws, &fc.col_offset(2), rate)?;
 
     fc.next_colour_block(3);
@@ -401,7 +401,7 @@ fn output_descent(
     write_metres_option(ws, &fc.col_offset(1), stages.total_descent_metres())?;
     let rate = stages
         .total_descent_metres()
-        .and_then(|a| Some(a / stages.distance_km()));
+        .map(|a| a / stages.distance_km());
     write_metres_option(ws, &fc.col_offset(2), rate)?;
 
     fc.next_colour_block(3);
@@ -842,7 +842,7 @@ fn output_tp_cadence(
         } else {
             write_blank(ws, fc)?;
         }
-        
+
         fc.increment_row();
     }
 

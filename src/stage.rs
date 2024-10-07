@@ -4,7 +4,7 @@
 //! other metrics fairly easily.
 
 use core::{fmt, slice};
-use std::{collections::HashSet, ops::Index, usize};
+use std::{collections::HashSet, ops::Index};
 
 use geo::{GeodesicDistance, Point};
 use log::{debug, info, warn};
@@ -192,7 +192,7 @@ impl<'gpx> Stage<'gpx> {
 
     /// Returns the ascent rate in m/km over the stage.
     pub fn ascent_rate_per_km(&self) -> Option<f64> {
-        self.ascent_metres().and_then(|a| Some(a / self.distance_km()))
+        self.ascent_metres().map(|a| a / self.distance_km())
     }
 
     /// Returns the total descent in metres over the stage.
@@ -214,7 +214,7 @@ impl<'gpx> Stage<'gpx> {
 
     /// Returns the descent rate in m/km over the stage.
     pub fn descent_rate_per_km(&self) -> Option<f64> {
-        self.descent_metres().and_then(|a| Some(a / self.distance_km()))
+        self.descent_metres().map(|a| a / self.distance_km())
     }
 }
 
@@ -399,8 +399,7 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the point of maximum heart rate across all the stages.
     pub fn max_heart_rate(&self) -> Option<&EnrichedTrackPoint> {
-        self
-            .0
+        self.0
             .iter()
             .filter_map(|s| s.max_heart_rate)
             .max_by(|a, b| a.heart_rate().unwrap().cmp(&b.heart_rate().unwrap()))
@@ -408,8 +407,7 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the point of minimum temperature across all the stages.
     pub fn min_temperature(&self) -> Option<&EnrichedTrackPoint> {
-        self
-            .0
+        self.0
             .iter()
             .filter_map(|s| s.min_air_temp)
             .min_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
@@ -885,7 +883,6 @@ fn find_heart_rates(
     start_idx: usize,
     end_idx: usize,
 ) -> (Option<&EnrichedTrackPoint>, Option<f64>) {
-
     let mut sum: f64 = 0.0;
     let mut count = 0;
     let mut max: Option<&EnrichedTrackPoint> = None;

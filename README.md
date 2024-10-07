@@ -89,7 +89,7 @@ Or build from source using cargo.
   able to reverse geocode lat-lon to timezone name.
 - Track splitting
 - Waypoint processing
-
+- Full fidelity GPX writing.
 
 # Bugs
 - I think it's technically wrong to simply merge all tracks and segments?

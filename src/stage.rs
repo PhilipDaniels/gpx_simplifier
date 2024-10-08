@@ -229,6 +229,15 @@ impl<'gpx> Index<usize> for StageList<'gpx> {
     }
 }
 
+impl<'gpx> IntoIterator for &'gpx StageList<'gpx> {
+    type Item = &'gpx Stage<'gpx>;
+    type IntoIter = slice::Iter<'gpx, Stage<'gpx>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl<'gpx> StageList<'gpx> {
     /// Returns the indexes of all the TrackPoints that have been
     /// highlighted as 'special' in some way, e.g. the point
@@ -246,7 +255,6 @@ impl<'gpx> StageList<'gpx> {
         idxs
     }
 
-    // TODO: Implement Iterator properly.
     pub fn iter(&self) -> slice::Iter<Stage> {
         self.0.iter()
     }
@@ -950,15 +958,12 @@ fn distance_between_points_metres(p1: Point, p2: Point) -> f64 {
 /// Try and figure out whether we are starting Moving or Stopped
 /// by looking at the average speed over the first 3 minutes.
 fn get_starting_stage_type(gpx: &EnrichedGpx, _params: &StageDetectionParameters) -> StageType {
-    // Get this out into a variable to avoid off-by-one errors (hopefully).
-    let last_valid_idx = gpx.last_valid_idx();
-
     // The first point has no start_time() since it does not have
     // a delta time. We can safely skip it.
-
     let start = &gpx.points[1];
     let mut end_idx = 1;
-    while end_idx < last_valid_idx {
+
+    while end_idx <= gpx.last_valid_idx() {
         let duration = gpx.points[end_idx]
             .time
             .expect("time exists due to check in detect_stages")

@@ -78,7 +78,7 @@ fn main() {
                 min_duration_seconds: args.min_stop_time * 60.0,
             };
 
-            let stages = detect_stages(&gpx, params);
+            let (stages, mini_stops) = detect_stages(&gpx, params);
             let workbook = create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
             write_summary_file(&summary_filename, workbook).unwrap();
         }

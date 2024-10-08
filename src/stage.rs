@@ -61,6 +61,15 @@ pub struct Stage<'gpx> {
     pub max_air_temp: Option<&'gpx EnrichedTrackPoint>,
 }
 
+/// A MiniStop is a short stop - you stopped, but not long
+/// enough for it to be a control. They only exist within
+/// Control-type stages.
+#[derive(Debug)]
+pub struct MiniStop<'gpx> {
+    pub start: &'gpx EnrichedTrackPoint,
+    pub end: &'gpx EnrichedTrackPoint,
+}
+
 /// The type of a Stage.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum StageType {
@@ -542,7 +551,10 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 ///
 /// All non-Stopped stages are considered Moving stages.
 #[time]
-pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> StageList {
+pub fn detect_stages(
+    gpx: &EnrichedGpx,
+    params: StageDetectionParameters,
+) -> (StageList, Vec<MiniStop>) {
     if gpx.points.len() < 2 {
         warn!("GPX {:?} does not have any points", gpx.filename);
         return Default::default();
@@ -557,10 +569,11 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     );
 
     let mut stages = StageList::default();
+    let mut mini_stops = Vec::new();
 
     // If we don't have time there is nothing we can do.
     if gpx.points.iter().any(|p| p.time.is_none()) {
-        return stages;
+        return (stages, mini_stops);
     }
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
@@ -578,7 +591,7 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     let mut stage_type = get_starting_stage_type(gpx, &params);
     info!("Determined type of the first stage to be {}", stage_type);
 
-    while let Some(stage) = get_next_stage(stage_type, start_idx, gpx, &params) {
+    while let Some((stage, mut m_stops)) = get_next_stage(stage_type, start_idx, gpx, &params) {
         // Stages do not share points, the next stage starts on the next point.
         start_idx = stage.end.index + 1;
 
@@ -601,8 +614,9 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
             );
         }
         stages.push(stage);
-
         stage_type = stage_type.toggle();
+
+        mini_stops.append(&mut m_stops);
     }
 
     info!("Detection finished, found {} stages", stages.len());
@@ -627,7 +641,7 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
         );
     }
 
-    stages
+    (stages, mini_stops)
 }
 
 fn get_next_stage<'gpx>(
@@ -635,7 +649,7 @@ fn get_next_stage<'gpx>(
     start_idx: usize,
     gpx: &'gpx EnrichedGpx,
     params: &StageDetectionParameters,
-) -> Option<Stage<'gpx>> {
+) -> Option<(Stage<'gpx>, Vec<MiniStop<'gpx>>)> {
     // Get this out into a variable to avoid off-by-one errors (hopefully).
     let last_valid_idx = gpx.last_valid_idx();
 
@@ -652,10 +666,11 @@ fn get_next_stage<'gpx>(
 
     // A Moving stage ends on the point before the speed drops below the limit.
     // A Stopped stage ends when we have moved some distance.
-    let end_idx = match stage_type {
+    let (end_idx, mini_stops) = match stage_type {
         StageType::Moving => find_stop_index(gpx, start_idx, last_valid_idx, params),
         StageType::Control => {
-            find_resume_index(gpx, start_idx, last_valid_idx, params.min_metres_to_resume)
+            (find_resume_index(gpx, start_idx, last_valid_idx, params.min_metres_to_resume),
+            Vec::new())
         }
     };
 
@@ -691,18 +706,19 @@ fn get_next_stage<'gpx>(
     assert!(stage.end.time >= stage.start.time);
     assert!(stage.start.index >= stage.track_start_point.index);
 
-    Some(stage)
+    Some((stage, mini_stops))
 }
 
 /// A Moving stage is ended when we stop. This occurs when we drop below the
 /// 'stopped_speed_kmh' and do not attain 'resume_speed_kmh' for at least
 /// 'min_duration_seconds'. Find the index of that point.
-fn find_stop_index(
+fn find_stop_index<'gpx>(
     gpx: &EnrichedGpx,
     start_idx: usize,
     last_valid_idx: usize,
     params: &StageDetectionParameters,
-) -> usize {
+) -> (usize, Vec<MiniStop<'gpx>>) {
+    let mut mini_stops = Vec::new();
     let mut end_idx = start_idx + 1;
 
     while end_idx <= last_valid_idx {
@@ -730,7 +746,7 @@ fn find_stop_index(
                 "find_stop_index(start_idx={start_idx}) (1) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion"
             );
 
-            return last_valid_idx;
+            return (last_valid_idx, mini_stops);
         }
 
         // Now take note of this point as a *possible* index of the
@@ -757,7 +773,7 @@ fn find_stop_index(
             debug!(
                 "find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion"
             );
-            return last_valid_idx;
+            return (last_valid_idx, mini_stops);
         }
 
         // Is that a stop of sufficient length? If so, the point found above is a valid
@@ -783,13 +799,16 @@ fn find_stop_index(
                 possible_end_point.index,
                 stop_duration
             );
-            return possible_end_point.index;
+            return (possible_end_point.index, mini_stops);
         } else {
             debug!(
                 "find_stop_index(start_idx={start_idx}) Rejecting stop at {} because it is too short, duration = {}",
                 possible_end_point.index,
                 stop_duration
             );
+
+            // TODO: Add a mini-stop. 18992 is just a steep hill.
+            // 20861 is a pause to get onto the bridge.
         }
 
         // If that's not a valid stop (because it's too short),
@@ -800,7 +819,7 @@ fn find_stop_index(
 
     // If we get here then we exhausted all the TrackPoints.
     debug!("find_stop_index(start_idx={start_idx}) (2) Returning last_valid_idx {last_valid_idx} due to TrackPoint exhaustion");
-    last_valid_idx
+    (last_valid_idx, mini_stops)
 }
 
 /// A Stopped stage is ended when we have moved at least 'min_metres_to_resume'.

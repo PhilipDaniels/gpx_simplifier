@@ -82,7 +82,6 @@ Or build from source using cargo.
 
 # TODO
 - Find micro-stops
-- Moving %
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be

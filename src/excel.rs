@@ -266,11 +266,17 @@ fn output_duration(
     write_string(ws, fc, "Total")?;
     write_duration_option(ws, &fc.col_offset(1), stages.duration())?;
 
-    write_string(ws, &fc.row_offset(1), "Control")?;
-    write_duration_option(ws, &fc.offset(1, 1), stages.total_control_time())?;
+    write_string(ws, &fc.row_offset(1), "Moving")?;
+    write_duration_option(ws, &fc.offset(1, 1), stages.total_moving_time())?;
 
-    write_string(ws, &fc.row_offset(2), "Moving")?;
-    write_duration_option(ws, &fc.offset(2, 1), stages.total_moving_time())?;
+    write_string(ws, &fc.row_offset(2), "Controlling")?;
+    write_duration_option(ws, &fc.offset(2, 1), stages.total_control_time())?;
+
+    write_string(ws, &fc.row_offset(3), "Moving")?;
+    write_percentage_option(ws, &fc.offset(3, 1), stages.moving_percent())?;
+
+    write_string(ws, &fc.row_offset(4), "Controlling")?;
+    write_percentage_option(ws, &fc.offset(4, 1), stages.controlling_percent())?;
 
     fc.next_colour_block(2);
     Ok(())
@@ -1000,6 +1006,28 @@ fn write_f64_option(
     Ok(())
 }
 
+fn write_percentage(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    value: f64,
+) -> Result<(), Box<dyn Error>> {
+    ws.write_number_with_format(fc.row, fc.col, value, &fc.percentage_format())?;
+    Ok(())
+}
+
+fn write_percentage_option(
+    ws: &mut Worksheet,
+    fc: &FormatControl,
+    value: Option<f64>,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(value) = value {
+        write_percentage(ws, fc, value)?;
+    } else {
+        write_blank(ws, fc)?;
+    }
+    Ok(())
+}
+
 /// Formats 'utc_date' into a string like "2024-09-01T05:10:44Z".
 /// This is the format that GPX files contain.
 fn write_utc_date(
@@ -1420,6 +1448,11 @@ impl FormatControl {
 
     fn float_format(&self) -> Format {
         let format = Format::new().set_num_format("0.0");
+        self.apply_background_color_if_needed(format)
+    }
+
+    fn percentage_format(&self) -> Format {
+        let format = Format::new().set_num_format("0.0%");
         self.apply_background_color_if_needed(format)
     }
 

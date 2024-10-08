@@ -429,11 +429,23 @@ impl StageList {
 
     /// Returns the point of maximum temperature across all the stages.
     pub fn max_temperature(&self) -> Option<&EnrichedTrackPoint> {
-        self
-            .0
+        self.0
             .iter()
             .filter_map(|s| s.max_air_temp.as_ref())
             .max_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
+    }
+
+    /// Returns the total moving time as a percentage of the total duration
+    /// across all the stages.
+    pub fn moving_percent(&self) -> Option<f64> {
+        self.total_moving_time()
+            .map(|tmt| tmt.as_seconds_f64() / self.duration().unwrap().as_seconds_f64())
+    }
+
+    /// Returns the total controlling time as a percentage of the total duration
+    /// across all the stages.
+    pub fn controlling_percent(&self) -> Option<f64> {
+        self.moving_percent().map(|mp| 1.0 - mp)
     }
 }
 

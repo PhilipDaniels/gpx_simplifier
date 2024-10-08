@@ -32,10 +32,10 @@ const CADENCE_COLUMN_WIDTH_WITH_UNITS: f64 = 15.5;
 
 /// Builds the Workbook that is used for the summary.
 #[time]
-pub fn create_summary_xlsx<'gpx>(
+pub fn create_summary_xlsx(
     trackpoint_hyperlinks: Hyperlink,
     gpx: &EnrichedGpx,
-    stages: &StageList<'gpx>,
+    stages: &StageList,
 ) -> Result<Workbook, Box<dyn Error>> {
     let mut workbook = Workbook::new();
 
@@ -424,7 +424,7 @@ fn output_min_elevation(
 
     for stage in stages {
         if stage.stage_type == StageType::Moving {
-            write_elevation_data(ws, fc, stage.min_elevation)?;
+            write_elevation_data(ws, fc, stage.min_elevation.as_ref())?;
         } else {
             write_blank(ws, fc)?;
             write_blank(ws, &fc.col_offset(1))?;
@@ -457,7 +457,7 @@ fn output_max_elevation(
 
     for stage in stages {
         if stage.stage_type == StageType::Moving {
-            write_elevation_data(ws, fc, stage.max_elevation)?;
+            write_elevation_data(ws, fc, stage.max_elevation.as_ref())?;
         } else {
             write_blank(ws, fc)?;
             write_blank(ws, &fc.col_offset(1))?;
@@ -490,7 +490,7 @@ fn output_max_speed(
 
     for stage in stages {
         if stage.stage_type == StageType::Moving {
-            write_max_speed_data(ws, fc, stage.max_speed)?;
+            write_max_speed_data(ws, fc, stage.max_speed.as_ref())?;
         } else {
             write_blank(ws, fc)?;
             write_blank(ws, &fc.col_offset(1))?;
@@ -522,7 +522,7 @@ fn output_heart_rate(
     ws.set_column_width(fc.col + 2, KILOMETRES_COLUMN_WIDTH_WITH_UNITS)?;
 
     for stage in stages {
-        write_heart_rate_data(ws, fc, stage.max_heart_rate, stage.avg_heart_rate)?;
+        write_heart_rate_data(ws, fc, stage.max_heart_rate.as_ref(), stage.avg_heart_rate)?;
         fc.increment_row();
     }
 
@@ -560,8 +560,8 @@ fn output_temperature(
         write_temperature_data(
             ws,
             fc,
-            stage.min_air_temp,
-            stage.max_air_temp,
+            stage.min_air_temp.as_ref(),
+            stage.max_air_temp.as_ref(),
             stage.avg_air_temp,
         )?;
 

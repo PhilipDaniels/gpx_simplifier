@@ -43,22 +43,22 @@ pub struct StageDetectionParameters {
 /// Represents a stage from a GPX track. The stage can represent
 /// you moving, or controlling.
 #[derive(Debug)]
-pub struct Stage<'gpx> {
+pub struct Stage {
     pub stage_type: StageType,
     // The first point in the entire track. We need this to calculate various
     // running totals. We could pass it into the relevant methods, but storing
     // it works ok too.
-    pub track_start_point: &'gpx EnrichedTrackPoint,
-    pub start: &'gpx EnrichedTrackPoint,
-    pub end: &'gpx EnrichedTrackPoint,
-    pub min_elevation: Option<&'gpx EnrichedTrackPoint>,
-    pub max_elevation: Option<&'gpx EnrichedTrackPoint>,
-    pub max_speed: Option<&'gpx EnrichedTrackPoint>,
+    pub track_start_point: EnrichedTrackPoint,
+    pub start: EnrichedTrackPoint,
+    pub end: EnrichedTrackPoint,
+    pub min_elevation: Option<EnrichedTrackPoint>,
+    pub max_elevation: Option<EnrichedTrackPoint>,
+    pub max_speed: Option<EnrichedTrackPoint>,
     pub avg_heart_rate: Option<f64>,
-    pub max_heart_rate: Option<&'gpx EnrichedTrackPoint>,
+    pub max_heart_rate: Option<EnrichedTrackPoint>,
     pub avg_air_temp: Option<f64>,
-    pub min_air_temp: Option<&'gpx EnrichedTrackPoint>,
-    pub max_air_temp: Option<&'gpx EnrichedTrackPoint>,
+    pub min_air_temp: Option<EnrichedTrackPoint>,
+    pub max_air_temp: Option<EnrichedTrackPoint>,
 }
 
 /// The type of a Stage.
@@ -86,7 +86,7 @@ impl StageType {
     }
 }
 
-impl<'gpx> Stage<'gpx> {
+impl Stage {
     /// Returns the indexes of all the TrackPoints that have been
     /// highlighted as 'special' in some way, e.g. the point
     /// of min elevation. This is so we can force a hyperlink
@@ -98,23 +98,23 @@ impl<'gpx> Stage<'gpx> {
             self.end.index,
         ];
 
-        if let Some(p) = self.min_elevation {
+        if let Some(p) = &self.min_elevation {
             idxs.push(p.index);
         }
 
-        if let Some(p) = self.max_elevation {
+        if let Some(p) = &self.max_elevation {
             idxs.push(p.index);
         }
 
-        if let Some(p) = self.max_speed {
+        if let Some(p) = &self.max_speed {
             idxs.push(p.index);
         }
 
-        if let Some(p) = self.max_heart_rate {
+        if let Some(p) = &self.max_heart_rate {
             idxs.push(p.index);
         }
 
-        if let Some(p) = self.max_air_temp {
+        if let Some(p) = &self.max_air_temp {
             idxs.push(p.index);
         }
 
@@ -219,26 +219,26 @@ impl<'gpx> Stage<'gpx> {
 }
 
 #[derive(Default)]
-pub struct StageList<'gpx>(Vec<Stage<'gpx>>);
+pub struct StageList(Vec<Stage>);
 
-impl<'gpx> Index<usize> for StageList<'gpx> {
-    type Output = Stage<'gpx>;
+impl Index<usize> for StageList {
+    type Output = Stage;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
-impl<'gpx> IntoIterator for &'gpx StageList<'gpx> {
-    type Item = &'gpx Stage<'gpx>;
-    type IntoIter = slice::Iter<'gpx, Stage<'gpx>>;
+impl<'sl> IntoIterator for &'sl StageList {
+    type Item = &'sl Stage;
+    type IntoIter = slice::Iter<'sl, Stage>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'gpx> StageList<'gpx> {
+impl StageList {
     /// Returns the indexes of all the TrackPoints that have been
     /// highlighted as 'special' in some way, e.g. the point
     /// of min elevation. This is so we can force a hyperlink
@@ -261,15 +261,15 @@ impl<'gpx> StageList<'gpx> {
 
     /// Returns the first point in the first stage.
     pub fn first_point(&self) -> &EnrichedTrackPoint {
-        self.0[0].start
+        &self.0[0].start
     }
 
     /// Returns the last point in the last stage.
     pub fn last_point(&self) -> &EnrichedTrackPoint {
-        self.0[self.len() - 1].end
+        &self.0[self.len() - 1].end
     }
 
-    pub fn push(&mut self, stage: Stage<'gpx>) {
+    pub fn push(&mut self, stage: Stage) {
         self.0.push(stage);
     }
 
@@ -345,14 +345,16 @@ impl<'gpx> StageList<'gpx> {
         for stage in self.iter() {
             if stage.min_elevation.is_none() {
                 return None;
-            } else if stage.min_elevation.unwrap().ele < min_stage.min_elevation.unwrap().ele {
+            } else if stage.min_elevation.as_ref().unwrap().ele
+                < min_stage.min_elevation.as_ref().unwrap().ele
+            {
                 // The unwraps are safe because we are iterating across all
                 // stages, so min being None will be trapped.
                 min_stage = stage;
             }
         }
 
-        min_stage.min_elevation
+        min_stage.min_elevation.as_ref()
     }
 
     /// Returns the point of maximum elevation across all the stages.
@@ -361,14 +363,16 @@ impl<'gpx> StageList<'gpx> {
         for stage in self.iter() {
             if stage.max_elevation.is_none() {
                 return None;
-            } else if stage.max_elevation.unwrap().ele > max_stage.max_elevation.unwrap().ele {
+            } else if stage.max_elevation.as_ref().unwrap().ele
+                > max_stage.max_elevation.as_ref().unwrap().ele
+            {
                 // The unwraps are safe because we are iterating across all
                 // stages, so max being None will be trapped.
                 max_stage = stage;
             }
         }
 
-        max_stage.max_elevation
+        max_stage.max_elevation.as_ref()
 
         // TODO: Can we improve this code to something similar to this?
         // See also min_elevation and max_speed.
@@ -395,21 +399,23 @@ impl<'gpx> StageList<'gpx> {
         for stage in self.iter() {
             if stage.max_speed.is_none() {
                 return None;
-            } else if stage.max_speed.unwrap().speed_kmh > max_stage.max_speed.unwrap().speed_kmh {
+            } else if stage.max_speed.as_ref().unwrap().speed_kmh
+                > max_stage.max_speed.as_ref().unwrap().speed_kmh
+            {
                 // The unwraps are safe because we are iterating across all
                 // stages, so max being None will be trapped.
                 max_stage = stage;
             }
         }
 
-        max_stage.max_speed
+        max_stage.max_speed.as_ref()
     }
 
     /// Returns the point of maximum heart rate across all the stages.
     pub fn max_heart_rate(&self) -> Option<&EnrichedTrackPoint> {
         self.0
             .iter()
-            .filter_map(|s| s.max_heart_rate)
+            .filter_map(|s| s.max_heart_rate.as_ref())
             .max_by(|a, b| a.heart_rate().unwrap().cmp(&b.heart_rate().unwrap()))
     }
 
@@ -417,19 +423,17 @@ impl<'gpx> StageList<'gpx> {
     pub fn min_temperature(&self) -> Option<&EnrichedTrackPoint> {
         self.0
             .iter()
-            .filter_map(|s| s.min_air_temp)
+            .filter_map(|s| s.min_air_temp.as_ref())
             .min_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
     }
 
     /// Returns the point of maximum temperature across all the stages.
     pub fn max_temperature(&self) -> Option<&EnrichedTrackPoint> {
-        let max_temp = self
+        self
             .0
             .iter()
-            .filter_map(|s| s.min_air_temp)
-            .max_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()));
-
-        max_temp
+            .filter_map(|s| s.max_air_temp.as_ref())
+            .max_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
     }
 }
 
@@ -630,12 +634,12 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     stages
 }
 
-fn get_next_stage<'gpx>(
+fn get_next_stage(
     stage_type: StageType,
     start_idx: usize,
-    gpx: &'gpx EnrichedGpx,
+    gpx: &EnrichedGpx,
     params: &StageDetectionParameters,
-) -> Option<Stage<'gpx>> {
+) -> Option<Stage> {
     // Get this out into a variable to avoid off-by-one errors (hopefully).
     let last_valid_idx = gpx.last_valid_idx();
 
@@ -671,9 +675,9 @@ fn get_next_stage<'gpx>(
 
     let stage = Stage {
         stage_type,
-        track_start_point: &gpx.points[0],
-        start: &gpx.points[start_idx],
-        end: &gpx.points[end_idx],
+        track_start_point: gpx.points[0].clone(),
+        start: gpx.points[start_idx].clone(),
+        end: gpx.points[end_idx].clone(),
         min_elevation,
         max_elevation,
         max_speed: find_max_speed(gpx, start_idx, end_idx),
@@ -841,7 +845,7 @@ fn find_min_and_max_elevation_points(
     gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> (Option<&EnrichedTrackPoint>, Option<&EnrichedTrackPoint>) {
+) -> (Option<EnrichedTrackPoint>, Option<EnrichedTrackPoint>) {
     let mut min = &gpx.points[start_idx];
     let mut max = &gpx.points[start_idx];
 
@@ -860,7 +864,7 @@ fn find_min_and_max_elevation_points(
 
     assert!(max.ele >= min.ele);
 
-    (Some(min), Some(max))
+    (Some(min.clone()), Some(max.clone()))
 }
 
 /// Within a given range of trackpoints, finds the one with the
@@ -869,7 +873,7 @@ fn find_max_speed(
     gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> Option<&EnrichedTrackPoint> {
+) -> Option<EnrichedTrackPoint> {
     let mut max = &gpx.points[start_idx];
 
     for tp in &gpx.points[start_idx..=end_idx] {
@@ -881,7 +885,7 @@ fn find_max_speed(
         }
     }
 
-    Some(max)
+    Some(max.clone())
 }
 
 /// Within a given range of trackpoints, finds the point of
@@ -890,18 +894,18 @@ fn find_heart_rates(
     gpx: &EnrichedGpx,
     start_idx: usize,
     end_idx: usize,
-) -> (Option<&EnrichedTrackPoint>, Option<f64>) {
+) -> (Option<EnrichedTrackPoint>, Option<f64>) {
     let mut sum: f64 = 0.0;
     let mut count = 0;
-    let mut max: Option<&EnrichedTrackPoint> = None;
+    let mut max: Option<EnrichedTrackPoint> = None;
 
     for point in &gpx.points[start_idx..=end_idx] {
         if let Some(hr) = point.heart_rate() {
             sum += hr as f64;
             count += 1;
 
-            if max.is_none() || hr > max.unwrap().heart_rate().unwrap() {
-                max = Some(point);
+            if max.is_none() || hr > max.as_ref().unwrap().heart_rate().unwrap() {
+                max = Some(point.clone());
             }
         }
     }
@@ -921,13 +925,13 @@ fn find_air_temps(
     start_idx: usize,
     end_idx: usize,
 ) -> (
-    Option<&EnrichedTrackPoint>,
-    Option<&EnrichedTrackPoint>,
+    Option<EnrichedTrackPoint>,
+    Option<EnrichedTrackPoint>,
     Option<f64>,
 ) {
     let mut sum: Option<f64> = None;
-    let mut min: Option<&EnrichedTrackPoint> = None;
-    let mut max: Option<&EnrichedTrackPoint> = None;
+    let mut min: Option<EnrichedTrackPoint> = None;
+    let mut max: Option<EnrichedTrackPoint> = None;
     let mut count = 0;
 
     for idx in start_idx..=end_idx {
@@ -935,12 +939,12 @@ fn find_air_temps(
             count += 1;
             sum = Some(sum.unwrap_or_default() + at);
 
-            if min.is_none() || min.unwrap().air_temp().unwrap() > at {
-                min = Some(&gpx.points[idx]);
+            if min.is_none() || min.as_ref().unwrap().air_temp().unwrap() > at {
+                min = Some(gpx.points[idx].clone());
             }
 
-            if max.is_none() || max.unwrap().air_temp().unwrap() < at {
-                max = Some(&gpx.points[idx]);
+            if max.is_none() || max.as_ref().unwrap().air_temp().unwrap() < at {
+                max = Some(gpx.points[idx].clone());
             }
         }
     }

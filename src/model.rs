@@ -192,7 +192,7 @@ impl EnrichedGpx {
 
 /// A TrackPoint with lots of extra stuff calculated. We need the extras
 /// to find the stages.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnrichedTrackPoint {
     /// The index of the original trackpoint we used to create this value.
     pub index: usize,

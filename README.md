@@ -81,7 +81,6 @@ Or build from source using cargo.
 
 
 # TODO
-- Stopped -> Controlling
 - Find micro-stops
 - Moving %
 - Reverse geocode the stopped stages and the first and last point.

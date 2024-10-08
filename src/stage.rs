@@ -13,12 +13,12 @@ use time::{Duration, OffsetDateTime};
 
 use crate::model::{EnrichedGpx, EnrichedTrackPoint};
 
-/// Calculates speed in kmh from metres and seconds.
+/// Calculates speed in km/h from metres and seconds.
 pub fn speed_kmh(metres: f64, seconds: f64) -> f64 {
     (metres / seconds) * 3.6
 }
 
-/// Calculates speed in kmh from metres and a Duration.
+/// Calculates speed in km/h from metres and a Duration.
 pub fn speed_kmh_from_duration(metres: f64, time: Duration) -> f64 {
     speed_kmh(metres, time.as_seconds_f64())
 }
@@ -41,7 +41,7 @@ pub struct StageDetectionParameters {
 }
 
 /// Represents a stage from a GPX track. The stage can represent
-/// you moving, or stopped.
+/// you moving, or controlling.
 #[derive(Debug)]
 pub struct Stage<'gpx> {
     pub stage_type: StageType,
@@ -564,12 +564,12 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
     }
 
     // Note 1: The first TrackPoint always has a speed of 0, but it is unlikely
-    // that you are actually in a Stopped stage. However, it's not impossible,
+    // that you are actually in a Control stage. However, it's not impossible,
     // see Note 2 for why.
 
     // Note 2: We need to deal with the slightly bizarre situation where you turn
     // the GPS on and then don't go anywhere for a while - so your first stage
-    // may be a Stopped stage!
+    // may be a Control stage!
 
     let mut start_idx = 0;
 

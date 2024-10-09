@@ -1,5 +1,5 @@
 [package]
-name = "gpx_simplifier"
+name = "gapix"
 version = "1.0.0"
 edition = "2021"
 

@@ -26,7 +26,7 @@ use crate::model::{
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
 #[time]
 pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
-    info!("Reading file {:?}", input_file);
+    info!("Reading GPX file {:?}", input_file);
     let mut reader = Reader::from_file(input_file)?;
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 

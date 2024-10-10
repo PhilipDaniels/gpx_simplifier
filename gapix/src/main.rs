@@ -27,31 +27,32 @@ fn main() {
     info!("Starting {PROGRAM_NAME}");
 
     let args = parse_args();
+    dbg!(args);
 
-    // If we are running in "join mode" then we need to load all the
-    // input files into RAM.
-    if args.join {
-        let exe_dir = get_exe_dir();
-        let input_files = get_list_of_input_files(&exe_dir);
-        if input_files.is_empty() {
-            println!("No .gpx files found");
-            return;
-        }
+    // // If we are running in "join mode" then we need to load all the
+    // // input files into RAM.
+    // if args.join {
+    //     let exe_dir = get_exe_dir();
+    //     let input_files = get_list_of_input_files(&exe_dir);
+    //     if input_files.is_empty() {
+    //         println!("No .gpx files found");
+    //         return;
+    //     }
     
-        // Read all files into RAM.
-        let mut gpxs: Vec<_> = input_files
-            .iter()
-            .map(|f| read_gpx_file(f).unwrap())
-            .collect();
+    //     // Read all files into RAM.
+    //     let mut gpxs: Vec<_> = input_files
+    //         .iter()
+    //         .map(|f| read_gpx_file(f).unwrap())
+    //         .collect();
 
-        // Join if necessary. Keep as a vec (of one element) so that
-        // following loop can be used whether we join or not.
-        if args.join {
-            gpxs = vec![join_input_files(gpxs)];
-        }
+    //     // Join if necessary. Keep as a vec (of one element) so that
+    //     // following loop can be used whether we join or not.
+    //     if args.join {
+    //         gpxs = vec![join_input_files(gpxs)];
+    //     }
 
-        return;
-    }
+    //     return;
+    // }
 
 
 

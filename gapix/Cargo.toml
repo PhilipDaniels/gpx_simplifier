@@ -10,3 +10,4 @@ gapix_core = { path = "../gapix_core" }
 log = { workspace = true }
 logging_timer = { workspace = true }
 serde = { version = "1.0.204", features = ["derive"] }
+wild = "2.2.1"

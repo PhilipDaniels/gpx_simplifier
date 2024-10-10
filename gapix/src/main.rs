@@ -28,81 +28,91 @@ fn main() {
 
     let args = parse_args();
 
-    let exe_dir = get_exe_dir();
-    let input_files = get_list_of_input_files(&exe_dir);
-    if input_files.is_empty() {
-        println!("No .gpx files found");
+    // If we are running in "join mode" then we need to load all the
+    // input files into RAM.
+    if args.join {
+        let exe_dir = get_exe_dir();
+        let input_files = get_list_of_input_files(&exe_dir);
+        if input_files.is_empty() {
+            println!("No .gpx files found");
+            return;
+        }
+    
+        // Read all files into RAM.
+        let mut gpxs: Vec<_> = input_files
+            .iter()
+            .map(|f| read_gpx_file(f).unwrap())
+            .collect();
+
+        // Join if necessary. Keep as a vec (of one element) so that
+        // following loop can be used whether we join or not.
+        if args.join {
+            gpxs = vec![join_input_files(gpxs)];
+        }
+
         return;
     }
 
-    // Read all files into RAM.
-    let mut gpxs: Vec<_> = input_files
-        .iter()
-        .map(|f| read_gpx_file(f).unwrap())
-        .collect();
 
-    // Within each file, merge multiple tracks and segments into a single
-    // track-segment. (join_input_files also does that)
-    gpxs = gpxs
-        .into_iter()
-        .map(|gpx| gpx.into_single_track())
-        .collect();
 
-    // Join if necessary. Keep as a vec (of one element) so that
-    // following loop can be used whether we join or not.
-    if args.join {
-        gpxs = vec![join_input_files(gpxs)];
-    }
 
-    for gpx in gpxs.into_iter() {
-        let summary_filename = make_summary_filename(&gpx.filename);
-        let simplified_filename = make_simplified_filename(&gpx.filename);
+    // // Within each file, merge multiple tracks and segments into a single
+    // // track-segment. (join_input_files also does that)
+    // gpxs = gpxs
+    //     .into_iter()
+    //     .map(|gpx| gpx.into_single_track())
+    //     .collect();
 
-        if summary_filename.exists() && simplified_filename.exists() {
-            continue;
-        }
 
-        // Always enrich the TrackPoints. Keeps the flow simple and though
-        // it is one of the most expensive operations, it's still quick enough -
-        // yay Rust!
-        let mut gpx = EnrichedGpx::from(gpx);
-        enrich_trackpoints(&mut gpx);
+    // for gpx in gpxs.into_iter() {
+    //     let summary_filename = make_summary_filename(&gpx.filename);
+    //     let simplified_filename = make_simplified_filename(&gpx.filename);
 
-        // If we are detecting stops (really Stages now), then do that on
-        // the original file, for more precision. Though whether it matters
-        // much in practice is debatable - it only really makes a difference
-        // if your 'metres' input to RDP is largish.
-        if args.detect_stages {
-            let params = StageDetectionParameters {
-                stopped_speed_kmh: args.stopped_speed,
-                min_metres_to_resume: args.stop_resumption_distance,
-                min_duration_seconds: args.min_stop_time * 60.0,
-            };
+    //     if summary_filename.exists() && simplified_filename.exists() {
+    //         continue;
+    //     }
 
-            let stages = detect_stages(&gpx, params);
-            let workbook =
-                create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
-            write_summary_file(&summary_filename, workbook).unwrap();
-        }
+    //     // Always enrich the TrackPoints. Keeps the flow simple and though
+    //     // it is one of the most expensive operations, it's still quick enough -
+    //     // yay Rust!
+    //     let mut gpx = EnrichedGpx::from(gpx);
+    //     enrich_trackpoints(&mut gpx);
 
-        // Always do simplification last because it mutates the track,
-        // reducing its accuracy.
-        if !simplified_filename.exists() {
-            if let Some(metres) = args.metres {
-                let epsilon = metres_to_epsilon(metres);
+    //     // If we are detecting stops (really Stages now), then do that on
+    //     // the original file, for more precision. Though whether it matters
+    //     // much in practice is debatable - it only really makes a difference
+    //     // if your 'metres' input to RDP is largish.
+    //     if args.detect_stages {
+    //         let params = StageDetectionParameters {
+    //             stopped_speed_kmh: args.stopped_speed,
+    //             min_metres_to_resume: args.stop_resumption_distance,
+    //             min_duration_seconds: args.min_stop_time * 60.0,
+    //         };
 
-                let start_count = gpx.points.len();
-                reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
-                println!(
-                    "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
-                    gpx.points.len(),
-                    gpx.filename
-                );
+    //         let stages = detect_stages(&gpx, params);
+    //         let workbook =
+    //             create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
+    //         write_summary_file(&summary_filename, workbook).unwrap();
+    //     }
 
-                write_simplified_gpx_file(&simplified_filename, &gpx).unwrap();
-            }
-        }
-    }
+    //     // Always do simplification last because it mutates the track,
+    //     // reducing its accuracy.
+    //     if !simplified_filename.exists() {
+    //         if let Some(metres) = args.metres {
+    //             let epsilon = metres_to_epsilon(metres);
+
+    //             let start_count = gpx.points.len();
+    //             reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
+    //             println!(
+    //                 "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
+    //                 gpx.points.len(),
+    //                 gpx.filename
+    //             );
+
+    //             write_simplified_gpx_file(&simplified_filename, &gpx).unwrap();
+    //         }
+    //     }
+    // }
 }
 
 fn make_simplified_filename(p: &Path) -> PathBuf {

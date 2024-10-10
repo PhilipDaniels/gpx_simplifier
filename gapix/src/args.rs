@@ -62,7 +62,8 @@ pub struct Args {
 
 
 pub fn parse_args() -> Args {
-    Args::parse()
+    // Use the wild crate to do glob expansion on Windows.
+    Args::parse_from(wild::args())
 }
 
 impl Args {

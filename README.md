@@ -1,4 +1,6 @@
-# gpx_simplifier
+# gapix
+
+GaPiX: GPX analysis and information
 
 A small command-line tool to join and simplify GPX tracks.
 
@@ -25,7 +27,7 @@ along the line.
 
 # How to use
 
-When **gpx_simplifier** is run it looks for its input files
+When **gapix** is run it looks for its input files
 in the same folder as the exe. This is mainly for convenience -
 I have a known folder containing a copy of the exe, I then
 drop the GPXs I want to process into that folder and double-click

@@ -81,10 +81,10 @@ Or build from source using cargo.
 
 
 # TODO
-- Full pass lossless read and write of the complete XSD.
 - Make a library out of the core.
 - Should only read all files into RAM if doing joining. For other
   modes, process one at a time.
+- Full pass lossless read and write of the complete XSD.
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be

@@ -762,12 +762,6 @@ fn find_stop_index(
             end_idx += 1;
         }
 
-        debug!(
-            "find_stop_index(start_idx={start_idx}) Scanned forward to index {}, which is {:.2} metres from the possible stop",
-            end_idx,
-            gpx.points[end_idx].running_metres - possible_end_point.running_metres
-        );
-
         // Same logic as above.
         if end_idx >= last_valid_idx {
             debug!(
@@ -775,6 +769,12 @@ fn find_stop_index(
             );
             return last_valid_idx;
         }
+        
+        debug!(
+            "find_stop_index(start_idx={start_idx}) Scanned forward to index {}, which is {:.2} metres from the possible stop",
+            end_idx,
+            gpx.points[end_idx].running_metres - possible_end_point.running_metres
+        );
 
         // Is that a stop of sufficient length? If so, the point found above is a valid
         // end for this current stage (which is a Moving Stage, remember).

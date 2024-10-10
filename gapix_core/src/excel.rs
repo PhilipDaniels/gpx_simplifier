@@ -8,7 +8,6 @@ use rust_xlsxwriter::{
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    args::Hyperlink,
     formatting::to_local_date,
     model::{EnrichedGpx, EnrichedTrackPoint},
     stage::{StageList, StageType},
@@ -29,6 +28,14 @@ const SPEED_COLUMN_WIDTH: f64 = 8.0;
 const HEART_RATE_WIDTH_WITH_UNITS: f64 = 17.5;
 const TEMPERATURE_COLUMN_WIDTH_WITH_UNITS: f64 = 12.0;
 const CADENCE_COLUMN_WIDTH_WITH_UNITS: f64 = 15.5;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// Whether to include Google maps hyperlinks
+/// when writing the trackpoints.
+pub enum Hyperlink {
+    Yes,
+    No,
+}
 
 /// Builds the Workbook that is used for the summary.
 #[time]

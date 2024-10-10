@@ -1,4 +1,5 @@
 use clap::{arg, command, value_parser, Parser};
+use gapix_core::excel::Hyperlink;
 
 #[derive(Debug, Default, Parser)]
 #[command(version, about, long_about = None)]
@@ -64,17 +65,10 @@ pub fn parse_args() -> Args {
     Args::parse()
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-/// Whether to include Google maps hyperlinks
-/// when writing the trackpoints.
-pub enum Hyperlink {
-    Yes,
-    No,
-}
-
 impl Args {
     /// We always write the list of trackpoints, but adding
     /// hyperlinks is optional.
+    /// TODO: Move this somewhere else. Only needed in the Excel writer.
     pub fn trackpoint_hyperlinks(&self) -> Hyperlink {
         if self.write_trackpoint_hyperlinks {
             Hyperlink::Yes

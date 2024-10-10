@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+env_logger = { workspace = true }
+geo = "0.28.0"
+log = { workspace = true }
+logging_timer = { workspace = true }
+quick-xml = { version = "0.36.0" }
+rust_xlsxwriter = "0.75.0"
+time = { version = "0.3.36", features = ["formatting", "parsing", "local-offset"] }

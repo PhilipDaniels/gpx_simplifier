@@ -1,13 +1,15 @@
 use args::parse_args;
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
-use excel::{create_summary_xlsx, write_summary_file};
-use gpx_reader::read_gpx_file;
+use gapix_core::{
+    excel::{create_summary_xlsx, write_summary_file},
+    gpx_reader::read_gpx_file,
+    model::{EnrichedGpx, Gpx},
+    simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file},
+    stage::{detect_stages, enrich_trackpoints, StageDetectionParameters},
+};
 use log::info;
 use logging_timer::time;
-use model::{EnrichedGpx, Gpx};
-use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
-use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
 use std::{
     fs::read_dir,
     io::Write,
@@ -15,12 +17,6 @@ use std::{
 };
 
 mod args;
-mod excel;
-mod formatting;
-mod gpx_reader;
-mod model;
-mod simplification;
-mod stage;
 
 pub const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
@@ -40,7 +36,10 @@ fn main() {
     }
 
     // Read all files into RAM.
-    let mut gpxs: Vec<_> = input_files.iter().map(|f| read_gpx_file(f).unwrap()).collect();
+    let mut gpxs: Vec<_> = input_files
+        .iter()
+        .map(|f| read_gpx_file(f).unwrap())
+        .collect();
 
     // Within each file, merge multiple tracks and segments into a single
     // track-segment. (join_input_files also does that)
@@ -81,7 +80,8 @@ fn main() {
             };
 
             let stages = detect_stages(&gpx, params);
-            let workbook = create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
+            let workbook =
+                create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
             write_summary_file(&summary_filename, workbook).unwrap();
         }
 

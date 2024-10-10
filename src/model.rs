@@ -38,6 +38,7 @@ pub struct GpxInfo {
 pub struct Metadata {
     pub link: Link,
     pub time: Option<OffsetDateTime>,
+    pub desc: Option<String>,
 }
 
 /// Data parsed from a <link> tag.
@@ -57,6 +58,7 @@ pub struct Link {
 pub struct Track {
     pub name: Option<String>,
     pub r#type: Option<String>,
+    pub desc: Option<String>,
     pub segments: Vec<TrackSegment>,
 }
 

@@ -22,6 +22,19 @@ use crate::model::{
     Declaration, Extensions, Gpx, GpxInfo, Link, Metadata, Track, TrackPoint, TrackSegment,
 };
 
+/*
+<xml>                                                  parse_decl
+<gpx>                          type="gpxType"          parse_gpx_info
+   <metadata>                  type="metadataType"     parse_metadata
+   <wpt>                       type="wptType"          n.a.
+   <rte>                       type="rteType"          n.a.
+   <extensions>                type="extensionsType"   n.a.
+   <trk>                       type="trkType"          parse_track
+       <trkseg>                type="trksegType"       parse_track_segment
+           <trkpt>             type="wptType"          parse_trackpoint
+               <extensions>    type="extensions"       parse_trackpoint_extensions
+
+*/
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
 #[time]
@@ -126,6 +139,7 @@ fn parse_metadata(
     let mut text = None;
     let mut mime_type = None;
     let mut time = None;
+    let mut desc = None;
 
     loop {
         match reader.read_event_into(buf) {
@@ -144,27 +158,29 @@ fn parse_metadata(
                 b"time" => {
                     time = Some(read_inner_as_time(buf, reader)?);
                 }
-                e => panic!("Unexpected element {:?}", e),
-            },
-            Ok(Event::End(e)) => {
-                match e.name().as_ref() {
-                    b"metadata" => {
-                        if let Some(href) = href {
-                            return Ok(Metadata {
-                                link: Link {
-                                    href,
-                                    text,
-                                    r#type: mime_type,
-                                },
-                                time,
-                            });
-                        } else {
-                            Err("href attribute not found, but it is mandatory according to the XSD")?;
-                        }
-                    }
-                    _ => {}
+                b"desc" => {
+                    desc = Some(read_inner_as_string(buf, reader)?);
                 }
-            }
+                e => panic!("Unexpected element {:?}", bytes_to_string(e)?),
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"metadata" => {
+                    if let Some(href) = href {
+                        return Ok(Metadata {
+                            link: Link {
+                                href,
+                                text,
+                                r#type: mime_type,
+                            },
+                            time,
+                            desc,
+                        });
+                    } else {
+                        Err("href attribute not found, but it is mandatory according to the XSD")?;
+                    }
+                }
+                _ => {}
+            },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
             e => panic!("Unexpected element {:?}", e),
@@ -179,6 +195,7 @@ fn parse_track(
     let mut name = None;
     let mut track_type = None;
     let mut segments = Vec::new();
+    let mut desc = None;
 
     loop {
         match reader.read_event_into(buf) {
@@ -189,17 +206,21 @@ fn parse_track(
                 b"type" => {
                     track_type = Some(read_inner_as_string(buf, reader)?);
                 }
+                b"desc" => {
+                    desc = Some(read_inner_as_string(buf, reader)?);
+                }
                 b"trkseg" => {
                     let segment = parse_track_segment(buf, reader)?;
                     segments.push(segment);
                 }
-                e => panic!("Unexpected element {:?}", e),
+                e => panic!("Unexpected element {:?}", bytes_to_string(e)?),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trk" => {
                     return Ok(Track {
                         name,
                         r#type: track_type,
+                        desc,
                         segments,
                     })
                 }
@@ -261,7 +282,7 @@ fn parse_trackpoint(
                     Ok(ext) => extensions = Some(ext),
                     Err(err) => return Some(Err(err)),
                 },
-                e => panic!("Unexpected element {:?}", e),
+                e => panic!("Unexpected element {:?}", bytes_to_string(e).unwrap()),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trkpt" => {

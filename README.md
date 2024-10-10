@@ -81,15 +81,16 @@ Or build from source using cargo.
 
 
 # TODO
-- Full pass lossless read and write of the complete XSD
+- Full pass lossless read and write of the complete XSD.
 - Make a library out of the core.
+- Should only read all files into RAM if doing joining. For other
+  modes, process one at a time.
 - Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
 - Track splitting
 - Waypoint processing
-- Full fidelity GPX writing.
 
 # Bugs
 - I think it's technically wrong to simply merge all tracks and segments?

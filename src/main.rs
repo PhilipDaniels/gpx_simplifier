@@ -4,6 +4,7 @@ use env_logger::Builder;
 use excel::{create_summary_xlsx, write_summary_file};
 use gpx_reader::read_gpx_file;
 use log::info;
+use logging_timer::time;
 use model::{EnrichedGpx, Gpx};
 use simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file};
 use stage::{detect_stages, enrich_trackpoints, StageDetectionParameters};
@@ -24,6 +25,7 @@ mod stage;
 pub const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 
+#[time]
 fn main() {
     configure_logging();
     info!("Starting {PROGRAM_NAME}");

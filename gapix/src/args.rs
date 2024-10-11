@@ -1,27 +1,16 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{arg, builder::ArgPredicate, command, value_parser, Parser};
-
-/*
- --join FILES                      join & output full track
- --join --metres=5 FILES           join & output full track and simplified track
- --metres=5 FILES                  output simplified track
- --analyse [other params] FILES    analyse into an xlsx
-
-
- --force                           always write output even if it exists. Global option.
- FILES                             all commands require a list of files to operate on
-
-
- FULL SYNTAX
- ===========
- [--force] [--join] [--metres=5] \
-   [--analyse [--stopped_speed] [--stop_resumption_distance] [--write_trackpoint_hyperlinks] ] \
-   FILES
-*/
+use log::{info, warn};
 
 /// Returns the parsed command line options. Uses the 'wild' crate to do glob
-/// expansion on Windows. so that Windows and Linux behave identically.
+/// expansion on Windows, so that Windows and Linux behave identically.
+///
+/// Note that if you use a pattern such as '*.gpx' and there are no actually
+/// matching gpx files, then you get 1 FILE with the name '*.gpx', i.e. the
+/// unexpanded pattern. This is the same whether you use wild::args() or
+/// std::env::args(), so it appears to be something we have to detect and work
+/// around.
 pub fn parse_args() -> Args {
     Args::parse_from(wild::args())
 }
@@ -35,16 +24,16 @@ pub struct Args {
         default_value = "false",
         help = "Overwrite output files even if they already exist"
     )]
-    force: bool,
+    pub force: bool,
 
     #[arg(
         short,
         long,
         default_value = "false",
         help = "Join the input GPX files into a single file with 1 track before \
-                applying further processing"
+                applying further processing and produce a '.joined.gpx' file"
     )]
-    join: bool,
+    pub join: bool,
 
     #[arg(
         short,
@@ -53,7 +42,7 @@ pub struct Args {
                 with METRES accuracy and produce a '.simplified.gpx' file",
         value_parser = value_parser!(u16).range(1..=1000)
     )]
-    metres: Option<u16>,
+    pub metres: Option<u16>,
 
     #[arg(
         short,
@@ -66,7 +55,7 @@ pub struct Args {
             ]),
         help = "Analyse the GPX and produce a summary spreadsheet in .xlsx format",
     )]
-    analyse: bool,
+    pub analyse: bool,
 
     #[arg(
         long,
@@ -94,25 +83,150 @@ pub struct Args {
         short = 'g',
         long,
         help = "When analysing, whether to include a Google Maps hyperlink when writing TrackPoints to the Summary sheet. \
-               WARNING: This can slow down the opening of the .xlsx in LibreOffice a lot. Implies 'analyse'.",
+               WARNING: This can slow down the opening of the .xlsx in LibreOffice a lot. Implies 'analyse'."
     )]
     pub trackpoint_hyperlinks: bool,
 
     #[arg(
-        help = "List of files to process. Any file that does not have a 'gpx' extension will be ignored.",
+        help = "List of files to process. Any file that does not have a 'gpx' extension will be ignored."
     )]
-    pub files: Vec<PathBuf>,
+    files: Vec<PathBuf>,
 }
 
-// impl Args {
-//     /// We always write the list of trackpoints, but adding
-//     /// hyperlinks is optional.
-//     /// TODO: Move this somewhere else. Only needed in the Excel writer.
-//     pub fn trackpoint_hyperlinks(&self) -> Hyperlink {
-//         if self.write_trackpoint_hyperlinks {
-//             Hyperlink::Yes
-//         } else {
-//             Hyperlink::No
-//         }
-//     }
-// }
+const JOINED_EXT: &'static str = "joined.gpx";
+const SIMPLIFIED_EXT: &'static str = "simplified.gpx";
+const JOINED_SIMPLIFIED_EXT: &'static str = "joined.simplified.gpx";
+const ANALYSIS_EXT: &'static str = "xlsx";
+
+impl Args {
+    /// Returns the list of files to process, in sorted order. This is based on
+    /// a simple list of things that was globbed to us on the command line; we
+    /// need to apply some filtering to that to ensure we are only dealing with
+    /// files ending in '.gpx'. An existence check and other errors (it might be
+    /// a directory for example) is left to load time.
+    pub fn files(&self) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+
+        for f in &self.files {
+            if Self::is_gpx_file(&f) {
+                if Self::is_output_file(&f) {
+                    warn!("Excluding {:?} because it is an output file", f);
+                } else {
+                    files.push(f.clone());
+                }
+            } else {
+                warn!("Excluding {:?} because it does not end in '.gpx'", f);
+            }
+        }
+
+        files.sort();
+        files
+    }
+
+    fn is_gpx_file(p: &Path) -> bool {
+        p.extension()
+            .is_some_and(|ext| ext.to_ascii_lowercase() == "gpx")
+    }
+
+    fn is_output_file(p: &Path) -> bool {
+        let s = p.to_string_lossy().to_ascii_lowercase();
+        s.ends_with(JOINED_EXT)
+            || s.ends_with(SIMPLIFIED_EXT)
+            || s.ends_with(JOINED_SIMPLIFIED_EXT)  // Redundant, but for reliability under future changes.
+            || s.ends_with(ANALYSIS_EXT)
+    }
+}
+
+/// The set of required outputs for any particular input file. If a field is
+/// 'Some' then that file needs to be produced.
+#[derive(Debug)]
+pub struct RequiredOutputFiles {
+    pub joined_file: Option<PathBuf>,
+    pub simplified_file: Option<PathBuf>,
+    pub analysis_file: Option<PathBuf>,
+}
+
+impl RequiredOutputFiles {
+    /// Figure out what output files are required based on
+    /// the command line arguments.
+    fn new<P: AsRef<Path>>(args: &Args, file: P) -> Self {
+        let file = file.as_ref();
+
+        let joined_file = if args.join {
+            let mut f = file.to_owned();
+            f.set_extension(JOINED_EXT);
+            Some(f)
+        } else {
+            None
+        };
+
+        let simplified_file = if args.join && args.metres.is_some() {
+            let mut f = file.to_owned();
+            f.set_extension(JOINED_SIMPLIFIED_EXT);
+            Some(f)
+        } else if args.metres.is_some() {
+            let mut f = file.to_owned();
+            f.set_extension(SIMPLIFIED_EXT);
+            Some(f)
+        } else {
+            None
+        };
+
+        let analysis_file = if args.analyse {
+            let mut f = file.to_owned();
+            f.set_extension(ANALYSIS_EXT);
+            Some(f)
+        } else {
+            None
+        };
+
+        Self {
+            joined_file,
+            simplified_file,
+            analysis_file,
+        }
+    }
+
+    /// Returns true if there is any work at all to do, i.e. at
+    /// least one output file is required.
+    pub fn has_work(&self) -> bool {
+        self.joined_file.is_some() || self.simplified_file.is_some() || self.analysis_file.is_some()
+    }
+}
+
+/// Determines the output files that need to be generated for a particular input
+/// file. This depends on what command line arguments we were invoked with and
+/// whether the specified outputs already exist. Yes, there is potentially a
+/// TOCTOU bug here but it really doesn't matter for this program, no feasible
+/// race conditions exist.
+pub fn get_required_outputs<P: AsRef<Path>>(args: &Args, file: P) -> RequiredOutputFiles {
+    let file = file.as_ref();
+    let mut rof = RequiredOutputFiles::new(args, file);
+
+    // If we aren't forcing overwrite of the output, then set some of the
+    // options to None if the file already exists.
+    if !args.force {
+        if let Some(file) = rof.joined_file.as_ref() {
+            if file.exists() {
+                info!("File {:?} already exists, skipping", file);
+                rof.joined_file = None;
+            }
+        }
+
+        if let Some(file) = rof.simplified_file.as_ref() {
+            if file.exists() {
+                info!("File {:?} already exists, skipping", file);
+                rof.simplified_file = None;
+            }
+        }
+
+        if let Some(file) = rof.analysis_file.as_ref() {
+            if file.exists() {
+                info!("File {:?} already exists, skipping", file);
+                rof.analysis_file = None;
+            }
+        }
+    }
+
+    rof
+}

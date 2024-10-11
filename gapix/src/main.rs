@@ -1,22 +1,14 @@
-use args::parse_args;
+use args::{get_required_outputs, parse_args};
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
-use gapix_core::{
-    excel::{create_summary_xlsx, write_summary_file},
-    gpx_reader::read_gpx_file,
-    model::{EnrichedGpx, Gpx},
-    simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp, write_simplified_gpx_file},
-    stage::{detect_stages, enrich_trackpoints, StageDetectionParameters},
-};
-use log::info;
+use gapix_core::gpx_reader::read_gpx_from_file;
+use join::join_input_files;
+use log::{debug, error, info, warn};
 use logging_timer::time;
-use std::{
-    fs::read_dir,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::io::Write;
 
 mod args;
+mod join;
 
 pub const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
@@ -27,35 +19,42 @@ fn main() {
     info!("Starting {PROGRAM_NAME}");
 
     let args = parse_args();
-    dbg!(args);
+    debug!("{:?}", &args);
 
-    // // If we are running in "join mode" then we need to load all the
-    // // input files into RAM.
-    // if args.join {
-    //     let exe_dir = get_exe_dir();
-    //     let input_files = get_list_of_input_files(&exe_dir);
-    //     if input_files.is_empty() {
-    //         println!("No .gpx files found");
-    //         return;
-    //     }
-    
-    //     // Read all files into RAM.
-    //     let mut gpxs: Vec<_> = input_files
-    //         .iter()
-    //         .map(|f| read_gpx_file(f).unwrap())
-    //         .collect();
+    // Exclude any file that is not ending .gpx.
+    // Deal with files that don't exist at load time.
+    // Don't load files that have no work required to be done.
+    // Can you join and simplify in one step?
 
-    //     // Join if necessary. Keep as a vec (of one element) so that
-    //     // following loop can be used whether we join or not.
-    //     if args.join {
-    //         gpxs = vec![join_input_files(gpxs)];
-    //     }
+    // If we are running in "join mode" then we need to load all the
+    // input files into RAM and merge them into a single file.
+    let input_files = args.files();
+    if input_files.is_empty() {
+        println!("No .gpx files specified, exiting");
+        return;
+    }
 
-    //     return;
-    // }
+    if args.join {
+        debug!("In join mode");
+        let rof = get_required_outputs(&args, &input_files[0]);
+        debug!("{:?}", &rof);
 
-
-
+        if rof.joined_file.is_some() {
+            match join_input_files(&input_files) {
+                Ok(gpx) => {
+                    // Write .joined.gpx
+                    // process_gpx()
+                }
+                Err(e) => error!("Error: {}", e)
+            }
+        }
+    } else {
+        debug!("In per-file mode");
+        for f in &input_files {
+            let gpx = read_gpx_from_file(f).unwrap();
+            // process gpx
+        }
+    }
 
     // // Within each file, merge multiple tracks and segments into a single
     // // track-segment. (join_input_files also does that)
@@ -63,7 +62,6 @@ fn main() {
     //     .into_iter()
     //     .map(|gpx| gpx.into_single_track())
     //     .collect();
-
 
     // for gpx in gpxs.into_iter() {
     //     let summary_filename = make_summary_filename(&gpx.filename);
@@ -114,87 +112,6 @@ fn main() {
     //         }
     //     }
     // }
-}
-
-fn make_simplified_filename(p: &Path) -> PathBuf {
-    let mut p = p.to_owned();
-    p.set_extension("simplified.gpx");
-    p
-}
-
-fn make_summary_filename(p: &Path) -> PathBuf {
-    let mut p = p.to_owned();
-    p.set_extension("summary.xlsx");
-    p
-}
-
-fn join_input_files(mut input_files: Vec<Gpx>) -> Gpx {
-    for gpx in &input_files {
-        assert!(gpx.is_single_track());
-    }
-
-    // We can't simply re-use the first track/segment due to
-    // multiple mut borrows. So create a new vec of points.
-    let required_capacity: usize = input_files.iter().map(|f| f.num_points()).sum();
-    let mut points = Vec::with_capacity(required_capacity);
-
-    for f in &mut input_files {
-        println!("Joining {:?}", f.filename);
-        points.append(&mut f.tracks[0].segments[0].points);
-    }
-
-    // Sort all the points by ascending time in case
-    // we got the files in a wacky order.
-    points.sort_by_key(|p| p.time);
-
-    println!("Joined {} files", input_files.len());
-
-    input_files.swap_remove(0)
-}
-
-/// Get a list of all files in the exe_dir that have the ".gpx" extension.
-/// Be careful to exclude files that actually end in ".simplified.gpx" -
-/// they are output files we already created! If we don't exclude them here,
-/// we end up generating ".simplified.simplified.gpx", etc.
-/// Remarks: the list of files is guaranteed to be sorted, this is
-/// important for the joining algorithm (the first file is expected to
-/// be the first part of the track, and so on).
-fn get_list_of_input_files(exe_dir: &PathBuf) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    let Ok(entries) = read_dir(exe_dir) else {
-        return files;
-    };
-
-    for entry in entries {
-        let entry = entry.unwrap();
-        let meta = entry.metadata().unwrap();
-        if meta.is_file() {
-            let s = &entry.file_name();
-            let p = Path::new(s);
-            if let Some(ext) = p.extension() {
-                if ext.to_ascii_lowercase() == "gpx" {
-                    let s = s.to_string_lossy().to_ascii_lowercase();
-                    if !s.ends_with(".simplified.gpx") {
-                        files.push(entry.path());
-                    }
-                }
-            }
-        }
-    }
-
-    files.sort_unstable();
-
-    for f in &files {
-        println!("Found GPX input file {:?}", f);
-    }
-
-    files
-}
-
-fn get_exe_dir() -> PathBuf {
-    let mut exe_path = std::env::current_exe().unwrap();
-    exe_path.pop();
-    exe_path
 }
 
 fn configure_logging() {

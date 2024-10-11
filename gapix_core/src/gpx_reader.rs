@@ -6,7 +6,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     error::Error,
     fs::File,
-    io::BufReader,
+    io::{BufRead, BufReader},
     path::Path,
 };
 
@@ -35,12 +35,10 @@ use crate::model::{
                <extensions>    type="extensions"       parse_trackpoint_extensions
 
 */
-/// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
-/// This function doesn't parse everything, just the things that appear in my Garmin files.
+
 #[time]
-pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
-    info!("Reading GPX file {:?}", input_file);
-    let mut reader = Reader::from_file(input_file)?;
+pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P) -> Result<Gpx, Box<dyn Error>> {
+    let mut xml_reader = Reader::from_reader(input);
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 
     let mut declaration = None;
@@ -49,7 +47,7 @@ pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
     let mut tracks: Vec<Track> = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        match xml_reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
                 declaration = Some(parse_decl(&decl)?);
             }
@@ -58,10 +56,10 @@ pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
                     gpx_info = Some(parse_gpx_info(&e)?);
                 }
                 b"metadata" => {
-                    metadata = Some(parse_metadata(&mut buf, &mut reader)?);
+                    metadata = Some(parse_metadata(&mut buf, &mut xml_reader)?);
                 }
                 b"trk" => {
-                    let track = parse_track(&mut buf, &mut reader)?;
+                    let track = parse_track(&mut buf, &mut xml_reader)?;
                     tracks.push(track);
                 }
                 _ => (),
@@ -79,7 +77,7 @@ pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
                     }
 
                     let gpx = Gpx {
-                        filename: input_file.to_owned(),
+                        filename: input_file.as_ref().to_owned(),
                         declaration: declaration.unwrap(),
                         info: gpx_info.unwrap(),
                         metadata: metadata.unwrap(),
@@ -93,12 +91,22 @@ pub fn read_gpx_file(input_file: &Path) -> Result<Gpx, Box<dyn Error>> {
             Ok(Event::Eof) => {
                 panic!("Reached EOF unexpectedly (before the closing GPX tag). File is probably corrupt.");
             }
-            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            Err(e) => panic!("Error at position {}: {:?}", xml_reader.error_position(), e),
             _ => (),
         }
 
         buf.clear();
     }
+}
+
+/// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
+/// This function doesn't parse everything, just the things that appear in my Garmin files.
+pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: &P) -> Result<Gpx, Box<dyn Error>> {
+    let input_file = input_file.as_ref();
+    info!("Reading GPX file {:?}", input_file);
+    let buf_reader = BufReader::new(File::open(input_file)?);
+    return read_gpx_from_reader(buf_reader, &input_file);
+
 }
 
 /// Parses an XML declaration, i.e. the very first line of the file which is:
@@ -131,9 +139,9 @@ fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
     })
 }
 
-fn parse_metadata(
+fn parse_metadata<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<Metadata, Box<dyn Error>> {
     let mut href = None;
     let mut text = None;
@@ -188,9 +196,9 @@ fn parse_metadata(
     }
 }
 
-fn parse_track(
+fn parse_track<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<Track, Box<dyn Error>> {
     let mut name = None;
     let mut track_type = None;
@@ -233,9 +241,9 @@ fn parse_track(
     }
 }
 
-fn parse_track_segment(
+fn parse_track_segment<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<TrackSegment, Box<dyn Error>> {
     let mut points = Vec::new();
 
@@ -247,9 +255,9 @@ fn parse_track_segment(
     Ok(TrackSegment { points })
 }
 
-fn parse_trackpoint(
+fn parse_trackpoint<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Option<Result<TrackPoint, Box<dyn Error>>> {
     let mut lat = None;
     let mut lon = None;
@@ -307,9 +315,9 @@ fn parse_trackpoint(
     }
 }
 
-fn parse_trackpoint_extensions(
+fn parse_trackpoint_extensions<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<Extensions, Box<dyn Error>> {
     let mut air_temp = None;
     let mut water_temp = None;
@@ -395,9 +403,9 @@ fn read_attribute_as_f64(
 }
 
 /// Reads the 'INNER TEXT' from a tag such as <tag>INNER TEXT</tag>.
-fn read_inner_as_string(
+fn read_inner_as_string<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<String, Box<dyn Error>> {
     match reader.read_event_into(buf) {
         Ok(Event::Text(ele)) => Ok(bytes_to_string(ele.as_ref())?),
@@ -410,27 +418,27 @@ fn read_inner_as_string(
 }
 
 /// Reads a <time>2024-09-21T06:59:46.000Z</time> tag.
-fn read_inner_as_time(
+fn read_inner_as_time<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<OffsetDateTime, Box<dyn Error>> {
     let t = read_inner_as_string(buf, reader)?;
     Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
 }
 
 /// Reads inner text and converts it to an f64.
-fn read_inner_as_f64(
+fn read_inner_as_f64<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<f64, Box<dyn Error>> {
     let t = read_inner_as_string(buf, reader)?;
     Ok(t.parse::<f64>()?)
 }
 
 /// Reads inner text and converts it to a u16.
-fn read_inner_as_u16(
+fn read_inner_as_u16<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<BufReader<File>>,
+    reader: &mut Reader<R>,
 ) -> Result<u16, Box<dyn Error>> {
     let t = read_inner_as_string(buf, reader)?;
     Ok(t.parse::<u16>()?)

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use geo::{point, Point};
+use log::debug;
 use time::{Duration, OffsetDateTime};
 
 /// Data parsed from a GPX file, based on the XSD description at
@@ -124,8 +125,16 @@ impl Gpx {
         // work because that track may have multiple segments. This function is
         // only called once and the simpler code wins out over the fix for that
         // problem.
+        let mut track_count = 0;
+        let mut segment_count = 0;
+        let mut point_count = 0;
+
         for src_track in self.tracks.iter_mut() {
+            track_count += 1;
+
             for src_segment in src_track.segments.iter_mut() {
+                segment_count += 1;
+                point_count += src_segment.points.len();
                 points.append(&mut src_segment.points);
             }
         }
@@ -133,6 +142,11 @@ impl Gpx {
         for idx in (1..self.tracks.len() - 1).rev() {
             self.tracks.remove(idx);
         }
+
+        debug!(
+            "Merged {} tracks with {} segments and {} points into a single track",
+            track_count, segment_count, point_count,
+        );
 
         self
     }

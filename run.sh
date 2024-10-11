@@ -2,10 +2,9 @@
 cd "$(dirname "$0")"
 
 # Remove all output files.
-rm -f target/release/*simp*.gpx && rm -f target/release/*.xlsx
+rm -vf target/release/*simp*.gpx && rm -vf target/release/*.xlsx
 
-# A run that just does stage detection.
-RUST_LOG=DEBUG cargo run --release -- --detect-stages # --write-trackpoint-hyperlinks
+# Build separately so that globbing works in the next command.
+cargo build --release
 
-# A run that just does simplification.
-#cargo run --release -- --metres=1
+RUST_LOG=DEBUG target/release/gapix -f --metres=5 --analyse target/release/*.gpx

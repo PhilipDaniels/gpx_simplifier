@@ -5,3 +5,4 @@ pub mod gpx_writer;
 pub mod model;
 pub mod simplification;
 pub mod stage;
+mod byte_counter;

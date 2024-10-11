@@ -64,109 +64,15 @@ pub fn write_simplified_gpx_file(
     print!("Writing file {:?}", &output_file);
     let mut w = BufWriter::new(File::create(output_file)?);
 
-    write_declaration_tag(&mut w, &gpx.declaration)?;
-    write_gpx_tag_open(&mut w, &gpx.info)?;
-    write_metadata_tag(&mut w, &gpx.metadata)?;
-    write_track(&mut w, &gpx.track_name, &gpx.track_type, &gpx.points)?;
-    write_gpx_tag_close(&mut w)?;
+    // write_declaration_tag(&mut w, &gpx.declaration)?;
+    // write_gpx_tag_open(&mut w, &gpx.info)?;
+    // write_metadata_tag(&mut w, &gpx.metadata)?;
+    // write_track(&mut w, &gpx.track_name, &gpx.track_type, &gpx.points)?;
+    // write_gpx_tag_close(&mut w)?;
 
     w.flush().unwrap();
     let metadata = std::fs::metadata(output_file)?;
     println!(", {} Kb", metadata.len() / 1024);
-
-    Ok(())
-}
-
-fn write_declaration_tag<W: Write>(
-    w: &mut W,
-    declaration: &Declaration,
-) -> Result<(), Box<dyn Error>> {
-    write!(w, "<?xml version=\"{}\"", declaration.version)?;
-    if let Some(encoding) = &declaration.encoding {
-        write!(w, " encoding=\"{}\"", encoding)?;
-    }
-    if let Some(standalone) = &declaration.standalone {
-        write!(w, " standalone=\"{}\"", standalone)?;
-    }
-    writeln!(w, "?>")?;
-    Ok(())
-}
-
-fn write_gpx_tag_open<W: Write>(w: &mut W, info: &GpxInfo) -> Result<(), Box<dyn Error>> {
-    writeln!(
-        w,
-        "<gpx creator=\"{}\" version=\"{}\"",
-        info.creator, info.version
-    )?;
-    for (key, value) in &info.attributes {
-        writeln!(w, "  {}=\"{}\"", key, value)?;
-    }
-    writeln!(w, ">")?;
-    Ok(())
-}
-
-fn write_gpx_tag_close<W: Write>(w: &mut W) -> Result<(), Box<dyn Error>> {
-    writeln!(w, "</gpx>")?;
-    Ok(())
-}
-
-fn write_metadata_tag<W: Write>(w: &mut W, metadata: &Metadata) -> Result<(), Box<dyn Error>> {
-    writeln!(w, "  <metadata>")?;
-    writeln!(w, "    <link href=\"{}\">", metadata.link.href)?;
-    if let Some(text) = &metadata.link.text {
-        writeln!(w, "      <text>{}</text>", text)?;
-    }
-    if let Some(r#type) = &metadata.link.r#type {
-        writeln!(w, "      <type>{}</type>", r#type)?;
-    }
-    writeln!(w, "    </link>")?;
-    if let Some(time) = &metadata.time {
-        writeln!(w, "    <time>{}</time>", format_utc_date(time))?;
-    }
-    writeln!(w, "  </metadata>")?;
-    Ok(())
-}
-
-fn write_track<W: Write>(
-    w: &mut W,
-    track_name: &Option<String>,
-    track_type: &Option<String>,
-    points: &[EnrichedTrackPoint],
-) -> Result<(), Box<dyn Error>> {
-    writeln!(w, "  <trk>")?;
-    if let Some(track_name) = track_name {
-        writeln!(w, "    <name>{}</name>", track_name)?;
-    }
-    if let Some(track_type) = track_type {
-        writeln!(w, "    <type>{}</type>", track_type)?;
-    }
-
-    writeln!(w, "    <trkseg>")?;
-    for p in points {
-        write_trackpoint(w, p)?;
-    }
-    writeln!(w, "    </trkseg>")?;
-
-    writeln!(w, "  </trk>")?;
-    Ok(())
-}
-
-fn write_trackpoint<W: Write>(w: &mut W, point: &EnrichedTrackPoint) -> Result<(), Box<dyn Error>> {
-    writeln!(
-        w,
-        "      <trkpt lat=\"{:.6}\" lon=\"{:.6}\">",
-        point.lat, point.lon
-    )?;
-
-    if let Some(ele) = point.ele {
-        writeln!(w, "        <ele>{:.1}</ele>", ele)?;
-    }
-
-    if let Some(t) = point.time {
-        writeln!(w, "        <time>{}</time>", format_utc_date(&t))?;
-    }
-
-    writeln!(w, "      </trkpt>")?;
 
     Ok(())
 }

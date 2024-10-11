@@ -1,7 +1,7 @@
 use args::{get_required_outputs, parse_args};
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
-use gapix_core::gpx_reader::read_gpx_from_file;
+use gapix_core::{gpx_reader::read_gpx_from_file, gpx_writer::write_gpx_file};
 use join::join_input_files;
 use log::{debug, error, info, warn};
 use logging_timer::time;
@@ -39,13 +39,13 @@ fn main() {
         let rof = get_required_outputs(&args, &input_files[0]);
         debug!("{:?}", &rof);
 
-        if rof.joined_file.is_some() {
+        if let Some(joined_filename) = rof.joined_file {
             match join_input_files(&input_files) {
                 Ok(gpx) => {
-                    // Write .joined.gpx
+                    write_gpx_file(joined_filename, &gpx).unwrap();
                     // process_gpx()
                 }
-                Err(e) => error!("Error: {}", e)
+                Err(e) => error!("Error: {}", e),
             }
         }
     } else {

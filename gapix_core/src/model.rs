@@ -6,7 +6,7 @@ use time::{Duration, OffsetDateTime};
 
 /// Data parsed from a GPX file, based on the XSD description at
 /// https://www.topografix.com/GPX/1/1/gpx.xsd
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Gpx {
     pub filename: PathBuf,
     pub declaration: Declaration,
@@ -16,6 +16,7 @@ pub struct Gpx {
     // TODO: There can also be a list of waypoints and/or routes.
 }
 
+/// Represents the 'xml' declaration tag - the first line of an XML file.
 #[derive(Debug, Clone)]
 pub struct Declaration {
     pub version: String,
@@ -23,6 +24,8 @@ pub struct Declaration {
     pub standalone: Option<String>,
 }
 
+/// Represents the 'gpx' tag, which is the main container element for the entire
+/// file.
 #[derive(Debug, Clone)]
 pub struct GpxInfo {
     /// The 'creator' attribute.
@@ -55,7 +58,7 @@ pub struct Link {
 }
 
 /// TODO: Parse all fields.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Track {
     pub name: Option<String>,
     pub r#type: Option<String>,
@@ -63,7 +66,7 @@ pub struct Track {
     pub segments: Vec<TrackSegment>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TrackSegment {
     pub points: Vec<TrackPoint>,
 }

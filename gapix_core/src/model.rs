@@ -1,8 +1,12 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use anyhow::{bail, Result};
 use geo::{point, Point};
 use log::debug;
+use logging_timer::time;
 use time::{Duration, OffsetDateTime};
+
+use crate::stage::{distance_between_points_metres, speed_kmh_from_duration};
 
 /// Data parsed from a GPX file, based on the XSD description at
 /// https://www.topografix.com/GPX/1/1/gpx.xsd
@@ -13,7 +17,6 @@ pub struct Gpx {
     pub info: GpxInfo,
     pub metadata: Metadata,
     pub tracks: Vec<Track>,
-    // TODO: There can also be a list of waypoints and/or routes.
 }
 
 /// Represents the 'xml' declaration tag - the first line of an XML file.
@@ -37,7 +40,6 @@ pub struct GpxInfo {
     pub attributes: HashMap<String, String>,
 }
 
-/// TODO: Parse all fields.
 #[derive(Debug, Clone)]
 pub struct Metadata {
     pub link: Link,
@@ -57,7 +59,6 @@ pub struct Link {
     pub r#type: Option<String>,
 }
 
-/// TODO: Parse all fields.
 #[derive(Debug, Clone)]
 pub struct Track {
     pub name: Option<String>,
@@ -111,11 +112,11 @@ impl Gpx {
         self.tracks.len() == 1 && self.tracks[0].segments.len() == 1
     }
 
-    /// Merges all the tracks and segments within the GPX into
-    /// a new structure that has one track with one segment containing
-    /// all the points.
-    /// The name and type of the first track in `self` is used
-    /// to name the new track.
+    /// Merges all the tracks and segments within the GPX into a new structure
+    /// that has one track with one segment containing all the points. The name
+    /// and type of the first track in `self` is used to name the new track.
+    /// If the GPX is already in single track form then self is simply returned
+    /// as-is (this is a cheap operation in that case).
     pub fn into_single_track(mut self) -> Gpx {
         if self.is_single_track() {
             return self;
@@ -152,6 +153,34 @@ impl Gpx {
         );
 
         self
+    }
+
+    /// Makes an EnrichedGpx from the Gpx. Each of the new trackpoints will have
+    /// derived data calculated where possible. An error is returned if the Gpx
+    /// is not in single-track form.
+    pub fn to_enriched_gpx(&self) -> Result<EnrichedGpx> {
+        if !self.is_single_track() {
+            bail!("GPX must be in single track form before converting to Enriched format. See method into_single_track().");
+        }
+
+        let mut egpx = EnrichedGpx {
+            filename: self.filename.clone(),
+            declaration: self.declaration.clone(),
+            info: self.info.clone(),
+            metadata: self.metadata.clone(),
+            track_name: self.tracks[0].name.clone(),
+            track_type: self.tracks[0].r#type.clone(),
+            points: self.tracks[0].segments[0]
+                .points
+                .iter()
+                .enumerate()
+                .map(|(idx, tp)| EnrichedTrackPoint::new(idx, tp))
+                .collect(),
+        };
+
+        egpx.enrich_trackpoints();
+
+        Ok(egpx)
     }
 }
 
@@ -205,6 +234,100 @@ impl EnrichedGpx {
             None
         } else {
             Some(sum / self.points.len() as f64)
+        }
+    }
+
+    /// Calculate a set of enriched TrackPoint information (distances, speed, climb).
+    #[time]
+    fn enrich_trackpoints(&mut self) {
+        let start_time = self.points[0].time;
+        let mut cum_ascent_metres = None;
+        let mut cum_descent_metres = None;
+
+        let mut p1 = self.points[0].as_geo_point();
+
+        // If we have time and elevation, fill in the first point with some starting
+        // values. There are quite a few calculations that rely on these values
+        // being set (mainly 'running' data). The calculations will return None when
+        // we don't know the data.
+        if self.points[0].time.is_some() {
+            self.points[0].delta_time = Some(Duration::ZERO);
+            self.points[0].running_delta_time = Some(Duration::ZERO);
+            self.points[0].speed_kmh = Some(0.0);
+        }
+        if self.points[0].ele.is_some() {
+            self.points[0].ele_delta_metres = Some(0.0);
+            self.points[0].running_ascent_metres = Some(0.0);
+            self.points[0].running_descent_metres = Some(0.0);
+            cum_ascent_metres = Some(0.0);
+            cum_descent_metres = Some(0.0);
+        }
+
+        // Note we are iterating all points EXCEPT the first one.
+        for idx in 1..self.points.len() {
+            let p2 = self.points[idx].as_geo_point();
+            self.points[idx].delta_metres = distance_between_points_metres(p1, p2);
+            assert!(self.points[idx].delta_metres >= 0.0);
+
+            self.points[idx].running_metres =
+                self.points[idx - 1].running_metres + self.points[idx].delta_metres;
+            assert!(self.points[idx].running_metres >= 0.0);
+
+            // Time delta. Don't really need this stored, but is handy to spot
+            // points that took more than usual when scanning the CSV.
+            self.points[idx].delta_time = match (self.points[idx].time, self.points[idx - 1].time) {
+                (Some(t1), Some(t2)) => {
+                    let dt = t1 - t2;
+                    assert!(dt.is_positive());
+                    Some(dt)
+                }
+                _ => None,
+            };
+
+            // Speed. Based on the distance we just calculated.
+            self.points[idx].speed_kmh = match self.points[idx].delta_time {
+                Some(t) => {
+                    let speed = speed_kmh_from_duration(self.points[idx].delta_metres, t);
+                    assert!(speed >= 0.0);
+                    Some(speed)
+                }
+                None => todo!(),
+            };
+
+            // How long it took to get here.
+            self.points[idx].running_delta_time = match (self.points[idx].time, start_time) {
+                (Some(t1), Some(t2)) => {
+                    let dt = t1 - t2;
+                    assert!(dt.is_positive());
+                    Some(dt)
+                }
+                _ => None,
+            };
+
+            // Ascent and descent.
+            let ele_delta_metres = match (self.points[idx].ele, self.points[idx - 1].ele) {
+                (Some(ele1), Some(ele2)) => Some(ele1 - ele2),
+                _ => None,
+            };
+
+            self.points[idx].ele_delta_metres = ele_delta_metres;
+
+            if let Some(edm) = ele_delta_metres {
+                if edm > 0.0 {
+                    let cam = cum_ascent_metres.unwrap_or_default() + edm;
+                    assert!(cam >= 0.0);
+                    cum_ascent_metres = Some(cam);
+                } else {
+                    let cdm = cum_descent_metres.unwrap_or_default() + edm.abs();
+                    assert!(cdm >= 0.0);
+                    cum_descent_metres = Some(cdm);
+                }
+            }
+
+            self.points[idx].running_ascent_metres = cum_ascent_metres;
+            self.points[idx].running_descent_metres = cum_descent_metres;
+
+            p1 = p2;
         }
     }
 }
@@ -314,26 +437,5 @@ impl EnrichedTrackPoint {
     /// the Garmin extensions.
     pub fn cadence(&self) -> Option<u16> {
         self.extensions.as_ref().and_then(|ext| ext.cadence)
-    }
-}
-
-impl From<Gpx> for EnrichedGpx {
-    fn from(value: Gpx) -> Self {
-        let value = value.into_single_track();
-
-        Self {
-            filename: value.filename,
-            declaration: value.declaration,
-            info: value.info,
-            metadata: value.metadata,
-            track_name: value.tracks[0].name.clone(),
-            track_type: value.tracks[0].r#type.clone(),
-            points: value.tracks[0].segments[0]
-                .points
-                .iter()
-                .enumerate()
-                .map(|(idx, tp)| EnrichedTrackPoint::new(idx, tp))
-                .collect(),
-        }
     }
 }

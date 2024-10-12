@@ -455,100 +455,6 @@ impl StageList {
     }
 }
 
-/// Calculate a set of enriched TrackPoint information (distances, speed, climb).
-#[time]
-pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
-    let start_time = gpx.points[0].time;
-    let mut cum_ascent_metres = None;
-    let mut cum_descent_metres = None;
-
-    let mut p1 = gpx.points[0].as_geo_point();
-
-    // If we have time and elevation, fill in the first point with some starting
-    // values. There are quite a few calculations that rely on these values
-    // being set (mainly 'running' data). The calculations will return None when
-    // we don't know the data.
-    if gpx.points[0].time.is_some() {
-        gpx.points[0].delta_time = Some(Duration::ZERO);
-        gpx.points[0].running_delta_time = Some(Duration::ZERO);
-        gpx.points[0].speed_kmh = Some(0.0);
-    }
-    if gpx.points[0].ele.is_some() {
-        gpx.points[0].ele_delta_metres = Some(0.0);
-        gpx.points[0].running_ascent_metres = Some(0.0);
-        gpx.points[0].running_descent_metres = Some(0.0);
-        cum_ascent_metres = Some(0.0);
-        cum_descent_metres = Some(0.0);
-    }
-
-    // Note we are iterating all points EXCEPT the first one.
-    for idx in 1..gpx.points.len() {
-        let p2 = gpx.points[idx].as_geo_point();
-        gpx.points[idx].delta_metres = distance_between_points_metres(p1, p2);
-        assert!(gpx.points[idx].delta_metres >= 0.0);
-
-        gpx.points[idx].running_metres =
-            gpx.points[idx - 1].running_metres + gpx.points[idx].delta_metres;
-        assert!(gpx.points[idx].running_metres >= 0.0);
-
-        // Time delta. Don't really need this stored, but is handy to spot
-        // points that took more than usual when scanning the CSV.
-        gpx.points[idx].delta_time = match (gpx.points[idx].time, gpx.points[idx - 1].time) {
-            (Some(t1), Some(t2)) => {
-                let dt = t1 - t2;
-                assert!(dt.is_positive());
-                Some(dt)
-            }
-            _ => None,
-        };
-
-        // Speed. Based on the distance we just calculated.
-        gpx.points[idx].speed_kmh = match gpx.points[idx].delta_time {
-            Some(t) => {
-                let speed = speed_kmh_from_duration(gpx.points[idx].delta_metres, t);
-                assert!(speed >= 0.0);
-                Some(speed)
-            }
-            None => todo!(),
-        };
-
-        // How long it took to get here.
-        gpx.points[idx].running_delta_time = match (gpx.points[idx].time, start_time) {
-            (Some(t1), Some(t2)) => {
-                let dt = t1 - t2;
-                assert!(dt.is_positive());
-                Some(dt)
-            }
-            _ => None,
-        };
-
-        // Ascent and descent.
-        let ele_delta_metres = match (gpx.points[idx].ele, gpx.points[idx - 1].ele) {
-            (Some(ele1), Some(ele2)) => Some(ele1 - ele2),
-            _ => None,
-        };
-
-        gpx.points[idx].ele_delta_metres = ele_delta_metres;
-
-        if let Some(edm) = ele_delta_metres {
-            if edm > 0.0 {
-                let cam = cum_ascent_metres.unwrap_or_default() + edm;
-                assert!(cam >= 0.0);
-                cum_ascent_metres = Some(cam);
-            } else {
-                let cdm = cum_descent_metres.unwrap_or_default() + edm.abs();
-                assert!(cdm >= 0.0);
-                cum_descent_metres = Some(cdm);
-            }
-        }
-
-        gpx.points[idx].running_ascent_metres = cum_ascent_metres;
-        gpx.points[idx].running_descent_metres = cum_descent_metres;
-
-        p1 = p2;
-    }
-}
-
 /// Detects the stages in the GPX and returns them as a list.
 ///
 /// Invariants: the first stage starts at TrackPoint 0
@@ -992,7 +898,7 @@ fn find_air_temps(
 }
 
 /// Calculate distance between two points in metres.
-fn distance_between_points_metres(p1: Point, p2: Point) -> f64 {
+pub fn distance_between_points_metres(p1: Point, p2: Point) -> f64 {
     p1.geodesic_distance(&p2)
 }
 

@@ -84,6 +84,7 @@ Or build from source using cargo.
 
 # TODO
 - Full pass lossless read and write of the complete XSD.
+- Pass some options into the gpx_writer to control the fidelity.
 - Track splitting
 - Waypoint processing
 - Create an IndentingWriter based off the 'indent_write' crate.

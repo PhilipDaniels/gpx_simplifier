@@ -1,10 +1,17 @@
-use args::{get_required_outputs, parse_args};
-use anyhow::{bail, Result};
+use anyhow::{Context, Ok, Result};
+use args::{get_required_outputs, parse_args, Args, RequiredOutputFiles};
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
-use gapix_core::{gpx_reader::read_gpx_from_file, gpx_writer::write_gpx_to_file};
+use gapix_core::{
+    excel::{create_summary_xlsx, write_summary_to_file, Hyperlink},
+    gpx_reader::read_gpx_from_file,
+    gpx_writer::write_gpx_to_file,
+    model::Gpx,
+    simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp},
+    stage::{detect_stages, StageDetectionParameters},
+};
 use join::join_input_files;
-use log::{debug, info};
+use log::{debug, info, warn};
 use logging_timer::time;
 use std::io::Write;
 
@@ -29,90 +36,83 @@ fn main() -> Result<()> {
     // input files into RAM and merge them into a single file.
     let input_files = args.files();
     if input_files.is_empty() {
-        println!("No .gpx files specified, exiting");
-        return Ok(())
+        warn!("No .gpx files specified, exiting");
+        return Ok(());
     }
 
+    // In join mode we join all the input files into a single file
+    // and then process it. There is nothing to be done after that.
     if args.join {
-        debug!("In join mode");
         let rof = get_required_outputs(&args, &input_files[0]);
-        debug!("{:?}", &rof);
+        debug!("In join mode: {:?}", &rof);
 
-        if let Some(joined_filename) = rof.joined_file {
-            match join_input_files(&input_files) {
-                Ok(gpx) => {
-                    write_gpx_to_file(joined_filename, &gpx)?;
-                    // process_gpx()
-                }
-                Err(e) => bail!("Error: {}", e),
-            }
+        if let Some(joined_filename) = &rof.joined_file {
+            let mut gpx = join_input_files(&input_files)?;
+            gpx.filename = joined_filename.clone();
+            write_gpx_to_file(&joined_filename, &gpx)?;
+            process_gpx(gpx, &args, rof)?;
         }
-    } else {
-        debug!("In per-file mode");
-        for f in &input_files {
-            let gpx = read_gpx_from_file(f)?;
-            // process gpx
-        }
+
+        return Ok(());
+    }
+
+    // The other modes break down to 'process each file separately'.
+    debug!("In per-file mode");
+    for f in &input_files {
+        let rof = get_required_outputs(&args, &f);
+        let gpx = read_gpx_from_file(f)?;
+        let gpx = gpx.into_single_track();
+        process_gpx(gpx, &args, rof)?;
     }
 
     Ok(())
+}
 
-    // // Within each file, merge multiple tracks and segments into a single
-    // // track-segment. (join_input_files also does that)
-    // gpxs = gpxs
-    //     .into_iter()
-    //     .map(|gpx| gpx.into_single_track())
-    //     .collect();
+fn process_gpx(mut gpx: Gpx, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
+    assert!(gpx.is_single_track());
 
-    // for gpx in gpxs.into_iter() {
-    //     let summary_filename = make_summary_filename(&gpx.filename);
-    //     let simplified_filename = make_simplified_filename(&gpx.filename);
+    if let Some(analysis_file) = &rof.analysis_file {
+        assert!(args.analyse);
 
-    //     if summary_filename.exists() && simplified_filename.exists() {
-    //         continue;
-    //     }
+        // Analysis requires us to enrich the GPX data with some
+        // derived data such as speed and running distance.
+        let enriched_gpx = gpx.to_enriched_gpx()?;
+        let params = StageDetectionParameters {
+            stopped_speed_kmh: args.control_speed,
+            min_metres_to_resume: args.control_resumption_distance,
+            min_duration_seconds: args.min_control_time * 60.0,
+        };
 
-    //     // Always enrich the TrackPoints. Keeps the flow simple and though
-    //     // it is one of the most expensive operations, it's still quick enough -
-    //     // yay Rust!
-    //     let mut gpx = EnrichedGpx::from(gpx);
-    //     enrich_trackpoints(&mut gpx);
+        let stages = detect_stages(&enriched_gpx, params);
 
-    //     // If we are detecting stops (really Stages now), then do that on
-    //     // the original file, for more precision. Though whether it matters
-    //     // much in practice is debatable - it only really makes a difference
-    //     // if your 'metres' input to RDP is largish.
-    //     if args.detect_stages {
-    //         let params = StageDetectionParameters {
-    //             stopped_speed_kmh: args.stopped_speed,
-    //             min_metres_to_resume: args.stop_resumption_distance,
-    //             min_duration_seconds: args.min_stop_time * 60.0,
-    //         };
+        let tp_hyper = if args.trackpoint_hyperlinks {
+            Hyperlink::Yes
+        } else {
+            Hyperlink::No
+        };
 
-    //         let stages = detect_stages(&gpx, params);
-    //         let workbook =
-    //             create_summary_xlsx(args.trackpoint_hyperlinks(), &gpx, &stages).unwrap();
-    //         write_summary_file(&summary_filename, workbook).unwrap();
-    //     }
+        let workbook = create_summary_xlsx(tp_hyper, &enriched_gpx, &stages).unwrap();
+        write_summary_to_file(analysis_file, workbook).unwrap();
+    }
 
-    //     // Always do simplification last because it mutates the track,
-    //     // reducing its accuracy.
-    //     if !simplified_filename.exists() {
-    //         if let Some(metres) = args.metres {
-    //             let epsilon = metres_to_epsilon(metres);
+    if let Some(simplified_file) = &rof.simplified_file {
+        let metres = args
+            .metres
+            .context("The 'metres' argument should be specified if we are simplifying")?;
+        let epsilon = metres_to_epsilon(metres);
+        let start_count = gpx.num_points();
+        reduce_trackpoints_by_rdp(&mut gpx.tracks[0].segments[0].points, epsilon);
+        let end_count = gpx.num_points();
 
-    //             let start_count = gpx.points.len();
-    //             reduce_trackpoints_by_rdp(&mut gpx.points, epsilon);
-    //             println!(
-    //                 "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {} for {:?}",
-    //                 gpx.points.len(),
-    //                 gpx.filename
-    //             );
+        info!(
+            "Using Ramer-Douglas-Peucker with a precision of {metres}m (epsilon={epsilon}) reduced the trackpoint count from {start_count} to {end_count} for {:?}",
+            gpx.filename
+            );
 
-    //             write_simplified_gpx_file(&simplified_filename, &gpx).unwrap();
-    //         }
-    //     }
-    // }
+        write_gpx_to_file(&simplified_file, &gpx)?;
+    }
+
+    Ok(())
 }
 
 fn configure_logging() {

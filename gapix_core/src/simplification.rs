@@ -1,18 +1,9 @@
-use std::{
-    collections::HashSet,
-    fs::File,
-    io::{BufWriter, Write},
-    path::Path,
-};
+use std::collections::HashSet;
 
-use anyhow::Result;
 use geo::{coord, LineString, SimplifyIdx};
 use logging_timer::time;
 
-use crate::{
-    formatting::format_utc_date,
-    model::{Declaration, EnrichedGpx, EnrichedTrackPoint, GpxInfo, Metadata},
-};
+use crate::model::TrackPoint;
 
 /// We take input from the user in "metres of accuracy".
 /// The 'geo' implementation of RDP requires an epsilon
@@ -41,7 +32,7 @@ pub fn metres_to_epsilon(metres: u16) -> f64 {
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
 #[time]
-pub fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: f64) {
+pub fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f64) {
     let line_string: LineString<_> = points
         .iter()
         .map(|p| coord! { x: p.lon, y: p.lat })
@@ -54,25 +45,4 @@ pub fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: 
         n += 1;
         keep
     });
-}
-
-#[time]
-pub fn write_simplified_gpx_file(
-    output_file: &Path,
-    gpx: &EnrichedGpx,
-) -> Result<()> {
-    print!("Writing file {:?}", &output_file);
-    let mut w = BufWriter::new(File::create(output_file)?);
-
-    // write_declaration_tag(&mut w, &gpx.declaration)?;
-    // write_gpx_tag_open(&mut w, &gpx.info)?;
-    // write_metadata_tag(&mut w, &gpx.metadata)?;
-    // write_track(&mut w, &gpx.track_name, &gpx.track_type, &gpx.points)?;
-    // write_gpx_tag_close(&mut w)?;
-
-    w.flush()?;
-    let metadata = std::fs::metadata(output_file)?;
-    println!(", {} Kb", metadata.len() / 1024);
-
-    Ok(())
 }

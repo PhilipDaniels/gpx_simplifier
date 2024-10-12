@@ -50,7 +50,8 @@ fn main() -> Result<()> {
             let mut gpx = join_input_files(&input_files)?;
             gpx.filename = joined_filename.clone();
             write_gpx_to_file(&joined_filename, &gpx)?;
-            process_gpx(gpx, &args, rof)?;
+            analyse_gpx(&gpx, &args, &rof)?;
+            simplify_gpx(gpx, &args, rof)?;
         }
 
         return Ok(());
@@ -62,13 +63,14 @@ fn main() -> Result<()> {
         let rof = get_required_outputs(&args, &f);
         let gpx = read_gpx_from_file(f)?;
         let gpx = gpx.into_single_track();
-        process_gpx(gpx, &args, rof)?;
+        analyse_gpx(&gpx, &args, &rof)?;
+        simplify_gpx(gpx, &args, rof)?;
     }
 
     Ok(())
 }
 
-fn process_gpx(mut gpx: Gpx, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
+fn analyse_gpx(gpx: &Gpx, args: &Args, rof: &RequiredOutputFiles) -> Result<()> {
     assert!(gpx.is_single_track());
 
     if let Some(analysis_file) = &rof.analysis_file {
@@ -91,9 +93,15 @@ fn process_gpx(mut gpx: Gpx, args: &Args, rof: RequiredOutputFiles) -> Result<()
             Hyperlink::No
         };
 
-        let workbook = create_summary_xlsx(tp_hyper, &enriched_gpx, &stages).unwrap();
-        write_summary_to_file(analysis_file, workbook).unwrap();
+        let workbook = create_summary_xlsx(tp_hyper, &enriched_gpx, &stages)?;
+        write_summary_to_file(analysis_file, workbook)?;
     }
+
+    Ok(())
+}
+
+fn simplify_gpx(mut gpx: Gpx, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
+    assert!(gpx.is_single_track());
 
     if let Some(simplified_file) = &rof.simplified_file {
         let metres = args

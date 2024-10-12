@@ -112,7 +112,7 @@ impl Args {
                 if Self::is_output_file(&f) {
                     warn!("Excluding {:?} because it is an output file", f);
                 } else {
-                    files.push(f.clone());
+                    
                 }
             } else {
                 warn!("Excluding {:?} because it does not end in '.gpx'", f);
@@ -185,12 +185,6 @@ impl RequiredOutputFiles {
             simplified_file,
             analysis_file,
         }
-    }
-
-    /// Returns true if there is any work at all to do, i.e. at
-    /// least one output file is required.
-    pub fn has_work(&self) -> bool {
-        self.joined_file.is_some() || self.simplified_file.is_some() || self.analysis_file.is_some()
     }
 }
 

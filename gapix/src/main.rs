@@ -1,7 +1,7 @@
 use args::{get_required_outputs, parse_args};
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
-use gapix_core::{gpx_reader::read_gpx_from_file, gpx_writer::write_gpx_file};
+use gapix_core::{gpx_reader::read_gpx_from_file, gpx_writer::write_gpx_to_file};
 use join::join_input_files;
 use log::{debug, error, info, warn};
 use logging_timer::time;
@@ -20,6 +20,9 @@ fn main() {
 
     let args = parse_args();
     debug!("{:?}", &args);
+    if args.force {
+        info!("'--force' specified, all existing output files will be overwritten");
+    }
 
     // Exclude any file that is not ending .gpx.
     // Deal with files that don't exist at load time.
@@ -42,7 +45,7 @@ fn main() {
         if let Some(joined_filename) = rof.joined_file {
             match join_input_files(&input_files) {
                 Ok(gpx) => {
-                    write_gpx_file(joined_filename, &gpx).unwrap();
+                    write_gpx_to_file(joined_filename, &gpx).unwrap();
                     // process_gpx()
                 }
                 Err(e) => error!("Error: {}", e),

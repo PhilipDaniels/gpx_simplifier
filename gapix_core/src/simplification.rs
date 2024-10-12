@@ -1,11 +1,11 @@
 use std::{
     collections::HashSet,
-    error::Error,
     fs::File,
     io::{BufWriter, Write},
     path::Path,
 };
 
+use anyhow::Result;
 use geo::{coord, LineString, SimplifyIdx};
 use logging_timer::time;
 
@@ -60,7 +60,7 @@ pub fn reduce_trackpoints_by_rdp(points: &mut Vec<EnrichedTrackPoint>, epsilon: 
 pub fn write_simplified_gpx_file(
     output_file: &Path,
     gpx: &EnrichedGpx,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     print!("Writing file {:?}", &output_file);
     let mut w = BufWriter::new(File::create(output_file)?);
 
@@ -70,7 +70,7 @@ pub fn write_simplified_gpx_file(
     // write_track(&mut w, &gpx.track_name, &gpx.track_type, &gpx.points)?;
     // write_gpx_tag_close(&mut w)?;
 
-    w.flush().unwrap();
+    w.flush()?;
     let metadata = std::fs::metadata(output_file)?;
     println!(", {} Kb", metadata.len() / 1024);
 

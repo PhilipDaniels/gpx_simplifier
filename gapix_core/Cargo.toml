@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = { version = "1.0.89", features = ["backtrace"] }
 env_logger = { workspace = true }
 geo = "0.28.0"
 log = { workspace = true }

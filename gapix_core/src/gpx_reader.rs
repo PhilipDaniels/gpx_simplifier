@@ -1,15 +1,16 @@
 #![allow(clippy::single_match)]
 
-use core::{panic, str};
+use core::str;
 use std::{
     borrow::{Borrow, Cow},
     collections::{hash_map::Entry, HashMap},
-    error::Error,
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
+    str::FromStr,
 };
 
+use anyhow::{bail, Context, Result};
 use log::info;
 use logging_timer::time;
 use quick_xml::{
@@ -37,7 +38,8 @@ use crate::model::{
 */
 
 #[time]
-pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P) -> Result<Gpx, Box<dyn Error>> {
+pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P) -> Result<Gpx> {
+    let input_file = input_file.as_ref();
     let mut xml_reader = Reader::from_reader(input);
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 
@@ -66,21 +68,11 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    if declaration.is_none() {
-                        Err("Did not find the 'xml' declaration element")?;
-                    }
-                    if gpx_info.is_none() {
-                        Err("Did not find the 'gpx' element")?;
-                    }
-                    if metadata.is_none() {
-                        Err("Did not find the 'metadata' element")?;
-                    }
-
                     let gpx = Gpx {
-                        filename: input_file.as_ref().to_owned(),
-                        declaration: declaration.unwrap(),
-                        info: gpx_info.unwrap(),
-                        metadata: metadata.unwrap(),
+                        filename: input_file.to_owned(),
+                        declaration: declaration.context("Did not find the 'xml' declaration element")?,
+                        info: gpx_info.context("Did not find the 'gpx' element")?,
+                        metadata: metadata.context("Did not find the 'metadata' element")?,
                         tracks,
                     };
 
@@ -89,9 +81,10 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P
                 _ => (),
             },
             Ok(Event::Eof) => {
-                panic!("Reached EOF unexpectedly (before the closing GPX tag). File is probably corrupt.");
+                bail!("Reached EOF unexpectedly (before the closing GPX tag) while parsing {:?}. File is probably corrupt.",
+                    input_file);
             }
-            Err(e) => panic!("Error at position {}: {:?}", xml_reader.error_position(), e),
+            Err(e) => bail!("Error at position {}: {:?}", xml_reader.error_position(), e),
             _ => (),
         }
 
@@ -101,17 +94,16 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
-pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: &P) -> Result<Gpx, Box<dyn Error>> {
+pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: &P) -> Result<Gpx> {
     let input_file = input_file.as_ref();
     info!("Reading GPX file {:?}", input_file);
     let buf_reader = BufReader::new(File::open(input_file)?);
     return read_gpx_from_reader(buf_reader, &input_file);
-
 }
 
 /// Parses an XML declaration, i.e. the very first line of the file which is:
 ///     <?xml version="1.0" encoding="UTF-8"?>
-fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
+fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration> {
     Ok(Declaration {
         version: rcow_to_string(decl.version())?,
         encoding: orcow_to_string(decl.encoding())?,
@@ -119,17 +111,17 @@ fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration, Box<dyn Error>> {
     })
 }
 
-fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
+fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo> {
     let mut attributes = parse_attributes(tag)?;
 
     let creator = match attributes.entry("creator".to_string()) {
         Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-        _ => return Err("Mandatory attribute 'creator' was missing on the GPX element")?,
+        _ => bail!("Mandatory attribute 'creator' was missing on the GPX element"),
     };
 
     let version = match attributes.entry("version".to_string()) {
         Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-        _ => return Err("Mandatory attribute 'version' was missing on the GPX element")?,
+        _ => bail!("Mandatory attribute 'version' was missing on the GPX element"),
     };
 
     Ok(GpxInfo {
@@ -139,10 +131,7 @@ fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo, Box<dyn Error>> {
     })
 }
 
-fn parse_metadata<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<Metadata, Box<dyn Error>> {
+fn parse_metadata<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<Metadata> {
     let mut href = None;
     let mut text = None;
     let mut mime_type = None;
@@ -169,7 +158,7 @@ fn parse_metadata<R: BufRead>(
                 b"desc" => {
                     desc = Some(read_inner_as_string(buf, reader)?);
                 }
-                e => panic!("Unexpected element {:?}", bytes_to_string(e)?),
+                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"metadata" => {
@@ -184,22 +173,19 @@ fn parse_metadata<R: BufRead>(
                             desc,
                         });
                     } else {
-                        Err("href attribute not found, but it is mandatory according to the XSD")?;
+                        bail!("href attribute not found, but it is mandatory according to the XSD");
                     }
                 }
                 _ => {}
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e => panic!("Unexpected element {:?}", e),
+            e => bail!("Unexpected element {:?}", e),
         }
     }
 }
 
-fn parse_track<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<Track, Box<dyn Error>> {
+fn parse_track<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<Track> {
     let mut name = None;
     let mut track_type = None;
     let mut segments = Vec::new();
@@ -218,10 +204,9 @@ fn parse_track<R: BufRead>(
                     desc = Some(read_inner_as_string(buf, reader)?);
                 }
                 b"trkseg" => {
-                    let segment = parse_track_segment(buf, reader)?;
-                    segments.push(segment);
+                    segments.push(parse_track_segment(buf, reader)?);
                 }
-                e => panic!("Unexpected element {:?}", bytes_to_string(e)?),
+                e => bail!("Unexpected element {:?}", bytes_to_string(e)?),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trk" => {
@@ -236,7 +221,7 @@ fn parse_track<R: BufRead>(
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e => panic!("Unexpected element {:?}", e),
+            e => bail!("Unexpected element {:?}", e),
         }
     }
 }
@@ -244,11 +229,10 @@ fn parse_track<R: BufRead>(
 fn parse_track_segment<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
-) -> Result<TrackSegment, Box<dyn Error>> {
+) -> Result<TrackSegment> {
     let mut points = Vec::new();
 
-    while let Some(point) = parse_trackpoint(buf, reader) {
-        let point = point?;
+    while let Some(point) = parse_trackpoint(buf, reader)? {
         points.push(point);
     }
 
@@ -258,7 +242,7 @@ fn parse_track_segment<R: BufRead>(
 fn parse_trackpoint<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
-) -> Option<Result<TrackPoint, Box<dyn Error>>> {
+) -> Result<Option<TrackPoint>> {
     let mut lat = None;
     let mut lon = None;
     let mut ele = None;
@@ -269,34 +253,25 @@ fn parse_trackpoint<R: BufRead>(
         match reader.read_event_into(buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"trkpt" => {
-                    match read_attribute_as_f64(&e, "lat") {
-                        Ok(attr_value) => lat = Some(attr_value),
-                        Err(err) => return Some(Err(err)),
-                    }
-                    match read_attribute_as_f64(&e, "lon") {
-                        Ok(attr_value) => lon = Some(attr_value),
-                        Err(err) => return Some(Err(err)),
-                    }
+                    lat = Some(read_attribute_as_f64(&e, "lat")?);
+                    lon = Some(read_attribute_as_f64(&e, "lon")?);
                 }
-                b"ele" => match read_inner_as_f64(buf, reader) {
-                    Ok(inner) => ele = Some(inner),
-                    Err(err) => return Some(Err(err)),
-                },
-                b"time" => match read_inner_as_time(buf, reader) {
-                    Ok(inner) => time = Some(inner),
-                    Err(err) => return Some(Err(err)),
-                },
-                b"extensions" => match parse_trackpoint_extensions(buf, reader) {
-                    Ok(ext) => extensions = Some(ext),
-                    Err(err) => return Some(Err(err)),
-                },
-                e => panic!("Unexpected element {:?}", bytes_to_string(e).unwrap()),
+                b"ele" => {
+                    ele = Some(read_inner_as_f64(buf, reader)?);
+                }
+                b"time" => {
+                    time = Some(read_inner_as_time(buf, reader)?);
+                }
+                b"extensions" => {
+                    extensions = Some(parse_trackpoint_extensions(buf, reader)?);
+                }
+                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trkpt" => {
-                    return Some(Ok(TrackPoint {
-                        lat: lat.unwrap(),
-                        lon: lon.unwrap(),
+                    return Ok(Some(TrackPoint {
+                        lat: lat.context("lat attribute not found")?,
+                        lon: lon.context("lon attribute not found")?,
                         ele,
                         time,
                         extensions,
@@ -304,13 +279,13 @@ fn parse_trackpoint<R: BufRead>(
                 }
                 b"trkseg" => {
                     // Reached the end of the trackpoints for this segment.
-                    return None;
+                    return Ok(None);
                 }
                 _ => {}
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e => panic!("Unexpected element {:?}", e),
+            e => bail!("Unexpected element {:?}", e),
         }
     }
 }
@@ -318,7 +293,7 @@ fn parse_trackpoint<R: BufRead>(
 fn parse_trackpoint_extensions<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
-) -> Result<Extensions, Box<dyn Error>> {
+) -> Result<Extensions> {
     let mut air_temp = None;
     let mut water_temp = None;
     let mut depth = None;
@@ -344,7 +319,7 @@ fn parse_trackpoint_extensions<R: BufRead>(
                 b"cad" => {
                     cadence = Some(read_inner_as_u16(buf, reader)?);
                 }
-                e => panic!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.local_name().as_ref() {
                 b"TrackPointExtension" => { /* ignore, just a container element */ }
@@ -359,16 +334,16 @@ fn parse_trackpoint_extensions<R: BufRead>(
                 }
                 b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */
                 }
-                e => panic!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             // Ignore spurious Event::Text, I think they are newlines.
             Ok(Event::Text(_)) => {}
-            e => panic!("Unexpected element {:?}", e),
+            e => bail!("Unexpected element {:?}", e),
         }
     }
 }
 
-fn parse_attributes(tag: &BytesStart<'_>) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn parse_attributes(tag: &BytesStart<'_>) -> Result<HashMap<String, String>> {
     let mut result = HashMap::new();
 
     for attr in tag.attributes() {
@@ -383,37 +358,27 @@ fn parse_attributes(tag: &BytesStart<'_>) -> Result<HashMap<String, String>, Box
     Ok(result)
 }
 
-fn read_attribute_as_string(
-    tag: &BytesStart<'_>,
-    attribute_name: &str,
-) -> Result<String, Box<dyn Error>> {
+fn read_attribute_as_string(tag: &BytesStart<'_>, attribute_name: &str) -> Result<String> {
     let attrs = parse_attributes(tag)?;
     match attrs.get(attribute_name) {
         Some(value) => Ok(value.clone()),
-        None => Err(format!("No attribute named {attribute_name}"))?,
+        None => bail!("No attribute named {attribute_name}"),
     }
 }
 
-fn read_attribute_as_f64(
-    tag: &BytesStart<'_>,
-    attribute_name: &str,
-) -> Result<f64, Box<dyn Error>> {
+fn read_attribute_as_f64(tag: &BytesStart<'_>, attribute_name: &str) -> Result<f64> {
     let s = read_attribute_as_string(tag, attribute_name)?;
     Ok(s.parse::<f64>()?)
 }
 
 /// Reads the 'INNER TEXT' from a tag such as <tag>INNER TEXT</tag>.
-fn read_inner_as_string<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<String, Box<dyn Error>> {
+fn read_inner_as_string<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<String> {
     match reader.read_event_into(buf) {
         Ok(Event::Text(ele)) => Ok(bytes_to_string(ele.as_ref())?),
-        e => Err(format!(
-            "Got unexpected XML node, document is probably corrupt: {:?}",
+        e => bail!(
+            "Got unexpected XML element {:?} (was expecting Event::Text), this is either a bug or the document is corrupt",
             e
-        )
-        .into()),
+        ),
     }
 }
 
@@ -421,55 +386,59 @@ fn read_inner_as_string<R: BufRead>(
 fn read_inner_as_time<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
-) -> Result<OffsetDateTime, Box<dyn Error>> {
+) -> Result<OffsetDateTime> {
     let t = read_inner_as_string(buf, reader)?;
     Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
 }
 
 /// Reads inner text and converts it to an f64.
-fn read_inner_as_f64<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<f64, Box<dyn Error>> {
+fn read_inner_as_f64<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<f64> {
     let t = read_inner_as_string(buf, reader)?;
     Ok(t.parse::<f64>()?)
 }
 
 /// Reads inner text and converts it to a u16.
-fn read_inner_as_u16<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<u16, Box<dyn Error>> {
+/// TODO: Make these methods generic.
+fn read_inner_as_u16<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<u16> {
     let t = read_inner_as_string(buf, reader)?;
     Ok(t.parse::<u16>()?)
 }
 
-fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String, Box<dyn Error>> {
-    bytes_to_string(v.borrow())
-}
-
-fn rcow_to_string(v: Result<Cow<'_, [u8]>, quick_xml::Error>) -> Result<String, Box<dyn Error>> {
-    match v {
-        Ok(Cow::Borrowed(s)) => Ok(bytes_to_string(s)?),
-        Ok(Cow::Owned(s)) => Ok(bytes_to_string(&s)?),
-        Err(err) => Err(Box::new(err)),
+fn read_inner_as<R: BufRead, T: FromStr>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<T> {
+    let t = read_inner_as_string(buf, reader)?;
+    match t.parse::<T>() {
+        Ok(v) => Ok(v),
+        Err(_) => bail!(
+            "Could not parse {:?} into {}",
+            &buf,
+            std::any::type_name::<T>()
+        ),
     }
 }
 
-fn orcow_to_string(
-    v: Option<Result<Cow<'_, [u8]>, quick_xml::Error>>,
-) -> Result<Option<String>, Box<dyn Error>> {
+fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String> {
+    bytes_to_string(v.borrow())
+}
+
+fn rcow_to_string(v: Result<Cow<'_, [u8]>, quick_xml::Error>) -> Result<String> {
+    match v {
+        Ok(Cow::Borrowed(s)) => Ok(bytes_to_string(s)?),
+        Ok(Cow::Owned(s)) => Ok(bytes_to_string(&s)?),
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn orcow_to_string(v: Option<Result<Cow<'_, [u8]>, quick_xml::Error>>) -> Result<Option<String>> {
     match v {
         Some(Ok(Cow::Borrowed(s))) => Ok(Some(bytes_to_string(s)?)),
         Some(Ok(Cow::Owned(s))) => Ok(Some(bytes_to_string(&s)?)),
-        Some(Err(err)) => Err(Box::new(err)),
+        Some(Err(err)) => Err(err.into()),
         None => Ok(None),
     }
 }
 
-fn bytes_to_string(value: &[u8]) -> Result<String, Box<dyn Error>> {
-    match str::from_utf8(value) {
-        Ok(s) => Ok(s.to_string()),
-        Err(err) => Err(Box::new(err)),
-    }
+fn bytes_to_string(value: &[u8]) -> Result<String> {
+    str::from_utf8(value)
+        .and_then(|s| Ok(s.to_string()))
+        .map_err(|e| e.into())
 }

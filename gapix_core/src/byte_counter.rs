@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, Seek, Write};
 
 pub(crate) struct ByteCounter<W> {
     inner: W,
@@ -23,7 +23,8 @@ where
 }
 
 impl<W> Write for ByteCounter<W>
-    where W: Write
+where
+    W: Write,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let res = self.inner.write(buf);
@@ -35,5 +36,14 @@ impl<W> Write for ByteCounter<W>
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner.flush()
+    }
+}
+
+impl<W> Seek for ByteCounter<W>
+where
+    W: Seek,
+{
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        self.inner.seek(pos)
     }
 }

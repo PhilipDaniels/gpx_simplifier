@@ -1,10 +1,10 @@
 use std::{
-    error::Error,
     fs::File,
     io::{BufWriter, Write},
     path::Path,
 };
 
+use anyhow::{Context, Result};
 use log::debug;
 use logging_timer::time;
 
@@ -18,12 +18,13 @@ use crate::{
 
 /// Writes a GPX to file with full-fidelity, i.e. everything we can write is
 /// written.
-pub fn write_gpx_file<P: AsRef<Path>>(output_file: P, gpx: &Gpx) -> Result<(), Box<dyn Error>> {
+pub fn write_gpx_to_file<P: AsRef<Path>>(output_file: P, gpx: &Gpx) -> Result<()> {
     let output_file = output_file.as_ref();
-    let file = File::create(output_file)?;
+    let file =
+        File::create(output_file).with_context(|| format!("Failed to create {:?}", output_file))?;
     let w = BufWriter::new(file);
     let mut w = ByteCounter::new(w);
-    write_gpx(&mut w, gpx)?;
+    write_gpx_to_writer(&mut w, gpx)?;
     debug!("Wrote {} bytes to {:?}", w.bytes_written(), output_file);
     Ok(())
 }
@@ -31,23 +32,21 @@ pub fn write_gpx_file<P: AsRef<Path>>(output_file: P, gpx: &Gpx) -> Result<(), B
 /// Writes a GPX to the specified writer with full-fidelity, i.e. everything we
 /// can write is written.
 #[time]
-pub fn write_gpx<W: Write>(w: &mut W, gpx: &Gpx) -> Result<(), Box<dyn Error>> {
-    write_declaration_element(w, &gpx.declaration)?;
-    write_gpxinfo_element_open(w, &gpx.info)?;
-    write_metadata_element(w, &gpx.metadata)?;
+pub fn write_gpx_to_writer<W: Write>(w: &mut W, gpx: &Gpx) -> Result<()> {
+    write_declaration_element(w, &gpx.declaration).context("Failed to write <xml...> element")?;
+    write_gpxinfo_element_open(w, &gpx.info).context("Failed to write <gpx> element")?;
+    write_metadata_element(w, &gpx.metadata).context("Failed to write <metadata> element")?;
     for track in &gpx.tracks {
-        write_track(w, track)?;
+        write_track(w, track)
+            .with_context(|| format!("Failed to write <track> {:?}", track.name))?;
     }
-    write_gpxinfo_element_close(w)?;
+    write_gpxinfo_element_close(w).context("Failed to write </gpx> element")?;
 
     w.flush()?;
     Ok(())
 }
 
-fn write_declaration_element<W: Write>(
-    w: &mut W,
-    declaration: &Declaration,
-) -> Result<(), Box<dyn Error>> {
+fn write_declaration_element<W: Write>(w: &mut W, declaration: &Declaration) -> Result<()> {
     write!(w, "<?xml version=\"{}\"", declaration.version)?;
     if let Some(encoding) = &declaration.encoding {
         write!(w, " encoding=\"{}\"", encoding)?;
@@ -59,7 +58,7 @@ fn write_declaration_element<W: Write>(
     Ok(())
 }
 
-fn write_gpxinfo_element_open<W: Write>(w: &mut W, info: &GpxInfo) -> Result<(), Box<dyn Error>> {
+fn write_gpxinfo_element_open<W: Write>(w: &mut W, info: &GpxInfo) -> Result<()> {
     writeln!(
         w,
         "<gpx creator=\"{}\" version=\"{}\"",
@@ -72,16 +71,16 @@ fn write_gpxinfo_element_open<W: Write>(w: &mut W, info: &GpxInfo) -> Result<(),
     Ok(())
 }
 
-fn write_gpxinfo_element_close<W: Write>(w: &mut W) -> Result<(), Box<dyn Error>> {
+fn write_gpxinfo_element_close<W: Write>(w: &mut W) -> Result<()> {
     writeln!(w, "</gpx>")?;
     Ok(())
 }
 
-fn write_metadata_element<W: Write>(w: &mut W, metadata: &Metadata) -> Result<(), Box<dyn Error>> {
+fn write_metadata_element<W: Write>(w: &mut W, metadata: &Metadata) -> Result<()> {
     writeln!(w, "  <metadata>")?;
     write_link_element(w, &metadata.link)?;
     if let Some(time) = &metadata.time {
-        writeln!(w, "    <time>{}</time>", format_utc_date(time))?;
+        writeln!(w, "    <time>{}</time>", format_utc_date(time)?)?;
     }
     if let Some(desc) = &metadata.desc {
         writeln!(w, "    <desc>{}</desc>", desc)?;
@@ -90,7 +89,7 @@ fn write_metadata_element<W: Write>(w: &mut W, metadata: &Metadata) -> Result<()
     Ok(())
 }
 
-fn write_link_element<W: Write>(w: &mut W, link: &Link) -> Result<(), Box<dyn Error>> {
+fn write_link_element<W: Write>(w: &mut W, link: &Link) -> Result<()> {
     writeln!(w, "    <link href=\"{}\">", link.href)?;
     if let Some(text) = &link.text {
         writeln!(w, "      <text>{}</text>", text)?;
@@ -102,7 +101,7 @@ fn write_link_element<W: Write>(w: &mut W, link: &Link) -> Result<(), Box<dyn Er
     Ok(())
 }
 
-fn write_track<W: Write>(w: &mut W, track: &Track) -> Result<(), Box<dyn Error>> {
+fn write_track<W: Write>(w: &mut W, track: &Track) -> Result<()> {
     writeln!(w, "  <trk>")?;
     if let Some(track_name) = &track.name {
         writeln!(w, "    <name>{}</name>", track_name)?;
@@ -122,7 +121,7 @@ fn write_track<W: Write>(w: &mut W, track: &Track) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-fn write_track_segment<W: Write>(w: &mut W, segment: &TrackSegment) -> Result<(), Box<dyn Error>> {
+fn write_track_segment<W: Write>(w: &mut W, segment: &TrackSegment) -> Result<()> {
     writeln!(w, "    <trkseg>")?;
     for p in &segment.points {
         write_trackpoint(w, p)?;
@@ -131,7 +130,7 @@ fn write_track_segment<W: Write>(w: &mut W, segment: &TrackSegment) -> Result<()
     Ok(())
 }
 
-fn write_trackpoint<W: Write>(w: &mut W, point: &TrackPoint) -> Result<(), Box<dyn Error>> {
+fn write_trackpoint<W: Write>(w: &mut W, point: &TrackPoint) -> Result<()> {
     writeln!(
         w,
         "      <trkpt lat=\"{:.6}\" lon=\"{:.6}\">",
@@ -143,11 +142,11 @@ fn write_trackpoint<W: Write>(w: &mut W, point: &TrackPoint) -> Result<(), Box<d
     }
 
     if let Some(t) = point.time {
-        writeln!(w, "        <time>{}</time>", format_utc_date(&t))?;
+        writeln!(w, "        <time>{}</time>", format_utc_date(&t)?)?;
     }
 
     if let Some(ext) = &point.extensions {
-        write_trackpoint_extensions(w, &ext)?;
+        write_trackpoint_extensions(w, &ext).context("Failed to write trackpoint extensions")?;
     }
 
     writeln!(w, "      </trkpt>")?;
@@ -155,10 +154,7 @@ fn write_trackpoint<W: Write>(w: &mut W, point: &TrackPoint) -> Result<(), Box<d
     Ok(())
 }
 
-fn write_trackpoint_extensions<W: Write>(
-    w: &mut W,
-    ext: &Extensions,
-) -> Result<(), Box<dyn Error>> {
+fn write_trackpoint_extensions<W: Write>(w: &mut W, ext: &Extensions) -> Result<()> {
     // TODO: Need to be careful of the namespace. Can get it from the GPX tag.
     Ok(())
 }

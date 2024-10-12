@@ -341,46 +341,44 @@ impl StageList {
 
     /// Returns the point of minimum elevation across all the stages.
     pub fn min_elevation(&self) -> Option<&EnrichedTrackPoint> {
-        let mut min_stage = &self.0[0];
+        let mut current_min = &self.0[0];
+
         for stage in self.iter() {
-            if stage.min_elevation.is_none() {
-                return None;
-            } else if stage.min_elevation.as_ref().unwrap().ele
-                < min_stage.min_elevation.as_ref().unwrap().ele
-            {
-                // The unwraps are safe because we are iterating across all
-                // stages, so min being None will be trapped.
-                min_stage = stage;
+            match (current_min.min_elevation.as_ref(), stage.min_elevation.as_ref()) {
+                (Some(min_ele), Some(stg)) => {
+                    if stg.ele < min_ele.ele {
+                        current_min = stage;
+                    }
+                },
+                (None, Some(_)) => {
+                    current_min = stage;
+                },
+                _ => {}
             }
         }
 
-        min_stage.min_elevation.as_ref()
+        current_min.min_elevation.as_ref()
     }
 
     /// Returns the point of maximum elevation across all the stages.
     pub fn max_elevation(&self) -> Option<&EnrichedTrackPoint> {
-        let mut max_stage = &self.0[0];
+        let mut current_max = &self.0[0];
+
         for stage in self.iter() {
-            if stage.max_elevation.is_none() {
-                return None;
-            } else if stage.max_elevation.as_ref().unwrap().ele
-                > max_stage.max_elevation.as_ref().unwrap().ele
-            {
-                // The unwraps are safe because we are iterating across all
-                // stages, so max being None will be trapped.
-                max_stage = stage;
+            match (current_max.max_elevation.as_ref(), stage.max_elevation.as_ref()) {
+                (Some(max_ele), Some(stg)) => {
+                    if stg.ele > max_ele.ele {
+                        current_max = stage;
+                    }
+                },
+                (None, Some(_)) => {
+                    current_max = stage;
+                },
+                _ => {}
             }
         }
 
-        max_stage.max_elevation.as_ref()
-
-        // TODO: Can we improve this code to something similar to this?
-        // See also min_elevation and max_speed.
-        // self.0
-        //     .iter()
-        //     .map(|stage| &stage.max_elevation)
-        //     .max_by(|a, b| a.ele.total_cmp(&b.ele))
-        //     .unwrap()
+        current_max.max_elevation.as_ref()
     }
 
     /// Returns the total ascent in metres across all the stages.
@@ -395,20 +393,23 @@ impl StageList {
 
     /// Returns the point of maximum speed across all the stages.
     pub fn max_speed(&self) -> Option<&EnrichedTrackPoint> {
-        let mut max_stage = &self.0[0];
+        let mut current_max = &self.0[0];
+
         for stage in self.iter() {
-            if stage.max_speed.is_none() {
-                return None;
-            } else if stage.max_speed.as_ref().unwrap().speed_kmh
-                > max_stage.max_speed.as_ref().unwrap().speed_kmh
-            {
-                // The unwraps are safe because we are iterating across all
-                // stages, so max being None will be trapped.
-                max_stage = stage;
+            match (current_max.max_speed.as_ref(), stage.max_speed.as_ref()) {
+                (Some(max_sp), Some(stg)) => {
+                    if stg.speed_kmh > max_sp.speed_kmh {
+                        current_max = stage;
+                    }
+                },
+                (None, Some(_)) => {
+                    current_max = stage;
+                },
+                _ => {}
             }
         }
 
-        max_stage.max_speed.as_ref()
+        current_max.max_speed.as_ref()
     }
 
     /// Returns the point of maximum heart rate across all the stages.
@@ -416,6 +417,7 @@ impl StageList {
         self.0
             .iter()
             .filter_map(|s| s.max_heart_rate.as_ref())
+            // The unwraps are safe because of the use of filter_map().
             .max_by(|a, b| a.heart_rate().unwrap().cmp(&b.heart_rate().unwrap()))
     }
 
@@ -424,6 +426,7 @@ impl StageList {
         self.0
             .iter()
             .filter_map(|s| s.min_air_temp.as_ref())
+            // The unwraps are safe because of the use of filter_map().
             .min_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
     }
 
@@ -432,14 +435,17 @@ impl StageList {
         self.0
             .iter()
             .filter_map(|s| s.max_air_temp.as_ref())
+            // The unwraps are safe because of the use of filter_map().
             .max_by(|a, b| a.air_temp().unwrap().total_cmp(&b.air_temp().unwrap()))
     }
 
     /// Returns the total moving time as a percentage of the total duration
     /// across all the stages.
     pub fn moving_percent(&self) -> Option<f64> {
-        self.total_moving_time()
-            .map(|tmt| tmt.as_seconds_f64() / self.duration().unwrap().as_seconds_f64())
+        match (self.total_moving_time(), self.duration()) {
+            (Some(tmt), Some(dur)) => Some(tmt.as_seconds_f64() / dur.as_seconds_f64()),
+            _ => None,
+        }
     }
 
     /// Returns the total controlling time as a percentage of the total duration
@@ -460,8 +466,8 @@ pub fn enrich_trackpoints(gpx: &mut EnrichedGpx) {
 
     // If we have time and elevation, fill in the first point with some starting
     // values. There are quite a few calculations that rely on these values
-    // being set (mainly 'running' data). The calculations won't panic, but they
-    // will return None when in fact we know the data.
+    // being set (mainly 'running' data). The calculations will return None when
+    // we don't know the data.
     if gpx.points[0].time.is_some() {
         gpx.points[0].delta_time = Some(Duration::ZERO);
         gpx.points[0].running_delta_time = Some(Duration::ZERO);
@@ -598,7 +604,16 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
         // Stages do not share points, the next stage starts on the next point.
         start_idx = stage.end.index + 1;
 
-        if stage.duration().is_none() {
+        if let Some(dur) = stage.duration() {
+            info!(
+                "Adding {} stage from point {} to {}, length={:.3}km, duration={}",
+                stage.stage_type,
+                stage.start.index,
+                stage.end.index,
+                stage.distance_km(),
+                dur,
+            );
+        } else {
             info!(
                 "Adding {} stage from point {} to {}, length={:.3}km, duration=unknown",
                 stage.stage_type,
@@ -606,16 +621,8 @@ pub fn detect_stages(gpx: &EnrichedGpx, params: StageDetectionParameters) -> Sta
                 stage.end.index,
                 stage.distance_km()
             );
-        } else {
-            info!(
-                "Adding {} stage from point {} to {}, length={:.3}km, duration={}",
-                stage.stage_type,
-                stage.start.index,
-                stage.end.index,
-                stage.distance_km(),
-                stage.duration().unwrap(),
-            );
         }
+
         stages.push(stage);
 
         stage_type = stage_type.toggle();
@@ -769,7 +776,7 @@ fn find_stop_index(
             );
             return last_valid_idx;
         }
-        
+
         debug!(
             "find_stop_index(start_idx={start_idx}) Scanned forward to index {}, which is {:.2} metres from the possible stop",
             end_idx,
@@ -916,8 +923,14 @@ fn find_heart_rates(
             sum += hr as f64;
             count += 1;
 
-            if max.is_none() || hr > max.as_ref().unwrap().heart_rate().unwrap() {
-                max = Some(point.clone());
+            if let Some(m) = max.as_ref() {
+                let mhr = m.heart_rate().expect("Should be safe to unwrap because 'max' is only set for points that have heart rates");
+                if hr > mhr {
+                    max = Some(point.clone());        
+                }
+            } else {
+                // No current max, this point has a hr so use it.
+                max = Some(point.clone())
             }
         }
     }
@@ -951,11 +964,23 @@ fn find_air_temps(
             count += 1;
             sum = Some(sum.unwrap_or_default() + at);
 
-            if min.is_none() || min.as_ref().unwrap().air_temp().unwrap() > at {
+            if let Some(m) = min.as_ref() {
+                let mht = m.air_temp().expect("Should be safe to unwrap because 'min' is only set for points that have an air temp");
+                if at < mht {
+                    min = Some(gpx.points[idx].clone());
+                }
+            } else {
+                // No current min, this point has an air temp so use it.
                 min = Some(gpx.points[idx].clone());
             }
 
-            if max.is_none() || max.as_ref().unwrap().air_temp().unwrap() < at {
+            if let Some(m) = max.as_ref() {
+                let mht = m.air_temp().expect("Should be safe to unwrap because 'max' is only set for points that have an air temp");
+                if at > mht {
+                    max = Some(gpx.points[idx].clone());
+                }
+            } else {
+                // No current max, this point has an air temp so use it.
                 max = Some(gpx.points[idx].clone());
             }
         }

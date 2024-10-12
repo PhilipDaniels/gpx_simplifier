@@ -1,9 +1,10 @@
 use args::{get_required_outputs, parse_args};
+use anyhow::{bail, Result};
 use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
 use gapix_core::{gpx_reader::read_gpx_from_file, gpx_writer::write_gpx_to_file};
 use join::join_input_files;
-use log::{debug, error, info, warn};
+use log::{debug, info};
 use logging_timer::time;
 use std::io::Write;
 
@@ -14,7 +15,7 @@ pub const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 
 #[time]
-fn main() {
+fn main() -> Result<()> {
     configure_logging();
     info!("Starting {PROGRAM_NAME}");
 
@@ -24,17 +25,12 @@ fn main() {
         info!("'--force' specified, all existing output files will be overwritten");
     }
 
-    // Exclude any file that is not ending .gpx.
-    // Deal with files that don't exist at load time.
-    // Don't load files that have no work required to be done.
-    // Can you join and simplify in one step?
-
     // If we are running in "join mode" then we need to load all the
     // input files into RAM and merge them into a single file.
     let input_files = args.files();
     if input_files.is_empty() {
         println!("No .gpx files specified, exiting");
-        return;
+        return Ok(())
     }
 
     if args.join {
@@ -45,19 +41,21 @@ fn main() {
         if let Some(joined_filename) = rof.joined_file {
             match join_input_files(&input_files) {
                 Ok(gpx) => {
-                    write_gpx_to_file(joined_filename, &gpx).unwrap();
+                    write_gpx_to_file(joined_filename, &gpx)?;
                     // process_gpx()
                 }
-                Err(e) => error!("Error: {}", e),
+                Err(e) => bail!("Error: {}", e),
             }
         }
     } else {
         debug!("In per-file mode");
         for f in &input_files {
-            let gpx = read_gpx_from_file(f).unwrap();
+            let gpx = read_gpx_from_file(f)?;
             // process gpx
         }
     }
+
+    Ok(())
 
     // // Within each file, merge multiple tracks and segments into a single
     // // track-segment. (join_input_files also does that)

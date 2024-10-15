@@ -51,7 +51,7 @@ two folders setup with separate batch files, one for
 joining and one for simplifying. For example, in my
 "simplify" folder I have a batch file with the command
 
-`gpx_simplifier.exe --metres=10`
+`gapix.exe --metres=10`
 
 which gives a very good size reduction while still being an
 excellent fit to the road.

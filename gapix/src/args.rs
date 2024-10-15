@@ -151,34 +151,24 @@ impl RequiredOutputFiles {
     /// the command line arguments.
     fn new<P: AsRef<Path>>(args: &Args, file: P) -> Self {
         let file = file.as_ref();
-
-        let joined_file = if args.join {
+        
+        let set_ext = |ext: &str| {
             let mut f = file.to_owned();
-            f.set_extension(JOINED_EXT);
-            Some(f)
-        } else {
-            None
+            f.set_extension(ext);
+            f
         };
+
+        let joined_file = args.join.then(|| set_ext(JOINED_EXT));
+        let analysis_file = args.join.then(|| set_ext(ANALYSIS_EXT));
 
         let simplified_file = if args.join && args.metres.is_some() {
-            let mut f = file.to_owned();
-            f.set_extension(JOINED_SIMPLIFIED_EXT);
-            Some(f)
+            Some(set_ext(JOINED_SIMPLIFIED_EXT))
         } else if args.metres.is_some() {
-            let mut f = file.to_owned();
-            f.set_extension(SIMPLIFIED_EXT);
-            Some(f)
+            Some(set_ext(SIMPLIFIED_EXT))
         } else {
             None
         };
 
-        let analysis_file = if args.analyse {
-            let mut f = file.to_owned();
-            f.set_extension(ANALYSIS_EXT);
-            Some(f)
-        } else {
-            None
-        };
 
         Self {
             joined_file,

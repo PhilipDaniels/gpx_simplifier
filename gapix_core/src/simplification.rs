@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use geo::{coord, LineString, SimplifyIdx};
 use logging_timer::time;
 
-use crate::model::TrackPoint;
+use crate::model::Waypoint;
 
 /// We take input from the user in "metres of accuracy".
 /// The 'geo' implementation of RDP requires an epsilon
@@ -32,7 +32,7 @@ pub fn metres_to_epsilon(metres: u16) -> f64 {
 /// 31358           50      387 (1.2%, 51Kb)    Poor - cuts off a lot of corners
 /// 31358           100     236 (0.8%, 31Kb)    Very poor - significant corner truncation
 #[time]
-pub fn reduce_trackpoints_by_rdp(points: &mut Vec<TrackPoint>, epsilon: f64) {
+pub fn reduce_trackpoints_by_rdp(points: &mut Vec<Waypoint>, epsilon: f64) {
     let line_string: LineString<_> = points
         .iter()
         .map(|p| coord! { x: p.lon, y: p.lat })

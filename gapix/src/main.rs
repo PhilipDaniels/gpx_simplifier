@@ -6,7 +6,7 @@ use gapix_core::{
     excel::{create_summary_xlsx, write_summary_to_file, Hyperlink},
     gpx_reader::read_gpx_from_file,
     gpx_writer::write_gpx_to_file,
-    model::Gpx,
+    model::GpxFile,
     simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp},
     stage::{detect_stages, StageDetectionParameters},
 };
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
 
         if let Some(joined_filename) = &rof.joined_file {
             let mut gpx = join_input_files(&input_files)?;
-            gpx.filename = joined_filename.clone();
+            gpx.filename = Some(joined_filename.clone());
             write_gpx_to_file(&joined_filename, &gpx)?;
             analyse_gpx(&gpx, &args, &rof)?;
             simplify_gpx(gpx, &args, rof)?;
@@ -70,7 +70,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn analyse_gpx(gpx: &Gpx, args: &Args, rof: &RequiredOutputFiles) -> Result<()> {
+fn analyse_gpx(gpx: &GpxFile, args: &Args, rof: &RequiredOutputFiles) -> Result<()> {
     assert!(gpx.is_single_track());
 
     if let Some(analysis_file) = &rof.analysis_file {
@@ -100,7 +100,7 @@ fn analyse_gpx(gpx: &Gpx, args: &Args, rof: &RequiredOutputFiles) -> Result<()> 
     Ok(())
 }
 
-fn simplify_gpx(mut gpx: Gpx, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
+fn simplify_gpx(mut gpx: GpxFile, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
     assert!(gpx.is_single_track());
 
     if let Some(simplified_file) = &rof.simplified_file {

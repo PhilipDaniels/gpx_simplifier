@@ -83,12 +83,15 @@ Or build from source using cargo.
 
 
 # TODO
+- Create a new type(s) for latlon which is bounded to the range -90.0..90.0.
 - Full pass lossless read and write of the complete XSD.
 - Pass some options into the gpx_writer to control the fidelity.
+- Move model into its own crate.
+- Reverse geocode the stopped stages and the first and last point.
+  Use a separate crate, maybe publish it.
 - Track splitting
 - Waypoint processing
 - Create an IndentingWriter based off the 'indent_write' crate.
-- Reverse geocode the stopped stages and the first and last point.
 - Use Rayon - CAN'T - Time crate blows up in to_local_offset.
 - Change to use Chrono and Chrono-TZ? Probably. First need to be
   able to reverse geocode lat-lon to timezone name.
@@ -97,3 +100,10 @@ Or build from source using cargo.
 - I think it's technically wrong to simply merge all tracks and segments?
   They may exist due to GPS interruptions, device restarts etc.
   Fixing this would make things a lot more complicated though.
+
+# Links
+- GPX XSD: https://www.topografix.com/GPX/1/1/gpx.xsd
+- Trackpoint extensions XSD: https://www8.garmin.com/xmlschemas/TrackPointExtensionv1.xsd
+
+Node = an element, an attribute 
+Element

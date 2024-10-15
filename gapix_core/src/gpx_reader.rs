@@ -20,7 +20,8 @@ use quick_xml::{
 use time::{format_description::well_known, OffsetDateTime};
 
 use crate::model::{
-    Declaration, Extensions, Gpx, GpxInfo, Link, Metadata, Track, TrackPoint, TrackSegment,
+    GarminTrackpointExtensions, Gpx, GpxFile, Link, Metadata, Track, TrackSegment, Waypoint,
+    XmlDeclaration,
 };
 
 /*
@@ -38,7 +39,10 @@ use crate::model::{
 */
 
 #[time]
-pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P) -> Result<Gpx> {
+pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(
+    input: R,
+    input_file: P,
+) -> Result<GpxFile> {
     let input_file = input_file.as_ref();
     let mut xml_reader = Reader::from_reader(input);
     let mut buf: Vec<u8> = Vec::with_capacity(512);
@@ -68,15 +72,15 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    let gpx = Gpx {
-                        filename: input_file.to_owned(),
-                        declaration: declaration.context("Did not find the 'xml' declaration element")?,
-                        info: gpx_info.context("Did not find the 'gpx' element")?,
-                        metadata: metadata.context("Did not find the 'metadata' element")?,
-                        tracks,
-                    };
+                    let mut gpx_file = GpxFile::with_filename(
+                        declaration.context("Did not find the 'xml' declaration element")?,
+                        gpx_info.context("Did not find the 'gpx' element")?,
+                        metadata.context("Did not find the 'metadata' element")?,
+                        input_file,
+                    );
 
-                    return Ok(gpx);
+                    gpx_file.tracks = tracks;
+                    return Ok(gpx_file);
                 }
                 _ => (),
             },
@@ -94,7 +98,7 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(input: R, input_file: &P
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
-pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: &P) -> Result<Gpx> {
+pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<GpxFile> {
     let input_file = input_file.as_ref();
     info!("Reading GPX file {:?}", input_file);
     let buf_reader = BufReader::new(File::open(input_file)?);
@@ -103,15 +107,15 @@ pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: &P) -> Result<Gpx> {
 
 /// Parses an XML declaration, i.e. the very first line of the file which is:
 ///     <?xml version="1.0" encoding="UTF-8"?>
-fn parse_decl(decl: &BytesDecl<'_>) -> Result<Declaration> {
-    Ok(Declaration {
+fn parse_decl(decl: &BytesDecl<'_>) -> Result<XmlDeclaration> {
+    Ok(XmlDeclaration {
         version: rcow_to_string(decl.version())?,
         encoding: orcow_to_string(decl.encoding())?,
         standalone: orcow_to_string(decl.standalone())?,
     })
 }
 
-fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo> {
+fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<Gpx> {
     let mut attributes = parse_attributes(tag)?;
 
     let creator = match attributes.entry("creator".to_string()) {
@@ -124,7 +128,7 @@ fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<GpxInfo> {
         _ => bail!("Mandatory attribute 'version' was missing on the GPX element"),
     };
 
-    Ok(GpxInfo {
+    Ok(Gpx {
         creator,
         version,
         attributes,
@@ -163,15 +167,14 @@ fn parse_metadata<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Resu
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"metadata" => {
                     if let Some(href) = href {
-                        return Ok(Metadata {
-                            link: Link {
-                                href,
-                                text,
-                                r#type: mime_type,
-                            },
-                            time,
-                            desc,
-                        });
+                        let mut link = Link::new(href);
+                        link.text = text;
+                        link.r#type = mime_type;
+                        let mut md = Metadata::default();
+                        md.links.push(link);
+                        md.time = time;
+                        md.desc = desc;
+                        return Ok(md);
                     } else {
                         bail!("href attribute not found, but it is mandatory according to the XSD");
                     }
@@ -186,6 +189,7 @@ fn parse_metadata<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Resu
 }
 
 fn parse_track<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<Track> {
+    // TODO: Make a track here instead of the individual fields.
     let mut name = None;
     let mut track_type = None;
     let mut segments = Vec::new();
@@ -210,12 +214,12 @@ fn parse_track<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trk" => {
-                    return Ok(Track {
-                        name,
-                        r#type: track_type,
-                        desc,
-                        segments,
-                    })
+                    let mut track = Track::default();
+                    track.name = name;
+                    track.r#type = track_type;
+                    track.desc = desc;
+                    track.segments = segments;
+                    return Ok(track);
                 }
                 _ => {}
             },
@@ -230,24 +234,24 @@ fn parse_track_segment<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
 ) -> Result<TrackSegment> {
-    let mut points = Vec::new();
+    let mut segment = TrackSegment::default();
 
-    while let Some(point) = parse_trackpoint(buf, reader)? {
-        points.push(point);
+    while let Some(point) = parse_waypoint(buf, reader)? {
+        segment.points.push(point);
     }
 
-    Ok(TrackSegment { points })
+    Ok(segment)
 }
 
-fn parse_trackpoint<R: BufRead>(
+fn parse_waypoint<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
-) -> Result<Option<TrackPoint>> {
+) -> Result<Option<Waypoint>> {
     let mut lat = None;
     let mut lon = None;
     let mut ele = None;
     let mut time = None;
-    let mut extensions = None;
+    let mut tp_extensions = None;
 
     loop {
         match reader.read_event_into(buf) {
@@ -257,25 +261,27 @@ fn parse_trackpoint<R: BufRead>(
                     lon = Some(read_attribute_as_f64(&e, "lon")?);
                 }
                 b"ele" => {
-                    ele = Some(read_inner_as_f64(buf, reader)?);
+                    ele = Some(read_inner_as::<R, f64>(buf, reader)?);
                 }
                 b"time" => {
                     time = Some(read_inner_as_time(buf, reader)?);
                 }
                 b"extensions" => {
-                    extensions = Some(parse_trackpoint_extensions(buf, reader)?);
+                    tp_extensions = Some(parse_garmin_trackpoint_extensions(buf, reader)?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trkpt" => {
-                    return Ok(Some(TrackPoint {
-                        lat: lat.context("lat attribute not found")?,
-                        lon: lon.context("lon attribute not found")?,
-                        ele,
-                        time,
-                        extensions,
-                    }))
+                    let mut tp = Waypoint::with_lat_lon(
+                        lat.context("lat attribute not found")?,
+                        lon.context("lon attribute not found")?,
+                    );
+
+                    tp.ele = ele;
+                    tp.time = time;
+                    tp.tp_extensions = tp_extensions;
+                    return Ok(Some(tp));
                 }
                 b"trkseg" => {
                     // Reached the end of the trackpoints for this segment.
@@ -290,10 +296,10 @@ fn parse_trackpoint<R: BufRead>(
     }
 }
 
-fn parse_trackpoint_extensions<R: BufRead>(
+fn parse_garmin_trackpoint_extensions<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
-) -> Result<Extensions> {
+) -> Result<GarminTrackpointExtensions> {
     let mut air_temp = None;
     let mut water_temp = None;
     let mut depth = None;
@@ -305,31 +311,32 @@ fn parse_trackpoint_extensions<R: BufRead>(
             Ok(Event::Start(e)) => match e.local_name().as_ref() {
                 b"TrackPointExtension" => { /* ignore, just a container element */ }
                 b"atemp" => {
-                    air_temp = Some(read_inner_as_f64(buf, reader)?);
+                    air_temp = Some(read_inner_as::<R, f64>(buf, reader)?);
                 }
                 b"wtemp" => {
-                    water_temp = Some(read_inner_as_f64(buf, reader)?);
+                    water_temp = Some(read_inner_as::<R, f64>(buf, reader)?);
                 }
                 b"depth" => {
-                    depth = Some(read_inner_as_f64(buf, reader)?);
+                    depth = Some(read_inner_as::<R, f64>(buf, reader)?);
                 }
                 b"hr" => {
-                    heart_rate = Some(read_inner_as_u16(buf, reader)?);
+                    heart_rate = Some(read_inner_as::<R, u8>(buf, reader)?);
                 }
                 b"cad" => {
-                    cadence = Some(read_inner_as_u16(buf, reader)?);
+                    cadence = Some(read_inner_as::<R, u8>(buf, reader)?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.local_name().as_ref() {
                 b"TrackPointExtension" => { /* ignore, just a container element */ }
                 b"extensions" => {
-                    return Ok(Extensions {
+                    return Ok(GarminTrackpointExtensions {
                         air_temp,
                         water_temp,
                         depth,
                         heart_rate,
                         cadence,
+                        extensions: None,
                     });
                 }
                 b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */
@@ -391,18 +398,11 @@ fn read_inner_as_time<R: BufRead>(
     Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
 }
 
-/// Reads inner text and converts it to an f64.
-fn read_inner_as_f64<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<f64> {
-    let t = read_inner_as_string(buf, reader)?;
-    Ok(t.parse::<f64>()?)
-}
-
-/// Reads inner text and converts it to a u16.
-/// TODO: Make these methods generic.
-fn read_inner_as_u16<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<u16> {
-    let t = read_inner_as_string(buf, reader)?;
-    Ok(t.parse::<u16>()?)
-}
+// /// Reads inner text and converts it to an f64.
+// fn read_inner_as_f64<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<f64> {
+//     let t = read_inner_as_string(buf, reader)?;
+//     Ok(t.parse::<f64>()?)
+// }
 
 fn read_inner_as<R: BufRead, T: FromStr>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<T> {
     let t = read_inner_as_string(buf, reader)?;

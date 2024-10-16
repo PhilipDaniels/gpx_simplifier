@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{bail, Result};
-use gapix_core::{gpx_reader::read_gpx_from_file, model::Gpx};
+use gapix_core::{read::read_gpx_from_file, model::Gpx};
 use log::info;
 use logging_timer::time;
 

@@ -4,7 +4,7 @@ use clap::builder::styling::AnsiColor;
 use env_logger::Builder;
 use gapix_core::{
     excel::{create_summary_xlsx, write_summary_to_file, Hyperlink},
-    gpx_reader::read_gpx_from_file,
+    read::read_gpx_from_file,
     gpx_writer::write_gpx_to_file,
     model::Gpx,
     simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp},

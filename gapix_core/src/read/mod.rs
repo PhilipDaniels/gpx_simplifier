@@ -5,7 +5,7 @@ use std::{
     borrow::{Borrow, Cow},
     collections::{hash_map::Entry, HashMap},
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Cursor, Read},
     path::Path,
     str::FromStr,
 };
@@ -36,6 +36,26 @@ use crate::model::{
                <extensions>    type="extensions"       parse_trackpoint_extensions
 
 */
+
+/// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
+/// This function doesn't parse everything, just the things that appear in my Garmin files.
+pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<Gpx> {
+    let input_file = input_file.as_ref();
+    info!("Reading GPX file {:?}", input_file);
+    let f = File::open(input_file)?;
+
+    // Q: Is it quicker to just read everything into a String first?
+    // A: About 10% quicker. Not enough to justify the memory load, I think.
+    // let mut s = String::new();
+    // f.read_to_string(&mut s)?;
+    // let c = Cursor::new(s);
+    // let mut gpx = read_gpx_from_reader(c)?;
+
+    let buf_reader = BufReader::new(f);
+    let mut gpx = read_gpx_from_reader(buf_reader)?;
+    gpx.filename = Some(input_file.to_owned());
+    return Ok(gpx);
+}
 
 #[time]
 pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
@@ -92,16 +112,7 @@ pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
     }
 }
 
-/// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
-/// This function doesn't parse everything, just the things that appear in my Garmin files.
-pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<Gpx> {
-    let input_file = input_file.as_ref();
-    info!("Reading GPX file {:?}", input_file);
-    let buf_reader = BufReader::new(File::open(input_file)?);
-    let mut gpx = read_gpx_from_reader(buf_reader)?;
-    gpx.filename = Some(input_file.to_owned());
-    return Ok(gpx);
-}
+
 
 /// Parses an XML declaration, i.e. the very first line of the file which is:
 ///     <?xml version="1.0" encoding="UTF-8"?>

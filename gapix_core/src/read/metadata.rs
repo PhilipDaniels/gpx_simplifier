@@ -19,8 +19,6 @@ pub(crate) fn parse_metadata<R: BufRead>(
 
     loop {
         match reader.read_event_into(buf) {
-            // TODO: We could break out a 'parse_link' function, as it is a defined
-            // element type in the XSD.
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"link" => {
                     href = Some(read_attribute_as_string(&e, "href")?);

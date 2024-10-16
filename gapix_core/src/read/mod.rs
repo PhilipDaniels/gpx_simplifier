@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use declaration::parse_declaration;
-use gpx::parse_gpx;
+use gpx::{parse_gpx, parse_gpx_attributes};
 use log::info;
 use logging_timer::time;
 use metadata::parse_metadata;
@@ -23,7 +23,7 @@ use quick_xml::{
 use time::{format_description::well_known, OffsetDateTime};
 use track::parse_track;
 
-use crate::model::{Gpx, Track};
+use crate::model::{Gpx, Track, XmlDeclaration};
 
 mod declaration;
 mod gpx;
@@ -71,48 +71,32 @@ pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<Gpx> {
 pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
     let mut xml_reader = Reader::from_reader(input);
     let mut buf: Vec<u8> = Vec::with_capacity(512);
-
-    let mut declaration = None;
-    let mut gpx_info = None;
-    let mut metadata = None;
-    let mut tracks: Vec<Track> = Vec::new();
+    let mut xml_declaration: Option<XmlDeclaration> = None;
+    let mut gpx: Option<Gpx> = None;
 
     loop {
         match xml_reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                declaration = Some(parse_declaration(&decl)?);
+                xml_declaration = Some(parse_declaration(&decl)?);
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    gpx_info = Some(parse_gpx(&e)?);
+                    let attrs = parse_gpx_attributes(&e)?;
+                    let mut partial_gpx = parse_gpx(&mut buf, &mut xml_reader)?;
+                    partial_gpx.creator = attrs.creator;
+                    partial_gpx.version = attrs.version;
+                    partial_gpx.attributes = attrs.other_attributes;
+                    gpx = Some(partial_gpx);
                 }
-                b"metadata" => {
-                    metadata = Some(parse_metadata(&mut buf, &mut xml_reader)?);
-                }
-                b"trk" => {
-                    let track = parse_track(&mut buf, &mut xml_reader)?;
-                    tracks.push(track);
-                }
-                _ => (),
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"gpx" => {
-                    let mut gpx = Gpx::new(
-                        declaration.context("Did not find the 'xml' declaration element")?,
-                        metadata.context("Did not find the 'metadata' element")?,
-                    );
-
-                    let gpx_info = gpx_info.context("Did not find the 'gpx' element")?;
-                    gpx.version = gpx_info.version;
-                    gpx.creator = gpx_info.creator;
-                    gpx.attributes = gpx_info.attributes;
-                    gpx.tracks = tracks;
-                    return Ok(gpx);
-                }
-                _ => (),
+                e => bail!("Unexpected opening element {:?}", bytes_to_string(e)),
             },
             Ok(Event::Eof) => {
-                bail!("Reached EOF unexpectedly (before the closing GPX tag). File is probably corrupt.");
+                // We should already have consumed the closing '<gpx>' tag in parse_gpx().
+                // So the next thing will be EOF.
+                let mut gpx = gpx.context("Did not find the 'gpx' element")?;
+                gpx.declaration =
+                    xml_declaration.context("Did not find the 'xml' declaration element")?;
+                return Ok(gpx);
             }
             Err(e) => bail!("Error at position {}: {:?}", xml_reader.error_position(), e),
             _ => (),
@@ -194,6 +178,6 @@ fn bytes_to_string(value: &[u8]) -> Result<String> {
 fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String> {
     match v {
         Cow::Borrowed(s) => Ok(bytes_to_string(s)?),
-        Cow::Owned(s) => Ok(String::from_utf8(s)?)
+        Cow::Owned(s) => Ok(String::from_utf8(s)?),
     }
 }

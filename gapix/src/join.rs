@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{bail, Result};
-use gapix_core::{gpx_reader::read_gpx_from_file, model::GpxFile};
+use gapix_core::{gpx_reader::read_gpx_from_file, model::Gpx};
 use log::info;
 use logging_timer::time;
 
@@ -10,7 +10,7 @@ use crate::PROGRAM_NAME;
 /// Joins multiple input files into a single file with 1 track and 1 track
 /// segment that contains all the track points.
 #[time]
-pub fn join_input_files<P: AsRef<Path>>(files: &[P]) -> Result<GpxFile> {
+pub fn join_input_files<P: AsRef<Path>>(files: &[P]) -> Result<Gpx> {
     if files.is_empty() {
         bail!("input file list is empty");
     }
@@ -50,7 +50,7 @@ pub fn join_input_files<P: AsRef<Path>>(files: &[P]) -> Result<GpxFile> {
     );
 
     // Since we made a new structure.
-    gpx.gpx.creator = PROGRAM_NAME.to_owned();
+    gpx.creator = PROGRAM_NAME.to_owned();
 
     Ok(gpx)
 }

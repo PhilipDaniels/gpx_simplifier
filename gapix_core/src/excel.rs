@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use log::info;
 use logging_timer::time;
 use rust_xlsxwriter::{
     Color, ExcelDateTime, Format, FormatAlign, FormatBorder, FormatPattern, Url, Workbook,
@@ -75,13 +76,16 @@ pub fn create_summary_xlsx(
 /// already exists.
 pub fn write_summary_to_file<P: AsRef<Path>>(filename: P, workbook: Workbook) -> Result<()> {
     let filename = filename.as_ref();
-    print!("Writing summary file {:?}", &filename);
     let file =
         File::create(filename).with_context(|| format!("Failed to create {:?}", filename))?;
     let mut writer = ByteCounter::new(BufWriter::new(file));
     write_summary_to_writer(&mut writer, workbook)?;
 
-    println!(", {} Kb", writer.bytes_written() / 1024);
+    info!(
+        "Summary file {:?}, {} Kb",
+        &filename,
+        writer.bytes_written() / 1024
+    );
     Ok(())
 }
 

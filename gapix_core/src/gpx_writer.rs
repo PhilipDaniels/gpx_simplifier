@@ -5,37 +5,41 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use log::debug;
+use log::info;
 use logging_timer::time;
 
 use crate::{
     byte_counter::ByteCounter,
     formatting::format_utc_date,
     model::{
-        GarminTrackpointExtensions, Gpx, GpxFile, Link, Metadata, Track, TrackSegment, Waypoint,
+        GarminTrackpointExtensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint,
         XmlDeclaration,
     },
 };
 
 /// Writes a GPX to file with full-fidelity, i.e. everything we can write is
 /// written.
-pub fn write_gpx_to_file<P: AsRef<Path>>(output_file: P, gpx: &GpxFile) -> Result<()> {
+pub fn write_gpx_to_file<P: AsRef<Path>>(output_file: P, gpx: &Gpx) -> Result<()> {
     let output_file = output_file.as_ref();
     let file =
         File::create(output_file).with_context(|| format!("Failed to create {:?}", output_file))?;
     let w = BufWriter::new(file);
     let mut w = ByteCounter::new(w);
     write_gpx_to_writer(&mut w, gpx)?;
-    debug!("Wrote {} bytes to {:?}", w.bytes_written(), output_file);
+    info!(
+        "GPX file {:?}, {} Kb",
+        output_file,
+        w.bytes_written() / 1024
+    );
     Ok(())
 }
 
 /// Writes a GPX to the specified writer with full-fidelity, i.e. everything we
 /// can write is written.
 #[time]
-pub fn write_gpx_to_writer<W: Write>(w: &mut W, gpx: &GpxFile) -> Result<()> {
+pub fn write_gpx_to_writer<W: Write>(w: &mut W, gpx: &Gpx) -> Result<()> {
     write_declaration_element(w, &gpx.declaration).context("Failed to write <xml...> element")?;
-    write_gpxinfo_element_open(w, &gpx.gpx).context("Failed to write <gpx> element")?;
+    write_gpxinfo_element_open(w, &gpx).context("Failed to write <gpx> element")?;
     write_metadata_element(w, &gpx.metadata).context("Failed to write <metadata> element")?;
     for track in &gpx.tracks {
         write_track(w, track)

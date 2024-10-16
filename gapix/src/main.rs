@@ -6,12 +6,12 @@ use gapix_core::{
     excel::{create_summary_xlsx, write_summary_to_file, Hyperlink},
     gpx_reader::read_gpx_from_file,
     gpx_writer::write_gpx_to_file,
-    model::GpxFile,
+    model::Gpx,
     simplification::{metres_to_epsilon, reduce_trackpoints_by_rdp},
     stage::{detect_stages, StageDetectionParameters},
 };
 use join::join_input_files;
-use log::{debug, info, warn};
+use log::{debug, info, logger, warn};
 use logging_timer::time;
 use std::io::Write;
 
@@ -24,6 +24,13 @@ pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 #[time]
 fn main() -> Result<()> {
     configure_logging();
+    main2()?;
+    logger().flush();
+    Ok(())
+}
+
+#[time]
+fn main2() -> Result<()> {
     info!("Starting {PROGRAM_NAME}");
 
     let args = parse_args();
@@ -61,6 +68,7 @@ fn main() -> Result<()> {
     debug!("In per-file mode");
     for f in &input_files {
         let rof = get_required_outputs(&args, &f);
+        debug!("Required Output Files: {:?}", &rof);
         let gpx = read_gpx_from_file(f)?;
         let gpx = gpx.into_single_track();
         analyse_gpx(&gpx, &args, &rof)?;
@@ -70,7 +78,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn analyse_gpx(gpx: &GpxFile, args: &Args, rof: &RequiredOutputFiles) -> Result<()> {
+fn analyse_gpx(gpx: &Gpx, args: &Args, rof: &RequiredOutputFiles) -> Result<()> {
     assert!(gpx.is_single_track());
 
     if let Some(analysis_file) = &rof.analysis_file {
@@ -100,7 +108,7 @@ fn analyse_gpx(gpx: &GpxFile, args: &Args, rof: &RequiredOutputFiles) -> Result<
     Ok(())
 }
 
-fn simplify_gpx(mut gpx: GpxFile, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
+fn simplify_gpx(mut gpx: Gpx, args: &Args, rof: RequiredOutputFiles) -> Result<()> {
     assert!(gpx.is_single_track());
 
     if let Some(simplified_file) = &rof.simplified_file {

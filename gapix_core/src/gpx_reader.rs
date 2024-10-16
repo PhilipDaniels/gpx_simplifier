@@ -20,8 +20,7 @@ use quick_xml::{
 use time::{format_description::well_known, OffsetDateTime};
 
 use crate::model::{
-    GarminTrackpointExtensions, Gpx, GpxFile, Link, Metadata, Track, TrackSegment, Waypoint,
-    XmlDeclaration,
+    GarminTrackpointExtensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint, XmlDeclaration,
 };
 
 /*
@@ -39,11 +38,7 @@ use crate::model::{
 */
 
 #[time]
-pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(
-    input: R,
-    input_file: P,
-) -> Result<GpxFile> {
-    let input_file = input_file.as_ref();
+pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
     let mut xml_reader = Reader::from_reader(input);
     let mut buf: Vec<u8> = Vec::with_capacity(512);
 
@@ -59,7 +54,7 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    gpx_info = Some(parse_gpx_info(&e)?);
+                    gpx_info = Some(parse_gpx_tag(&e)?);
                 }
                 b"metadata" => {
                     metadata = Some(parse_metadata(&mut buf, &mut xml_reader)?);
@@ -72,21 +67,22 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    let mut gpx_file = GpxFile::with_filename(
+                    let mut gpx = Gpx::new(
                         declaration.context("Did not find the 'xml' declaration element")?,
-                        gpx_info.context("Did not find the 'gpx' element")?,
                         metadata.context("Did not find the 'metadata' element")?,
-                        input_file,
                     );
 
-                    gpx_file.tracks = tracks;
-                    return Ok(gpx_file);
+                    let gpx_info = gpx_info.context("Did not find the 'gpx' element")?;
+                    gpx.version = gpx_info.version;
+                    gpx.creator = gpx_info.creator;
+                    gpx.attributes = gpx_info.attributes;
+                    gpx.tracks = tracks;
+                    return Ok(gpx);
                 }
                 _ => (),
             },
             Ok(Event::Eof) => {
-                bail!("Reached EOF unexpectedly (before the closing GPX tag) while parsing {:?}. File is probably corrupt.",
-                    input_file);
+                bail!("Reached EOF unexpectedly (before the closing GPX tag). File is probably corrupt.");
             }
             Err(e) => bail!("Error at position {}: {:?}", xml_reader.error_position(), e),
             _ => (),
@@ -98,11 +94,13 @@ pub fn read_gpx_from_reader<R: BufRead, P: AsRef<Path>>(
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
-pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<GpxFile> {
+pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<Gpx> {
     let input_file = input_file.as_ref();
     info!("Reading GPX file {:?}", input_file);
     let buf_reader = BufReader::new(File::open(input_file)?);
-    return read_gpx_from_reader(buf_reader, &input_file);
+    let mut gpx = read_gpx_from_reader(buf_reader)?;
+    gpx.filename = Some(input_file.to_owned());
+    return Ok(gpx);
 }
 
 /// Parses an XML declaration, i.e. the very first line of the file which is:
@@ -115,7 +113,13 @@ fn parse_decl(decl: &BytesDecl<'_>) -> Result<XmlDeclaration> {
     })
 }
 
-fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<Gpx> {
+struct GpxTag {
+    creator: String,
+    version: String,
+    attributes: HashMap<String, String>,
+}
+
+fn parse_gpx_tag(tag: &BytesStart<'_>) -> Result<GpxTag> {
     let mut attributes = parse_attributes(tag)?;
 
     let creator = match attributes.entry("creator".to_string()) {
@@ -128,7 +132,7 @@ fn parse_gpx_info(tag: &BytesStart<'_>) -> Result<Gpx> {
         _ => bail!("Mandatory attribute 'version' was missing on the GPX element"),
     };
 
-    Ok(Gpx {
+    Ok(GpxTag {
         creator,
         version,
         attributes,

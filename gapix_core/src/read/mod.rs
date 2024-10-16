@@ -2,37 +2,47 @@
 
 use core::str;
 use std::{
-    borrow::{Borrow, Cow},
-    collections::{hash_map::Entry, HashMap},
+    borrow::Cow,
+    collections::HashMap,
     fs::File,
-    io::{BufRead, BufReader, Cursor, Read},
+    io::{BufRead, BufReader},
     path::Path,
     str::FromStr,
 };
 
 use anyhow::{bail, Context, Result};
+use declaration::parse_declaration;
+use gpx::parse_gpx;
 use log::info;
 use logging_timer::time;
+use metadata::parse_metadata;
 use quick_xml::{
-    events::{BytesDecl, BytesStart, Event},
+    events::{BytesStart, Event},
     Reader,
 };
 use time::{format_description::well_known, OffsetDateTime};
+use track::parse_track;
 
-use crate::model::{
-    GarminTrackpointExtensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint, XmlDeclaration,
-};
+use crate::model::{Gpx, Track};
+
+mod declaration;
+mod gpx;
+mod metadata;
+mod track;
+mod track_segment;
+mod trackpoint_extensions;
+mod waypoint;
 
 /*
-<xml>                                                  parse_decl
-<gpx>                          type="gpxType"          parse_gpx_info
+<xml>                                                  parse_declaration
+<gpx>                          type="gpxType"          parse_gpx
    <metadata>                  type="metadataType"     parse_metadata
    <wpt>                       type="wptType"          n.a.
    <rte>                       type="rteType"          n.a.
    <extensions>                type="extensionsType"   n.a.
    <trk>                       type="trkType"          parse_track
        <trkseg>                type="trksegType"       parse_track_segment
-           <trkpt>             type="wptType"          parse_trackpoint
+           <trkpt>             type="wptType"          parse_waypoint
                <extensions>    type="extensions"       parse_trackpoint_extensions
 
 */
@@ -45,7 +55,7 @@ pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<Gpx> {
     let f = File::open(input_file)?;
 
     // Q: Is it quicker to just read everything into a String first?
-    // A: About 10% quicker. Not enough to justify the memory load, I think.
+    // A: About 5-10% quicker. Not enough to justify the memory load, I think.
     // let mut s = String::new();
     // f.read_to_string(&mut s)?;
     // let c = Cursor::new(s);
@@ -70,11 +80,11 @@ pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
     loop {
         match xml_reader.read_event_into(&mut buf) {
             Ok(Event::Decl(decl)) => {
-                declaration = Some(parse_decl(&decl)?);
+                declaration = Some(parse_declaration(&decl)?);
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    gpx_info = Some(parse_gpx_tag(&e)?);
+                    gpx_info = Some(parse_gpx(&e)?);
                 }
                 b"metadata" => {
                     metadata = Some(parse_metadata(&mut buf, &mut xml_reader)?);
@@ -109,259 +119,6 @@ pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
         }
 
         buf.clear();
-    }
-}
-
-
-
-/// Parses an XML declaration, i.e. the very first line of the file which is:
-///     <?xml version="1.0" encoding="UTF-8"?>
-fn parse_decl(decl: &BytesDecl<'_>) -> Result<XmlDeclaration> {
-    Ok(XmlDeclaration {
-        version: rcow_to_string(decl.version())?,
-        encoding: orcow_to_string(decl.encoding())?,
-        standalone: orcow_to_string(decl.standalone())?,
-    })
-}
-
-struct GpxTag {
-    creator: String,
-    version: String,
-    attributes: HashMap<String, String>,
-}
-
-fn parse_gpx_tag(tag: &BytesStart<'_>) -> Result<GpxTag> {
-    let mut attributes = parse_attributes(tag)?;
-
-    let creator = match attributes.entry("creator".to_string()) {
-        Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-        _ => bail!("Mandatory attribute 'creator' was missing on the GPX element"),
-    };
-
-    let version = match attributes.entry("version".to_string()) {
-        Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-        _ => bail!("Mandatory attribute 'version' was missing on the GPX element"),
-    };
-
-    Ok(GpxTag {
-        creator,
-        version,
-        attributes,
-    })
-}
-
-fn parse_metadata<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<Metadata> {
-    let mut href = None;
-    let mut text = None;
-    let mut mime_type = None;
-    let mut time = None;
-    let mut desc = None;
-
-    loop {
-        match reader.read_event_into(buf) {
-            // TODO: We could break out a 'parse_link' function, as it is a defined
-            // element type in the XSD.
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"link" => {
-                    href = Some(read_attribute_as_string(&e, "href")?);
-                }
-                b"text" => {
-                    text = Some(read_inner_as_string(buf, reader)?);
-                }
-                b"type" => {
-                    mime_type = Some(read_inner_as_string(buf, reader)?);
-                }
-                b"time" => {
-                    time = Some(read_inner_as_time(buf, reader)?);
-                }
-                b"desc" => {
-                    desc = Some(read_inner_as_string(buf, reader)?);
-                }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"metadata" => {
-                    if let Some(href) = href {
-                        let mut link = Link::new(href);
-                        link.text = text;
-                        link.r#type = mime_type;
-                        let mut md = Metadata::default();
-                        md.links.push(link);
-                        md.time = time;
-                        md.description = desc;
-                        return Ok(md);
-                    } else {
-                        bail!("href attribute not found, but it is mandatory according to the XSD");
-                    }
-                }
-                _ => {}
-            },
-            // Ignore spurious Event::Text, I think they are newlines.
-            Ok(Event::Text(_)) => {}
-            e => bail!("Unexpected element {:?}", e),
-        }
-    }
-}
-
-fn parse_track<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<Track> {
-    // TODO: Make a track here instead of the individual fields.
-    let mut name = None;
-    let mut track_type = None;
-    let mut segments = Vec::new();
-    let mut desc = None;
-
-    loop {
-        match reader.read_event_into(buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"name" => {
-                    name = Some(read_inner_as_string(buf, reader)?);
-                }
-                b"type" => {
-                    track_type = Some(read_inner_as_string(buf, reader)?);
-                }
-                b"desc" => {
-                    desc = Some(read_inner_as_string(buf, reader)?);
-                }
-                b"trkseg" => {
-                    segments.push(parse_track_segment(buf, reader)?);
-                }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)?),
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"trk" => {
-                    let mut track = Track::default();
-                    track.name = name;
-                    track.r#type = track_type;
-                    track.description = desc;
-                    track.segments = segments;
-                    return Ok(track);
-                }
-                _ => {}
-            },
-            // Ignore spurious Event::Text, I think they are newlines.
-            Ok(Event::Text(_)) => {}
-            e => bail!("Unexpected element {:?}", e),
-        }
-    }
-}
-
-fn parse_track_segment<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<TrackSegment> {
-    let mut segment = TrackSegment::default();
-
-    while let Some(point) = parse_waypoint(buf, reader)? {
-        segment.points.push(point);
-    }
-
-    Ok(segment)
-}
-
-fn parse_waypoint<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<Option<Waypoint>> {
-    let mut lat = None;
-    let mut lon = None;
-    let mut ele = None;
-    let mut time = None;
-    let mut tp_extensions = None;
-
-    loop {
-        match reader.read_event_into(buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"trkpt" => {
-                    lat = Some(read_attribute_as_f64(&e, "lat")?);
-                    lon = Some(read_attribute_as_f64(&e, "lon")?);
-                }
-                b"ele" => {
-                    ele = Some(read_inner_as::<R, f64>(buf, reader)?);
-                }
-                b"time" => {
-                    time = Some(read_inner_as_time(buf, reader)?);
-                }
-                b"extensions" => {
-                    tp_extensions = Some(parse_garmin_trackpoint_extensions(buf, reader)?);
-                }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"trkpt" => {
-                    let mut tp = Waypoint::with_lat_lon(
-                        lat.context("lat attribute not found")?,
-                        lon.context("lon attribute not found")?,
-                    );
-
-                    tp.ele = ele;
-                    tp.time = time;
-                    tp.tp_extensions = tp_extensions;
-                    return Ok(Some(tp));
-                }
-                b"trkseg" => {
-                    // Reached the end of the trackpoints for this segment.
-                    return Ok(None);
-                }
-                _ => {}
-            },
-            // Ignore spurious Event::Text, I think they are newlines.
-            Ok(Event::Text(_)) => {}
-            e => bail!("Unexpected element {:?}", e),
-        }
-    }
-}
-
-fn parse_garmin_trackpoint_extensions<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<GarminTrackpointExtensions> {
-    let mut air_temp = None;
-    let mut water_temp = None;
-    let mut depth = None;
-    let mut heart_rate = None;
-    let mut cadence = None;
-
-    loop {
-        match reader.read_event_into(buf) {
-            Ok(Event::Start(e)) => match e.local_name().as_ref() {
-                b"TrackPointExtension" => { /* ignore, just a container element */ }
-                b"atemp" => {
-                    air_temp = Some(read_inner_as::<R, f64>(buf, reader)?);
-                }
-                b"wtemp" => {
-                    water_temp = Some(read_inner_as::<R, f64>(buf, reader)?);
-                }
-                b"depth" => {
-                    depth = Some(read_inner_as::<R, f64>(buf, reader)?);
-                }
-                b"hr" => {
-                    heart_rate = Some(read_inner_as::<R, u8>(buf, reader)?);
-                }
-                b"cad" => {
-                    cadence = Some(read_inner_as::<R, u8>(buf, reader)?);
-                }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
-            },
-            Ok(Event::End(e)) => match e.local_name().as_ref() {
-                b"TrackPointExtension" => { /* ignore, just a container element */ }
-                b"extensions" => {
-                    return Ok(GarminTrackpointExtensions {
-                        air_temp,
-                        water_temp,
-                        depth,
-                        heart_rate,
-                        cadence,
-                        extensions: None,
-                    });
-                }
-                b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */
-                }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
-            },
-            // Ignore spurious Event::Text, I think they are newlines.
-            Ok(Event::Text(_)) => {}
-            e => bail!("Unexpected element {:?}", e),
-        }
     }
 }
 
@@ -404,7 +161,8 @@ fn read_inner_as_string<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -
     }
 }
 
-/// Reads a <time>2024-09-21T06:59:46.000Z</time> tag.
+/// Reads the inner text, e.g. in a '<time>2024-09-21T06:59:46.000Z</time>' tag
+/// and converts it into a time.
 fn read_inner_as_time<R: BufRead>(
     buf: &mut Vec<u8>,
     reader: &mut Reader<R>,
@@ -425,29 +183,17 @@ fn read_inner_as<R: BufRead, T: FromStr>(buf: &mut Vec<u8>, reader: &mut Reader<
     }
 }
 
-fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String> {
-    bytes_to_string(v.borrow())
-}
-
-fn rcow_to_string(v: Result<Cow<'_, [u8]>, quick_xml::Error>) -> Result<String> {
-    match v {
-        Ok(Cow::Borrowed(s)) => Ok(bytes_to_string(s)?),
-        Ok(Cow::Owned(s)) => Ok(bytes_to_string(&s)?),
-        Err(err) => Err(err.into()),
-    }
-}
-
-fn orcow_to_string(v: Option<Result<Cow<'_, [u8]>, quick_xml::Error>>) -> Result<Option<String>> {
-    match v {
-        Some(Ok(Cow::Borrowed(s))) => Ok(Some(bytes_to_string(s)?)),
-        Some(Ok(Cow::Owned(s))) => Ok(Some(bytes_to_string(&s)?)),
-        Some(Err(err)) => Err(err.into()),
-        None => Ok(None),
-    }
-}
-
+/// Converts a byte slice to a String.
 fn bytes_to_string(value: &[u8]) -> Result<String> {
     str::from_utf8(value)
         .and_then(|s| Ok(s.to_string()))
         .map_err(|e| e.into())
+}
+
+/// Converts a Cow<u8> to a String in the most efficient manner possible.
+fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String> {
+    match v {
+        Cow::Borrowed(s) => Ok(bytes_to_string(s)?),
+        Cow::Owned(s) => Ok(String::from_utf8(s)?)
+    }
 }

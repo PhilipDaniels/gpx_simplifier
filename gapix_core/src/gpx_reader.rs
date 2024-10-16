@@ -398,12 +398,6 @@ fn read_inner_as_time<R: BufRead>(
     Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
 }
 
-// /// Reads inner text and converts it to an f64.
-// fn read_inner_as_f64<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<f64> {
-//     let t = read_inner_as_string(buf, reader)?;
-//     Ok(t.parse::<f64>()?)
-// }
-
 fn read_inner_as<R: BufRead, T: FromStr>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<T> {
     let t = read_inner_as_string(buf, reader)?;
     match t.parse::<T>() {

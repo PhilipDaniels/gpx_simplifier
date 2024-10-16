@@ -112,7 +112,7 @@ impl Args {
                 if Self::is_output_file(&f) {
                     warn!("Excluding {:?} because it is an output file", f);
                 } else {
-                    
+                    files.push(f.clone());
                 }
             } else {
                 warn!("Excluding {:?} because it does not end in '.gpx'", f);

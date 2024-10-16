@@ -8,6 +8,18 @@ use time::{Duration, OffsetDateTime};
 
 use crate::stage::{distance_between_points_metres, speed_kmh_from_duration};
 
+// Gpx: lacks attributes, the XML declaration
+// Metadata: full
+// Waypoint: lacks magvar, extensions, lat/lon is available via the Point method
+// Route: full (apart from extensions)
+// Track: full (apart from extensions)
+// Person: full
+// Email: they represent as a single string
+// Copyright: full (their author is optional)
+// Link: full (they use type_)
+// Bounds: full
+// TrackSegment: full (apart from extensions)
+
 /// Data parsed from a GPX file, based on the XSD description at
 /// https://www.topografix.com/GPX/1/1/gpx.xsd
 #[derive(Debug, Clone)]
@@ -59,7 +71,7 @@ pub struct Metadata {
     /// The name of the GPX file.
     pub name: Option<String>,
     /// A description of the GPX file.
-    pub desc: Option<String>,
+    pub description: Option<String>,
     /// The person or organization who created the GPX file.
     pub author: Option<Person>,
     /// Copyright and license information governing use of the file.
@@ -82,7 +94,7 @@ pub type Lat = f64; // -90..90
 pub type Lon = f64; // -180..180
 
 /// A pair of (lat, lon) coordinates which constitute a bounding box.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Bounds {
     /// The minimum latitude.
     pub min_lat: Lat,
@@ -97,10 +109,10 @@ pub struct Bounds {
 /// Information about the copyright holder and any license governing use of this
 /// file. By linking to an appropriate license, you may place your data into the
 /// public domain or grant additional usage rights.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Copyright {
     /// The year of copyright.
-    pub year: i16,
+    pub year: Option<i16>,
     /// A link to an external resource containing the licence text.
     pub license: Option<String>,
     /// The author/holder of the copyright.
@@ -120,7 +132,7 @@ pub struct Person {
 }
 
 /// Represents the 'emailType' from the XSD.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Email {
     /// The first part of the email address (before the '@').
     pub id: String,
@@ -147,15 +159,15 @@ pub struct Route {
     /// GPS name of the route.
     pub name: Option<String>,
     /// GPS comment for the route.
-    pub cmt: Option<String>,
+    pub comment: Option<String>,
     /// User description of the route.
-    pub desc: Option<String>,
+    pub description: Option<String>,
     /// Source of data. Included to give user some idea of reliability and accuracy of data.
-    pub src: Option<String>,
+    pub source: Option<String>,
     /// Zero or more URLs associated with the route.
     pub links: Vec<Link>,
     /// GPS route number.
-    pub number: Option<u16>,
+    pub number: Option<u32>,
     /// Type (classification) of the track.
     pub r#type: Option<String>,
     /// Arbitrary extended information. Represented as an unparsed string.
@@ -172,9 +184,9 @@ pub struct Track {
     /// GPS comment for the track.
     pub comment: Option<String>,
     /// User description of the track.
-    pub desc: Option<String>,
+    pub description: Option<String>,
     /// Source of data. Included to give user some idea of reliability and accuracy of data.
-    pub src: Option<String>,
+    pub source: Option<String>,
     /// Zero or more URLs associated with the track.
     pub links: Vec<Link>,
     /// GPS track number.
@@ -228,17 +240,17 @@ pub struct Waypoint {
     /// validate the field before sending it to the GPS.
     pub name: Option<String>,
     /// GPS waypoint comment. Sent to GPS as comment.
-    pub cmt: Option<String>,
+    pub comment: Option<String>,
     /// A text description of the element. Holds additional information about
     /// the element intended for the user, not the GPS.
-    pub desc: Option<String>,
+    pub description: Option<String>,
     /// Source of data. Included to give user some idea of reliability and
     /// accuracy of data.
-    pub src: Option<String>,
+    pub source: Option<String>,
     /// Links to additional information about the waypoint.
     pub links: Vec<Link>,
     /// Text of GPS symbol name.
-    pub sym: Option<String>,
+    pub symbol: Option<String>,
     /// Type (classification) of the waypoint.
     pub r#type: Option<String>,
     /// Type of GPX fix.
@@ -275,8 +287,8 @@ pub struct Waypoint {
 #[derive(Debug, Clone)]
 pub enum FixType {
     None,
-    TwoD,
-    ThreeD,
+    TwoDimensional,
+    ThreeDimensional,
     DGPS,
     /// Indicates a military signal was used
     PPS,

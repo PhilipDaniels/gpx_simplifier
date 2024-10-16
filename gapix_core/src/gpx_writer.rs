@@ -85,7 +85,7 @@ fn write_metadata_element<W: Write>(w: &mut W, metadata: &Metadata) -> Result<()
     if let Some(time) = &metadata.time {
         writeln!(w, "    <time>{}</time>", format_utc_date(time)?)?;
     }
-    if let Some(desc) = &metadata.desc {
+    if let Some(desc) = &metadata.description {
         writeln!(w, "    <desc>{}</desc>", desc)?;
     }
     writeln!(w, "  </metadata>")?;
@@ -112,7 +112,7 @@ fn write_track<W: Write>(w: &mut W, track: &Track) -> Result<()> {
     if let Some(track_type) = &track.r#type {
         writeln!(w, "    <type>{}</type>", track_type)?;
     }
-    if let Some(desc) = &track.desc {
+    if let Some(desc) = &track.description {
         writeln!(w, "    <desc>{}</desc>", desc)?;
     }
 

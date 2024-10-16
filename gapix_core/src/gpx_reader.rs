@@ -173,7 +173,7 @@ fn parse_metadata<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Resu
                         let mut md = Metadata::default();
                         md.links.push(link);
                         md.time = time;
-                        md.desc = desc;
+                        md.description = desc;
                         return Ok(md);
                     } else {
                         bail!("href attribute not found, but it is mandatory according to the XSD");
@@ -217,7 +217,7 @@ fn parse_track<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<
                     let mut track = Track::default();
                     track.name = name;
                     track.r#type = track_type;
-                    track.desc = desc;
+                    track.description = desc;
                     track.segments = segments;
                     return Ok(track);
                 }

@@ -84,6 +84,8 @@ Or build from source using cargo.
 
 # TODO
 - Create a new type(s) for latlon which is bounded to the range -90.0..90.0.
+  Also dgpsStationType (0..=1203)
+- A new Extensions type
 - Full pass lossless read and write of the complete XSD.
 - Pass some options into the gpx_writer to control the fidelity.
 - Move model into its own crate.

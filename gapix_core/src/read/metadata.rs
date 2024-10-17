@@ -13,7 +13,7 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
 
     loop {
         match xml_reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+            Ok(Event::Start(start)) => match start.name().as_ref() {
                 b"name" => {
                     md.name = Some(xml_reader.read_inner_as()?);
                 }
@@ -24,10 +24,10 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
                     md.author = Some(parse_person(xml_reader)?);
                 }
                 b"copyright" => {
-                    md.copyright = Some(parse_copyright(&e, xml_reader)?);
+                    md.copyright = Some(parse_copyright(&start, xml_reader)?);
                 }
                 b"link" => {
-                    let link = parse_link(&e, xml_reader)?;
+                    let link = parse_link(&start, xml_reader)?;
                     md.links.push(link);
                 }
                 b"time" => {
@@ -37,10 +37,10 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
                     md.keywords = Some(xml_reader.read_inner_as()?);
                 }
                 b"bounds" => {
-                    md.bounds = Some(parse_bounds(&e, xml_reader)?);
+                    md.bounds = Some(parse_bounds(&start, xml_reader)?);
                 }
                 b"extensions" => {
-                    md.extensions = Some(parse_extensions(xml_reader)?);
+                    md.extensions = Some(parse_extensions(&start, xml_reader)?);
                 }
                 e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },

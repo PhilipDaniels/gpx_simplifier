@@ -18,7 +18,7 @@ pub(crate) fn parse_copyright(
 
     loop {
         match xml_reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+            Ok(Event::Start(start)) => match start.name().as_ref() {
                 b"year" => {
                     copyright.year = Some(xml_reader.read_inner_as()?);
                 }

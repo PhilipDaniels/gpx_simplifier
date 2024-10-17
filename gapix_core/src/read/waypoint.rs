@@ -32,7 +32,7 @@ pub(crate) fn parse_waypoint(
 
     loop {
         match xml_reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+            Ok(Event::Start(start)) => match start.name().as_ref() {
                 b"ele" => {
                     wp.ele = Some(xml_reader.read_inner_as()?);
                 }
@@ -58,7 +58,7 @@ pub(crate) fn parse_waypoint(
                     wp.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(&e, xml_reader)?;
+                    let link = parse_link(&start, xml_reader)?;
                     wp.links.push(link);
                 }
                 b"sym" => {
@@ -90,7 +90,7 @@ pub(crate) fn parse_waypoint(
                     wp.dgps_id = Some(xml_reader.read_inner_as()?);
                 }
                 b"extensions" => {
-                    wp.extensions = Some(parse_extensions(xml_reader)?);
+                    wp.extensions = Some(parse_extensions(&start, xml_reader)?);
                 }
                 e => bail!("Unexpected element {:?}", xml_reader.bytes_to_cow(e)),
             },

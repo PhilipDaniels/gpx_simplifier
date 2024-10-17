@@ -10,13 +10,13 @@ pub(crate) fn parse_track_segment(xml_reader: &mut Reader<&[u8]>) -> Result<Trac
 
     loop {
         match xml_reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+            Ok(Event::Start(start)) => match start.name().as_ref() {
                 b"trkpt" => {
-                    let point = parse_waypoint(&e, xml_reader, b"trkpt")?;
+                    let point = parse_waypoint(&start, xml_reader, b"trkpt")?;
                     segment.points.push(point);
                 }
                 b"extensions" => {
-                    segment.extensions = Some(parse_extensions(xml_reader)?);
+                    segment.extensions = Some(parse_extensions(&start, xml_reader)?);
                 }
                 e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },

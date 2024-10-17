@@ -13,7 +13,7 @@ pub(crate) fn parse_track(xml_reader: &mut Reader<&[u8]>) -> Result<Track> {
 
     loop {
         match xml_reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+            Ok(Event::Start(start)) => match start.name().as_ref() {
                 b"name" => {
                     track.name = Some(xml_reader.read_inner_as()?);
                 }
@@ -27,7 +27,7 @@ pub(crate) fn parse_track(xml_reader: &mut Reader<&[u8]>) -> Result<Track> {
                     track.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(&e, xml_reader)?;
+                    let link = parse_link(&start, xml_reader)?;
                     track.links.push(link);
                 }
                 b"number" => {
@@ -37,7 +37,7 @@ pub(crate) fn parse_track(xml_reader: &mut Reader<&[u8]>) -> Result<Track> {
                     track.r#type = Some(xml_reader.read_inner_as_string()?);
                 }
                 b"extensions" => {
-                    track.extensions = Some(parse_extensions(xml_reader)?);
+                    track.extensions = Some(parse_extensions(&start, xml_reader)?);
                 }
                 b"trkseg" => {
                     track.segments.push(parse_track_segment(xml_reader)?);

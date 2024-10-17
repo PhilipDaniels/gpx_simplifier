@@ -103,7 +103,7 @@ impl<R> XmlReaderConversions for Reader<R> {
         match bytes {
             // Ensure everything goes through decode().
             Cow::Borrowed(slice) => Ok(self.bytes_to_string(slice)?),
-            Cow::Owned(vec) => Ok(self.bytes_to_string(&vec)?)
+            Cow::Owned(vec) => Ok(self.bytes_to_string(&vec)?),
         }
     }
 }

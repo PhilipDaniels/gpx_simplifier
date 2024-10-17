@@ -1,12 +1,15 @@
 use anyhow::{bail, Result};
-use quick_xml::{events::BytesStart, Reader};
+use quick_xml::events::BytesStart;
 
 use crate::model::Bounds;
 
-use super::attributes::Attributes;
+use super::{attributes::Attributes, XmlReaderConversions};
 
-pub(crate) fn parse_bounds<R>(tag: &BytesStart<'_>, xml_reader: &Reader<R>) -> Result<Bounds> {
-    let mut attributes = Attributes::new(tag, xml_reader)?;
+pub(crate) fn parse_bounds<C: XmlReaderConversions>(
+    tag: &BytesStart<'_>,
+    converter: &C,
+) -> Result<Bounds> {
+    let mut attributes = Attributes::new(tag, converter)?;
     let mut bounds = Bounds::default();
     bounds.min_lat = attributes.get("minlat")?;
     bounds.min_lon = attributes.get("minlon")?;

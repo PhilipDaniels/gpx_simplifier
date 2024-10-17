@@ -1,12 +1,12 @@
 use anyhow::{bail, Result};
-use quick_xml::{events::BytesStart, Reader};
+use quick_xml::events::BytesStart;
 
 use crate::model::Email;
 
-use super::attributes::Attributes;
+use super::{attributes::Attributes, XmlReaderConversions};
 
-pub(crate) fn parse_email<R>(tag: &BytesStart<'_>, xml_reader: &Reader<R>) -> Result<Email> {
-    let mut attributes = Attributes::new(tag, xml_reader)?;
+pub(crate) fn parse_email<C: XmlReaderConversions>(tag: &BytesStart<'_>, converter: &C) -> Result<Email> {
+    let mut attributes = Attributes::new(tag, converter)?;
 
     let id: String = attributes.get("id")?;
     let domain: String = attributes.get("domain")?;

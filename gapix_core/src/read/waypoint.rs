@@ -1,5 +1,8 @@
 use anyhow::{bail, Result};
-use quick_xml::{events::Event, Reader};
+use quick_xml::{
+    events::{BytesStart, Event},
+    Reader,
+};
 
 use crate::model::Waypoint;
 
@@ -11,10 +14,11 @@ use super::{
 /// Parses a waypoint. Waypoints can appear under the 'gpx' tag, as part of a
 /// route or as part of a track.
 pub(crate) fn parse_waypoint(
-    mut attributes: Attributes,
+    event: &BytesStart<'_>,
     xml_reader: &mut Reader<&[u8]>,
     expected_end_tag: &[u8], // Possible ending tags: wpt, rtept, trkpt
 ) -> Result<Waypoint> {
+    let mut attributes = Attributes::new(event, xml_reader)?;
     let lat = attributes.get("lat")?;
     let lon = attributes.get("lon")?;
     if !attributes.is_empty() {
@@ -54,7 +58,7 @@ pub(crate) fn parse_waypoint(
                     wp.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?;
+                    let link = parse_link(&e, xml_reader)?;
                     wp.links.push(link);
                 }
                 b"sym" => {

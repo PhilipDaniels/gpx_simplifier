@@ -4,9 +4,8 @@ use quick_xml::{events::Event, Reader};
 use crate::model::Metadata;
 
 use super::{
-    attributes::Attributes, bounds::parse_bounds, copyright::parse_copyright,
-    extensions::parse_extensions, link::parse_link, person::parse_person, XmlReaderConversions,
-    XmlReaderExtensions,
+    bounds::parse_bounds, copyright::parse_copyright, extensions::parse_extensions,
+    link::parse_link, person::parse_person, XmlReaderConversions, XmlReaderExtensions,
 };
 
 pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata> {
@@ -28,7 +27,7 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
                     md.copyright = Some(parse_copyright(xml_reader)?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?;
+                    let link = parse_link(&e, xml_reader)?;
                     md.links.push(link);
                 }
                 b"time" => {

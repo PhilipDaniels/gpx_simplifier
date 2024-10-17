@@ -22,10 +22,10 @@ pub(crate) struct GpxAttributes {
 /// Parses the attributes on 'gpx' element itself. Gets around a multiple mut borrows
 /// problem in the main read_gpx_from_reader() function.
 pub(crate) fn parse_gpx_attributes<R>(
-    tag: &BytesStart<'_>,
+    event: &BytesStart<'_>,
     xml_reader: &Reader<R>,
 ) -> Result<GpxAttributes> {
-    let mut attributes = Attributes::new(tag, xml_reader)?;
+    let mut attributes = Attributes::new(event, xml_reader)?;
 
     let creator: String = attributes.get("creator")?;
     let version: String = attributes.get("version")?;
@@ -48,8 +48,7 @@ pub(crate) fn parse_gpx(xml_reader: &mut Reader<&[u8]>) -> Result<Gpx> {
                     gpx.metadata = parse_metadata(xml_reader)?;
                 }
                 b"wpt" => {
-                    let waypoint =
-                        parse_waypoint(Attributes::new(&e, xml_reader)?, xml_reader, b"wpt")?;
+                    let waypoint = parse_waypoint(&e, xml_reader, b"wpt")?;
                     gpx.waypoints.push(waypoint);
                 }
                 b"rte" => {

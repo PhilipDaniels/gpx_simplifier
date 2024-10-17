@@ -3,10 +3,7 @@ use quick_xml::{events::Event, Reader};
 
 use crate::model::TrackSegment;
 
-use super::{
-    attributes::Attributes, extensions::parse_extensions, waypoint::parse_waypoint,
-    XmlReaderConversions,
-};
+use super::{extensions::parse_extensions, waypoint::parse_waypoint, XmlReaderConversions};
 
 pub(crate) fn parse_track_segment(xml_reader: &mut Reader<&[u8]>) -> Result<TrackSegment> {
     let mut segment = TrackSegment::default();
@@ -15,8 +12,7 @@ pub(crate) fn parse_track_segment(xml_reader: &mut Reader<&[u8]>) -> Result<Trac
         match xml_reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"trkpt" => {
-                    let point =
-                        parse_waypoint(Attributes::new(&e, xml_reader)?, xml_reader, b"trkpt")?;
+                    let point = parse_waypoint(&e, xml_reader, b"trkpt")?;
                     segment.points.push(point);
                 }
                 b"extensions" => {

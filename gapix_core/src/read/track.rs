@@ -4,8 +4,8 @@ use quick_xml::{events::Event, Reader};
 use crate::model::Track;
 
 use super::{
-    attributes::Attributes, extensions::parse_extensions, link::parse_link,
-    track_segment::parse_track_segment, XmlReaderConversions, XmlReaderExtensions,
+    extensions::parse_extensions, link::parse_link, track_segment::parse_track_segment,
+    XmlReaderConversions, XmlReaderExtensions,
 };
 
 pub(crate) fn parse_track(xml_reader: &mut Reader<&[u8]>) -> Result<Track> {
@@ -27,7 +27,7 @@ pub(crate) fn parse_track(xml_reader: &mut Reader<&[u8]>) -> Result<Track> {
                     track.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?;
+                    let link = parse_link(&e, xml_reader)?;
                     track.links.push(link);
                 }
                 b"number" => {
@@ -42,7 +42,7 @@ pub(crate) fn parse_track(xml_reader: &mut Reader<&[u8]>) -> Result<Track> {
                 b"trkseg" => {
                     track.segments.push(parse_track_segment(xml_reader)?);
                 }
-                e => bail!("Unexpected element {:?}", xml_reader.bytes_to_cow(e)),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"trk" => {

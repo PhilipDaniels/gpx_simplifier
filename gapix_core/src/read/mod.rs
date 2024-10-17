@@ -8,7 +8,10 @@ use declaration::parse_declaration;
 use gpx::{parse_gpx, parse_gpx_attributes};
 use log::info;
 use logging_timer::time;
-use quick_xml::{events::Event, Reader};
+use quick_xml::{
+    events::{BytesStart, Event},
+    Reader,
+};
 use time::{format_description::well_known, OffsetDateTime};
 
 use crate::model::{Gpx, XmlDeclaration};
@@ -161,4 +164,20 @@ fn start_parse<'a, 'b>(
         Event::Start(start) => return Ok(start),
         _ => panic!("Failed to parse Event::Start(_) element"),
     }
+}
+
+/// Helper method. Checks to see if an element has any attributes and bails with
+/// an error if it does.
+fn check_no_attributes<C: XmlReaderConversions>(
+    start_element: &BytesStart<'_>,
+    xml_reader: &C,
+) -> Result<()> {
+    if let Some(_) = start_element.attributes().next() {
+        bail!(
+            "Extra attributes found on '{:?}' element",
+            xml_reader.bytes_to_cow(start_element.name().into_inner())
+        );
+    }
+
+    Ok(())
 }

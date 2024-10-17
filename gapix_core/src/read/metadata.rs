@@ -24,7 +24,7 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
                     md.author = Some(parse_person(xml_reader)?);
                 }
                 b"copyright" => {
-                    md.copyright = Some(parse_copyright(xml_reader)?);
+                    md.copyright = Some(parse_copyright(&e, xml_reader)?);
                 }
                 b"link" => {
                     let link = parse_link(&e, xml_reader)?;

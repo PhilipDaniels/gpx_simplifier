@@ -17,12 +17,12 @@ impl Attributes {
     /// Creates a new Attributes object by parsing out all the attributes of the
     /// specified tag.
     pub(crate) fn new<C: XmlReaderConversions>(
-        tag: &BytesStart<'_>,
+        start_element: &BytesStart<'_>,
         converter: &C,
     ) -> Result<Self> {
         let mut data = HashMap::new();
 
-        for attr in tag.attributes() {
+        for attr in start_element.attributes() {
             let attr = attr?;
             let key = attr.key.into_inner();
             let key = converter.bytes_to_string(key)?;

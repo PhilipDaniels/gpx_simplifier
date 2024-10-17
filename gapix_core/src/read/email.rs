@@ -7,10 +7,10 @@ use super::{attributes::Attributes, XmlReaderConversions};
 
 /// Parses an element of the form: <email id="phil" domain="gmail.com">
 pub(crate) fn parse_email<C: XmlReaderConversions>(
-    tag: &BytesStart<'_>,
+    start_element: &BytesStart<'_>,
     converter: &C,
 ) -> Result<Email> {
-    let mut attributes = Attributes::new(tag, converter)?;
+    let mut attributes = Attributes::new(start_element, converter)?;
 
     let id: String = attributes.get("id")?;
     let domain: String = attributes.get("domain")?;

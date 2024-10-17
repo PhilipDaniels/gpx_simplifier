@@ -16,7 +16,10 @@ pub(crate) struct Attributes {
 impl Attributes {
     /// Creates a new Attributes object by parsing out all the attributes of the
     /// specified tag.
-pub(crate) fn new<C: XmlReaderConversions>(tag: &BytesStart<'_>, converter: &C) -> Result<Self> {
+    pub(crate) fn new<C: XmlReaderConversions>(
+        tag: &BytesStart<'_>,
+        converter: &C,
+    ) -> Result<Self> {
         let mut data = HashMap::new();
 
         for attr in tag.attributes() {
@@ -52,9 +55,11 @@ pub(crate) fn new<C: XmlReaderConversions>(tag: &BytesStart<'_>, converter: &C) 
         S: Into<String>,
         T: FromStr,
     {
-        let value = match self.data.entry(key.into()) {
+        let key = key.into();
+
+        let value = match self.data.entry(key.clone()) {
             Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-            _ => bail!("Mandatory attribute 'id' was missing on the 'email' element"),
+            _ => bail!("Mandatory attribute '{}' not found", key),
         };
 
         match value.parse::<T>() {

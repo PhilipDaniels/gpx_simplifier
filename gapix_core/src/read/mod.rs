@@ -150,3 +150,15 @@ impl XmlReaderExtensions for Reader<&[u8]> {
         }
     }
 }
+
+/// A helper method to simplify tests. Often we need to get the contents of an
+/// 'Event::Start' event type.
+#[cfg(test)]
+fn start_parse<'a, 'b>(
+    xml_reader: &'a mut Reader<&'b [u8]>,
+) -> Result<quick_xml::events::BytesStart<'b>> {
+    match xml_reader.read_event().unwrap() {
+        Event::Start(start) => return Ok(start),
+        _ => panic!("Failed to parse Event::Start(_) element"),
+    }
+}

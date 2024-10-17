@@ -12,7 +12,7 @@ use crate::{
     byte_counter::ByteCounter,
     formatting::format_utc_date,
     model::{
-        Extensions, GarminTrackpointExtensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint,
+        Extensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint,
         XmlDeclaration,
     },
 };

@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -7,9 +5,9 @@ use crate::model::Copyright;
 
 use super::{bytes_to_string, read_inner_as, read_inner_as_string};
 
-pub(crate) fn parse_copyright<R: BufRead>(
+pub(crate) fn parse_copyright(
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<Copyright> {
     let mut copyright = Copyright::default();
 

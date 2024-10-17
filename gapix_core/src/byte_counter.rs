@@ -13,9 +13,9 @@ where
         ByteCounter { inner, count: 0 }
     }
 
-    fn into_inner(self) -> W {
-        self.inner
-    }
+    // fn into_inner(self) -> W {
+    //     self.inner
+    // }
 
     pub(crate) fn bytes_written(&self) -> usize {
         self.count

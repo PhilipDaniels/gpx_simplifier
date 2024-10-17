@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -7,16 +5,16 @@ use crate::model::Waypoint;
 
 use super::{
     attributes::Attributes, bytes_to_string, extensions::parse_extensions, link::parse_link,
-    read_inner_as, read_inner_as_time, trackpoint_extensions::parse_garmin_trackpoint_extensions,
+    read_inner_as, read_inner_as_time
 };
 
-// Possible ending tags: wpt, rtept, trkpt
-
-pub(crate) fn parse_waypoint<R: BufRead>(
+/// Parses a waypoint. Waypoints can appear under the 'gpx' tag, as part of a
+/// route or as part of a track.
+pub(crate) fn parse_waypoint(
     mut attributes: Attributes,
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
-    expected_end_tag: &[u8],
+    xml_reader: &mut Reader<&[u8]>,
+    expected_end_tag: &[u8],   // Possible ending tags: wpt, rtept, trkpt
 ) -> Result<Waypoint> {
     let lat = attributes.get("lat")?;
     let lon = attributes.get("lon")?;
@@ -89,7 +87,7 @@ pub(crate) fn parse_waypoint<R: BufRead>(
                     wp.dgps_id = Some(read_inner_as(buf, xml_reader)?);
                 }
                 b"extensions" => {
-                    wp.extensions = Some(parse_extensions(buf, xml_reader)?);
+                    wp.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },

@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -9,10 +7,11 @@ use super::{
     attributes::Attributes, bytes_to_string, extensions::parse_extensions, waypoint::parse_waypoint,
 };
 
-pub(crate) fn parse_track_segment<R: BufRead>(
+pub(crate) fn parse_track_segment(
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<TrackSegment> {
+
     let mut segment = TrackSegment::default();
 
     loop {
@@ -23,7 +22,7 @@ pub(crate) fn parse_track_segment<R: BufRead>(
                     segment.points.push(point);
                 }
                 b"extensions" => {
-                    segment.extensions = Some(parse_extensions(buf, xml_reader)?);
+                    segment.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)?),
             },

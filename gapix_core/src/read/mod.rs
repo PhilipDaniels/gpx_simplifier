@@ -1,13 +1,7 @@
 #![allow(clippy::single_match)]
 
 use core::str;
-use std::{
-    borrow::Cow,
-    fs::File,
-    io::{BufRead, BufReader},
-    path::Path,
-    str::FromStr,
-};
+use std::{borrow::Cow, io::BufRead, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 use declaration::parse_declaration;
@@ -36,28 +30,23 @@ mod trackpoint_extensions;
 mod waypoint;
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
-/// This function doesn't parse everything, just the things that appear in my Garmin files.
+#[time]
 pub fn read_gpx_from_file<P: AsRef<Path>>(input_file: P) -> Result<Gpx> {
     let input_file = input_file.as_ref();
     info!("Reading GPX file {:?}", input_file);
-    let f = File::open(input_file)?;
-
-    // Q: Is it quicker to just read everything into a String first?
-    // A: About 5-10% quicker. Not enough to justify the memory load, I think.
-    // let mut s = String::new();
-    // f.read_to_string(&mut s)?;
-    // let c = Cursor::new(s);
-    // let mut gpx = read_gpx_from_reader(c)?;
-
-    let buf_reader = BufReader::new(f);
-    let mut gpx = read_gpx_from_reader(buf_reader)?;
+    let contents = std::fs::read(input_file)?;
+    let mut gpx = read_gpx_from_slice(&contents)?;
     gpx.filename = Some(input_file.to_owned());
-    return Ok(gpx);
+    Ok(gpx)
+}
+
+pub fn read_gpx_from_slice(data: &[u8]) -> Result<Gpx> {
+    let xml_reader = Reader::from_reader(data);
+    read_gpx_from_reader(xml_reader)
 }
 
 #[time]
-pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
-    let mut xml_reader = Reader::from_reader(input);
+pub fn read_gpx_from_reader(mut xml_reader: Reader<&[u8]>) -> Result<Gpx> {
     let mut buf: Vec<u8> = Vec::with_capacity(512);
     let mut xml_declaration: Option<XmlDeclaration> = None;
     let mut gpx: Option<Gpx> = None;

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufRead};
+use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use log::debug;
@@ -36,9 +36,9 @@ pub(crate) fn parse_gpx_attributes(tag: &BytesStart<'_>) -> Result<GpxAttributes
 }
 
 /// Parses the 'gpx' element itself.
-pub(crate) fn parse_gpx<R: BufRead>(
+pub(crate) fn parse_gpx(
     mut buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<Gpx> {
     let mut gpx = Gpx::default();
 
@@ -61,7 +61,7 @@ pub(crate) fn parse_gpx<R: BufRead>(
                     gpx.tracks.push(track);
                 }
                 b"extensions" => {
-                    gpx.extensions = Some(parse_extensions(buf, xml_reader)?);
+                    gpx.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 _ => (),
             },

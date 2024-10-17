@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -11,9 +9,9 @@ use super::{
     read_inner_as_string, read_inner_as_time,
 };
 
-pub(crate) fn parse_metadata<R: BufRead>(
+pub(crate) fn parse_metadata(
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<Metadata> {
     let mut md = Metadata::default();
 
@@ -46,7 +44,7 @@ pub(crate) fn parse_metadata<R: BufRead>(
                     md.bounds = Some(parse_bounds(&e)?);
                 }
                 b"extensions" => {
-                    md.extensions = Some(parse_extensions(buf, xml_reader)?);
+                    md.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },

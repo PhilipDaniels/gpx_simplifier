@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -10,9 +8,9 @@ use super::{
     read_inner_as, read_inner_as_string, waypoint::parse_waypoint,
 };
 
-pub(crate) fn parse_route<R: BufRead>(
+pub(crate) fn parse_route(
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<Route> {
     let mut route = Route::default();
 
@@ -42,7 +40,7 @@ pub(crate) fn parse_route<R: BufRead>(
                     route.r#type = Some(read_inner_as_string(buf, xml_reader)?);
                 }
                 b"extensions" => {
-                    route.extensions = Some(parse_extensions(buf, xml_reader)?);
+                    route.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 b"rtept" => {
                     let point = parse_waypoint(Attributes::new(&e)?, buf, xml_reader, b"rtept")?;

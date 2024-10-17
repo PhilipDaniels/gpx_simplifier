@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -10,9 +8,9 @@ use super::{
     read_inner_as_string,
 };
 
-pub(crate) fn parse_person<R: BufRead>(
+pub(crate) fn parse_person(
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<Person> {
     let mut person = Person::default();
 

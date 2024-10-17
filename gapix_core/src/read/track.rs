@@ -1,5 +1,3 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
@@ -10,9 +8,9 @@ use super::{
     read_inner_as, read_inner_as_string, track_segment::parse_track_segment,
 };
 
-pub(crate) fn parse_track<R: BufRead>(
+pub(crate) fn parse_track(
     buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<R>,
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<Track> {
     let mut track = Track::default();
 
@@ -42,7 +40,7 @@ pub(crate) fn parse_track<R: BufRead>(
                     track.r#type = Some(read_inner_as_string(buf, xml_reader)?);
                 }
                 b"extensions" => {
-                    track.extensions = Some(parse_extensions(buf, xml_reader)?);
+                    track.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 b"trkseg" => {
                     track.segments.push(parse_track_segment(buf, xml_reader)?);

@@ -41,6 +41,8 @@ pub struct Gpx {
     pub routes: Vec<Route>,
     /// A list of tracks.
     pub tracks: Vec<Track>,
+    /// Arbitrary extended information. Represented as an unparsed string.
+    pub extensions: Option<Extensions>,
 }
 
 /// Represents the 'xml' declaration - the first line of an XML file (not just
@@ -74,7 +76,12 @@ pub struct Metadata {
     /// coordinates in the file.
     pub bounds: Option<Bounds>,
     /// Arbitrary extended information. Represented as an unparsed string.
-    pub extensions: Option<String>,
+    pub extensions: Option<Extensions>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Extensions {
+    pub(crate) raw_xml: String,
 }
 
 // TODO:
@@ -130,7 +137,7 @@ pub struct Email {
 
 /// Represents the 'linkType' from the XSD. A link to an external resource (Web
 /// page, digital photo, video clip, etc.) with additional information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Link {
     /// Text of hyperlink
     pub text: Option<String>,
@@ -159,7 +166,7 @@ pub struct Route {
     /// Type (classification) of the track.
     pub r#type: Option<String>,
     /// Arbitrary extended information. Represented as an unparsed string.
-    pub extensions: Option<String>,
+    pub extensions: Option<Extensions>,
     /// The list of points in the route.
     pub points: Vec<Waypoint>,
 }
@@ -182,7 +189,7 @@ pub struct Track {
     /// Type (classification) of the track.
     pub r#type: Option<String>,
     /// Arbitrary extended information. Represented as an unparsed string.
-    pub extensions: Option<String>,
+    pub extensions: Option<Extensions>,
     /// List of segments in the track. A Track Segment holds a list of Track
     /// Points which are logically connected in order. To represent a single GPS
     /// track where GPS reception was lost, or the GPS receiver was turned off,
@@ -199,7 +206,7 @@ pub struct TrackSegment {
     /// The set of points in the segment.
     pub points: Vec<Waypoint>,
     /// Arbitrary extended information.
-    pub extensions: Option<String>,
+    pub extensions: Option<Extensions>,
 }
 
 pub type Degrees = f64;
@@ -221,7 +228,7 @@ pub struct Waypoint {
     pub magvar: Option<Degrees>,
     /// Height (in meters) of geoid (mean sea level) above WGS84 earth
     /// ellipsoid. As defined in NMEA GGA message.
-    pub geoidheight: Option<f64>,
+    pub geoid_height: Option<f64>,
     /// The GPS name of the waypoint. This field will be transferred to and from
     /// the GPS. GPX does not place restrictions on the length of this field or
     /// the characters contained in it. It is up to the receiving application to
@@ -244,7 +251,7 @@ pub struct Waypoint {
     /// Type of GPX fix.
     pub fix: Option<FixType>,
     /// Number of satellites used to calculate the GPX fix.
-    pub sat: Option<u16>,
+    pub num_satellites: Option<u16>,
     /// Horizontal dilution of precision.
     pub hdop: Option<f64>,
     /// Vertical dilution of precision.
@@ -261,13 +268,11 @@ pub struct Waypoint {
     /// The longitude of the point. This is always in decimal degrees, and
     /// always in WGS84 datum.
     pub lon: Lon,
-    /// Extended Garmin trackpoint information.
-    pub tp_extensions: Option<GarminTrackpointExtensions>,
     /// Arbitrary extended information. Represented as an unparsed string.
     /// Garmin-specific trackpoint extensions as described at
     /// https://www8.garmin.com/xmlschemas/TrackPointExtensionv1.xsd are parsed
     /// into a separate field.
-    pub extensions: Option<String>,
+    pub extensions: Option<Extensions>,
 }
 
 /// Type of GPS fix. none means GPS had no fix. To signify "the fix info is
@@ -316,7 +321,6 @@ pub struct EnrichedGpx {
     pub points: Vec<EnrichedTrackPoint>,
 }
 
-
 /// A TrackPoint with lots of extra stuff calculated. We need the extras
 /// to find the stages.
 #[derive(Debug, Clone)]
@@ -333,8 +337,11 @@ pub struct EnrichedTrackPoint {
     pub time: Option<OffsetDateTime>,
     /// The Garmin TrackPoint extensions.
     pub extensions: Option<GarminTrackpointExtensions>,
+    pub extensions_new: Option<Extensions>,
+
 
     // All the below fields are the 'enriched' ones.
+
     /// The amount of time between this trackpoint and the previous one.
     pub delta_time: Option<Duration>,
     /// The distance between this trackpoint and the previous one.

@@ -1,9 +1,7 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    io::BufRead,
-};
+use std::{collections::HashMap, io::BufRead};
 
 use anyhow::{bail, Result};
+use log::debug;
 use quick_xml::{
     events::{BytesStart, Event},
     Reader,
@@ -11,7 +9,10 @@ use quick_xml::{
 
 use crate::model::Gpx;
 
-use super::{metadata::parse_metadata, parse_attributes, track::parse_track};
+use super::{
+    attributes::Attributes, extensions::parse_extensions, metadata::parse_metadata,
+    route::parse_route, track::parse_track, waypoint::parse_waypoint,
+};
 
 pub(crate) struct GpxAttributes {
     pub(crate) creator: String,
@@ -22,22 +23,15 @@ pub(crate) struct GpxAttributes {
 /// Parses the attributes on 'gpx' element itself. Gets around a multiple mut borrows
 /// problem in the main read_gpx_from_reader() function.
 pub(crate) fn parse_gpx_attributes(tag: &BytesStart<'_>) -> Result<GpxAttributes> {
-    let mut attributes = parse_attributes(&tag)?;
+    let mut attributes = Attributes::new(tag)?;
 
-    let creator = match attributes.entry("creator".to_string()) {
-        Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-        _ => bail!("Mandatory attribute 'creator' was missing on the GPX element"),
-    };
-
-    let version = match attributes.entry("version".to_string()) {
-        Entry::Occupied(occupied_entry) => occupied_entry.remove(),
-        _ => bail!("Mandatory attribute 'version' was missing on the GPX element"),
-    };
+    let creator: String = attributes.get("creator")?;
+    let version: String = attributes.get("version")?;
 
     Ok(GpxAttributes {
         creator,
         version,
-        other_attributes: attributes,
+        other_attributes: attributes.into_inner(),
     })
 }
 
@@ -54,14 +48,26 @@ pub(crate) fn parse_gpx<R: BufRead>(
                 b"metadata" => {
                     gpx.metadata = parse_metadata(buf, xml_reader)?;
                 }
+                b"wpt" => {
+                    let waypoint = parse_waypoint(Attributes::new(&e)?, buf, xml_reader, b"wpt")?;
+                    gpx.waypoints.push(waypoint);
+                }
+                b"rte" => {
+                    let route = parse_route(buf, xml_reader)?;
+                    gpx.routes.push(route);
+                }
                 b"trk" => {
                     let track = parse_track(buf, xml_reader)?;
                     gpx.tracks.push(track);
+                }
+                b"extensions" => {
+                    gpx.extensions = Some(parse_extensions(buf, xml_reader)?);
                 }
                 _ => (),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
+                    debug!("Buffer size is {}", buf.len());
                     return Ok(gpx);
                 }
                 _ => (),

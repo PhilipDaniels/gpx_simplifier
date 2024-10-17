@@ -3,7 +3,6 @@
 use core::str;
 use std::{
     borrow::Cow,
-    collections::HashMap,
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
@@ -15,37 +14,26 @@ use declaration::parse_declaration;
 use gpx::{parse_gpx, parse_gpx_attributes};
 use log::info;
 use logging_timer::time;
-use metadata::parse_metadata;
-use quick_xml::{
-    events::{BytesStart, Event},
-    Reader,
-};
+use quick_xml::{events::Event, Reader};
 use time::{format_description::well_known, OffsetDateTime};
-use track::parse_track;
 
-use crate::model::{Gpx, Track, XmlDeclaration};
+use crate::model::{Gpx, XmlDeclaration};
 
+mod attributes;
+mod bounds;
+mod copyright;
 mod declaration;
+mod email;
+mod extensions;
 mod gpx;
+mod link;
 mod metadata;
+mod person;
+mod route;
 mod track;
 mod track_segment;
 mod trackpoint_extensions;
 mod waypoint;
-
-/*
-<xml>                                                  parse_declaration
-<gpx>                          type="gpxType"          parse_gpx
-   <metadata>                  type="metadataType"     parse_metadata
-   <wpt>                       type="wptType"          n.a.
-   <rte>                       type="rteType"          n.a.
-   <extensions>                type="extensionsType"   n.a.
-   <trk>                       type="trkType"          parse_track
-       <trkseg>                type="trksegType"       parse_track_segment
-           <trkpt>             type="wptType"          parse_waypoint
-               <extensions>    type="extensions"       parse_trackpoint_extensions
-
-*/
 
 /// The XSD, which defines the format of a GPX file, is at https://www.topografix.com/GPX/1/1/gpx.xsd
 /// This function doesn't parse everything, just the things that appear in my Garmin files.
@@ -106,34 +94,6 @@ pub fn read_gpx_from_reader<R: BufRead>(input: R) -> Result<Gpx> {
     }
 }
 
-fn parse_attributes(tag: &BytesStart<'_>) -> Result<HashMap<String, String>> {
-    let mut result = HashMap::new();
-
-    for attr in tag.attributes() {
-        let attr = attr?;
-        let key = attr.key.into_inner();
-        let key = bytes_to_string(key)?;
-        let value = cow_to_string(attr.value)?;
-
-        result.insert(key, value);
-    }
-
-    Ok(result)
-}
-
-fn read_attribute_as_string(tag: &BytesStart<'_>, attribute_name: &str) -> Result<String> {
-    let attrs = parse_attributes(tag)?;
-    match attrs.get(attribute_name) {
-        Some(value) => Ok(value.clone()),
-        None => bail!("No attribute named {attribute_name}"),
-    }
-}
-
-fn read_attribute_as_f64(tag: &BytesStart<'_>, attribute_name: &str) -> Result<f64> {
-    let s = read_attribute_as_string(tag, attribute_name)?;
-    Ok(s.parse::<f64>()?)
-}
-
 /// Reads the 'INNER TEXT' from a tag such as <tag>INNER TEXT</tag>.
 fn read_inner_as_string<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<String> {
     match reader.read_event_into(buf) {
@@ -166,6 +126,8 @@ fn read_inner_as<R: BufRead, T: FromStr>(buf: &mut Vec<u8>, reader: &mut Reader<
         ),
     }
 }
+
+// TODO: Use reader.decoder().decode(...)
 
 /// Converts a byte slice to a String.
 fn bytes_to_string(value: &[u8]) -> Result<String> {

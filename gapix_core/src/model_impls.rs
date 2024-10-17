@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use geo::{point, Point};
 use log::debug;
 use logging_timer::time;
@@ -6,8 +6,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     model::{
-        Email, EnrichedGpx, EnrichedTrackPoint, Gpx, Lat, Link, Lon, Metadata, Waypoint,
-        XmlDeclaration,
+        Email, EnrichedGpx, EnrichedTrackPoint, Extensions, FixType, Gpx, Lat, Link, Lon, Metadata, Waypoint, XmlDeclaration
     },
     stage::{distance_between_points_metres, speed_kmh_from_duration},
 };
@@ -34,6 +33,7 @@ impl Gpx {
             waypoints: Default::default(),
             routes: Default::default(),
             tracks: Default::default(),
+            extensions: Default::default()
         }
     }
 
@@ -129,6 +129,20 @@ impl Gpx {
     }
 }
 
+impl Extensions {
+    /// Constructs a new Extensions object from the raw value.
+    pub fn new<S: Into<String>>(value: S) -> Self {
+        Self {
+            raw_xml: value.into()
+        }
+    }
+
+    /// Returns true if there are no extensions.
+    pub fn is_empty(&self) -> bool {
+        self.raw_xml.is_empty()
+    }
+}
+
 impl Default for XmlDeclaration {
     fn default() -> Self {
         Self {
@@ -172,6 +186,21 @@ impl Link {
             text: None,
             r#type: None,
             href: href.into(),
+        }
+    }
+}
+
+impl TryFrom<String> for FixType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        match value.as_ref() {
+            "none" => Ok(FixType::None),
+            "2d" => Ok(FixType::TwoDimensional),
+            "3d" => Ok(FixType::ThreeDimensional),
+            "dgps" => Ok(FixType::DGPS),
+            "pps" => Ok(FixType::PPS),
+            _ => Err(anyhow!("{} is not a valid FixType (valid values are 'none', '2d', '3d', 'dgps', 'pps')", value))
         }
     }
 }
@@ -318,7 +347,8 @@ impl EnrichedTrackPoint {
             lon: value.lon,
             ele: value.ele,
             time: value.time,
-            extensions: value.tp_extensions.clone(),
+            extensions: None,
+            extensions_new: value.extensions.clone(),
             delta_time: None,
             delta_metres: 0.0,
             running_metres: 0.0,

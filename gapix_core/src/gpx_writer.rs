@@ -12,7 +12,7 @@ use crate::{
     byte_counter::ByteCounter,
     formatting::format_utc_date,
     model::{
-        GarminTrackpointExtensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint,
+        Extensions, GarminTrackpointExtensions, Gpx, Link, Metadata, Track, TrackSegment, Waypoint,
         XmlDeclaration,
     },
 };
@@ -152,9 +152,8 @@ fn write_trackpoint<W: Write>(w: &mut W, point: &Waypoint) -> Result<()> {
         writeln!(w, "        <time>{}</time>", format_utc_date(&t)?)?;
     }
 
-    if let Some(tp_ext) = &point.tp_extensions {
-        write_trackpoint_extensions(w, &tp_ext)
-            .context("Failed to write Garmin trackpoint extensions")?;
+    if let Some(ext) = &point.extensions {
+        write_extensions(w, &ext).context("Failed to write Garmin trackpoint extensions")?;
     }
 
     writeln!(w, "      </trkpt>")?;
@@ -162,10 +161,7 @@ fn write_trackpoint<W: Write>(w: &mut W, point: &Waypoint) -> Result<()> {
     Ok(())
 }
 
-fn write_trackpoint_extensions<W: Write>(
-    _w: &mut W,
-    _ext: &GarminTrackpointExtensions,
-) -> Result<()> {
+fn write_extensions<W: Write>(_w: &mut W, _ext: &Extensions) -> Result<()> {
     // TODO: Need to be careful of the namespace. Can get it from the GPX tag.
     Ok(())
 }

@@ -1,21 +1,41 @@
 use std::io::BufRead;
 
-use anyhow::Result;
-use quick_xml::Reader;
+use anyhow::{bail, Result};
+use quick_xml::{events::Event, Reader};
 
 use crate::model::TrackSegment;
 
-use super::waypoint::parse_waypoint;
+use super::{
+    attributes::Attributes, bytes_to_string, extensions::parse_extensions, waypoint::parse_waypoint,
+};
 
 pub(crate) fn parse_track_segment<R: BufRead>(
     buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
+    xml_reader: &mut Reader<R>,
 ) -> Result<TrackSegment> {
     let mut segment = TrackSegment::default();
 
-    while let Some(point) = parse_waypoint(buf, reader)? {
-        segment.points.push(point);
+    loop {
+        match xml_reader.read_event_into(buf) {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"trkpt" => {
+                    let point = parse_waypoint(Attributes::new(&e)?, buf, xml_reader, b"trkpt")?;
+                    segment.points.push(point);
+                }
+                b"extensions" => {
+                    segment.extensions = Some(parse_extensions(buf, xml_reader)?);
+                }
+                e => bail!("Unexpected element {:?}", bytes_to_string(e)?),
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"trkseg" => {
+                    return Ok(segment);
+                }
+                _ => {}
+            },
+            // Ignore spurious Event::Text, I think they are newlines.
+            Ok(Event::Text(_)) => {}
+            e => bail!("Unexpected element {:?}", e),
+        }
     }
-
-    Ok(segment)
 }

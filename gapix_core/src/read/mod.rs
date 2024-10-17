@@ -80,6 +80,8 @@ pub fn read_gpx_from_reader(mut xml_reader: Reader<&[u8]>) -> Result<Gpx> {
     }
 }
 
+/// An extension trait for quick_xml::Reader that converts the underlying bytes
+/// into usable str and String values.
 pub(crate) trait XmlReaderConversions {
     fn bytes_to_cow<'a, 'b>(&'a self, bytes: &'b [u8]) -> Result<Cow<'b, str>>;
     fn bytes_to_string(&self, bytes: &[u8]) -> Result<String>;
@@ -89,6 +91,8 @@ pub(crate) trait XmlReaderConversions {
 impl<R> XmlReaderConversions for Reader<R> {
     #[inline]
     fn bytes_to_cow<'a, 'b>(&'a self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+        // It is important to pass the bytes through decode() in order to do a
+        // proper conversion.
         Ok(self.decoder().decode(bytes)?)
     }
 
@@ -108,6 +112,8 @@ impl<R> XmlReaderConversions for Reader<R> {
     }
 }
 
+/// An extension trait for quick_xml::Reader that makes it convenient to read
+/// inner text and convert it to a specific type.
 pub(crate) trait XmlReaderExtensions {
     fn read_inner_as_string(&mut self) -> Result<String>;
     fn read_inner_as_time(&mut self) -> Result<OffsetDateTime>;

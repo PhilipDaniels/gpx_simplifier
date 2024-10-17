@@ -5,40 +5,36 @@ use crate::model::Metadata;
 
 use super::{
     attributes::Attributes, bounds::parse_bounds, bytes_to_string, copyright::parse_copyright,
-    extensions::parse_extensions, link::parse_link, person::parse_person,
-    read_inner_as_string, read_inner_as_time,
+    extensions::parse_extensions, link::parse_link, person::parse_person, XmlReaderExtensions,
 };
 
-pub(crate) fn parse_metadata(
-    buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<&[u8]>,
-) -> Result<Metadata> {
+pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata> {
     let mut md = Metadata::default();
 
     loop {
-        match xml_reader.read_event_into(buf) {
+        match xml_reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"name" => {
-                    md.name = Some(read_inner_as_string(buf, xml_reader)?);
+                    md.name = Some(xml_reader.read_inner_as()?);
                 }
                 b"desc" => {
-                    md.description = Some(read_inner_as_string(buf, xml_reader)?);
+                    md.description = Some(xml_reader.read_inner_as()?);
                 }
                 b"author" => {
-                    md.author = Some(parse_person(buf, xml_reader)?);
+                    md.author = Some(parse_person(xml_reader)?);
                 }
                 b"copyright" => {
-                    md.copyright = Some(parse_copyright(buf, xml_reader)?);
+                    md.copyright = Some(parse_copyright(xml_reader)?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e)?, buf, xml_reader)?;
+                    let link = parse_link(Attributes::new(&e)?, xml_reader)?;
                     md.links.push(link);
                 }
                 b"time" => {
-                    md.time = Some(read_inner_as_time(buf, xml_reader)?);
+                    md.time = Some(xml_reader.read_inner_as_time()?);
                 }
                 b"keywords" => {
-                    md.keywords = Some(read_inner_as_string(buf, xml_reader)?);
+                    md.keywords = Some(xml_reader.read_inner_as()?);
                 }
                 b"bounds" => {
                     md.bounds = Some(parse_bounds(&e)?);

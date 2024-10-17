@@ -5,45 +5,42 @@ use crate::model::Route;
 
 use super::{
     attributes::Attributes, bytes_to_string, extensions::parse_extensions, link::parse_link,
-    read_inner_as, read_inner_as_string, waypoint::parse_waypoint,
+    waypoint::parse_waypoint, XmlReaderExtensions,
 };
 
-pub(crate) fn parse_route(
-    buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<&[u8]>,
-) -> Result<Route> {
+pub(crate) fn parse_route(xml_reader: &mut Reader<&[u8]>) -> Result<Route> {
     let mut route = Route::default();
 
     loop {
-        match xml_reader.read_event_into(buf) {
+        match xml_reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"name" => {
-                    route.name = Some(read_inner_as_string(buf, xml_reader)?);
+                    route.name = Some(xml_reader.read_inner_as()?);
                 }
                 b"cmt" => {
-                    route.comment = Some(read_inner_as_string(buf, xml_reader)?);
+                    route.comment = Some(xml_reader.read_inner_as()?);
                 }
                 b"desc" => {
-                    route.description = Some(read_inner_as_string(buf, xml_reader)?);
+                    route.description = Some(xml_reader.read_inner_as()?);
                 }
                 b"src" => {
-                    route.source = Some(read_inner_as_string(buf, xml_reader)?);
+                    route.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e)?, buf, xml_reader)?;
+                    let link = parse_link(Attributes::new(&e)?, xml_reader)?;
                     route.links.push(link);
                 }
                 b"number" => {
-                    route.number = Some(read_inner_as(buf, xml_reader)?);
+                    route.number = Some(xml_reader.read_inner_as()?);
                 }
                 b"type" => {
-                    route.r#type = Some(read_inner_as_string(buf, xml_reader)?);
+                    route.r#type = Some(xml_reader.read_inner_as()?);
                 }
                 b"extensions" => {
                     route.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 b"rtept" => {
-                    let point = parse_waypoint(Attributes::new(&e)?, buf, xml_reader, b"rtept")?;
+                    let point = parse_waypoint(Attributes::new(&e)?, xml_reader, b"rtept")?;
                     route.points.push(point);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)?),

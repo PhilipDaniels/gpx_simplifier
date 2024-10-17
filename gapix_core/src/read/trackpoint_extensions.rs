@@ -1,54 +1,40 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
 use crate::model::GarminTrackpointExtensions;
 
-use super::{bytes_to_string, read_inner_as};
+use super::{bytes_to_string, XmlReaderExtensions};
 
-pub(crate) fn parse_garmin_trackpoint_extensions<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
+pub(crate) fn parse_garmin_trackpoint_extensions(
+    xml_reader: &mut Reader<&[u8]>,
 ) -> Result<GarminTrackpointExtensions> {
-    let mut air_temp = None;
-    let mut water_temp = None;
-    let mut depth = None;
-    let mut heart_rate = None;
-    let mut cadence = None;
+    let mut gext = GarminTrackpointExtensions::default();
 
     loop {
-        match reader.read_event_into(buf) {
+        match xml_reader.read_event() {
             Ok(Event::Start(e)) => match e.local_name().as_ref() {
                 b"TrackPointExtension" => { /* ignore, just a container element */ }
                 b"atemp" => {
-                    air_temp = Some(read_inner_as::<R, f64>(buf, reader)?);
+                    gext.air_temp = Some(xml_reader.read_inner_as()?);
                 }
                 b"wtemp" => {
-                    water_temp = Some(read_inner_as::<R, f64>(buf, reader)?);
+                    gext.water_temp = Some(xml_reader.read_inner_as()?);
                 }
                 b"depth" => {
-                    depth = Some(read_inner_as::<R, f64>(buf, reader)?);
+                    gext.depth = Some(xml_reader.read_inner_as()?);
                 }
                 b"hr" => {
-                    heart_rate = Some(read_inner_as::<R, u8>(buf, reader)?);
+                    gext.heart_rate = Some(xml_reader.read_inner_as()?);
                 }
                 b"cad" => {
-                    cadence = Some(read_inner_as::<R, u8>(buf, reader)?);
+                    gext.cadence = Some(xml_reader.read_inner_as()?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },
             Ok(Event::End(e)) => match e.local_name().as_ref() {
                 b"TrackPointExtension" => { /* ignore, just a container element */ }
                 b"extensions" => {
-                    return Ok(GarminTrackpointExtensions {
-                        air_temp,
-                        water_temp,
-                        depth,
-                        heart_rate,
-                        cadence,
-                        extensions: None,
-                    });
+                    return Ok(gext);
                 }
                 b"atemp" | b"wtemp" | b"depth" | b"hr" | b"cad" => { /* ignore, just the closing tags */
                 }

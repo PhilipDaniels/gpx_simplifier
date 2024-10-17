@@ -1,7 +1,7 @@
 #![allow(clippy::single_match)]
 
 use core::str;
-use std::{borrow::Cow, io::BufRead, path::Path, str::FromStr};
+use std::{borrow::Cow, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 use declaration::parse_declaration;
@@ -47,19 +47,18 @@ pub fn read_gpx_from_slice(data: &[u8]) -> Result<Gpx> {
 
 #[time]
 pub fn read_gpx_from_reader(mut xml_reader: Reader<&[u8]>) -> Result<Gpx> {
-    let mut buf: Vec<u8> = Vec::with_capacity(512);
     let mut xml_declaration: Option<XmlDeclaration> = None;
     let mut gpx: Option<Gpx> = None;
 
     loop {
-        match xml_reader.read_event_into(&mut buf) {
+        match xml_reader.read_event() {
             Ok(Event::Decl(decl)) => {
                 xml_declaration = Some(parse_declaration(&decl)?);
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"gpx" => {
                     let attrs = parse_gpx_attributes(&e)?;
-                    let mut partial_gpx = parse_gpx(&mut buf, &mut xml_reader)?;
+                    let mut partial_gpx = parse_gpx(&mut xml_reader)?;
                     partial_gpx.creator = attrs.creator;
                     partial_gpx.version = attrs.version;
                     partial_gpx.attributes = attrs.other_attributes;
@@ -78,45 +77,8 @@ pub fn read_gpx_from_reader(mut xml_reader: Reader<&[u8]>) -> Result<Gpx> {
             Err(e) => bail!("Error at position {}: {:?}", xml_reader.error_position(), e),
             _ => (),
         }
-
-        buf.clear();
     }
 }
-
-/// Reads the 'INNER TEXT' from a tag such as <tag>INNER TEXT</tag>.
-fn read_inner_as_string<R: BufRead>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<String> {
-    match reader.read_event_into(buf) {
-        Ok(Event::Text(ele)) => Ok(bytes_to_string(ele.as_ref())?),
-        e => bail!(
-            "Got unexpected XML element {:?} (was expecting Event::Text), this is either a bug or the document is corrupt",
-            e
-        ),
-    }
-}
-
-/// Reads the inner text, e.g. in a '<time>2024-09-21T06:59:46.000Z</time>' tag
-/// and converts it into a time.
-fn read_inner_as_time<R: BufRead>(
-    buf: &mut Vec<u8>,
-    reader: &mut Reader<R>,
-) -> Result<OffsetDateTime> {
-    let t = read_inner_as_string(buf, reader)?;
-    Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
-}
-
-fn read_inner_as<R: BufRead, T: FromStr>(buf: &mut Vec<u8>, reader: &mut Reader<R>) -> Result<T> {
-    let t = read_inner_as_string(buf, reader)?;
-    match t.parse::<T>() {
-        Ok(v) => Ok(v),
-        Err(_) => bail!(
-            "Could not parse {:?} into {}",
-            &buf,
-            std::any::type_name::<T>()
-        ),
-    }
-}
-
-// TODO: Use reader.decoder().decode(...)
 
 /// Converts a byte slice to a String.
 fn bytes_to_string(value: &[u8]) -> Result<String> {
@@ -130,5 +92,40 @@ fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String> {
     match v {
         Cow::Borrowed(s) => Ok(bytes_to_string(s)?),
         Cow::Owned(s) => Ok(String::from_utf8(s)?),
+    }
+}
+
+pub(crate) trait XmlReaderExtensions {
+    fn read_inner_as_string(&mut self) -> Result<String>;
+    fn read_inner_as_time(&mut self) -> Result<OffsetDateTime>;
+    fn read_inner_as<T: FromStr>(&mut self) -> Result<T>;
+}
+
+impl XmlReaderExtensions for Reader<&[u8]> {
+    fn read_inner_as_string(&mut self) -> Result<String> {
+        match self.read_event() {
+            Ok(Event::Text(text)) => {
+                let text = self.decoder().decode(&text)?;
+                Ok(text.into())
+            }
+            e => bail!(
+                "Got unexpected XML element {:?} (was expecting Event::Text), this is either a bug or the document is corrupt",
+                e
+            ),
+        }
+    }
+
+    fn read_inner_as_time(&mut self) -> Result<OffsetDateTime> {
+        let t = self.read_inner_as_string()?;
+        Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
+    }
+
+    fn read_inner_as<T: FromStr>(&mut self) -> Result<T> {
+        let t = self.read_inner_as_string()?;
+
+        match t.parse::<T>() {
+            Ok(v) => Ok(v),
+            Err(_) => bail!("Could not parse {} into {}", t, std::any::type_name::<T>()),
+        }
     }
 }

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
-use log::debug;
 use quick_xml::{
     events::{BytesStart, Event},
     Reader,
@@ -36,28 +35,25 @@ pub(crate) fn parse_gpx_attributes(tag: &BytesStart<'_>) -> Result<GpxAttributes
 }
 
 /// Parses the 'gpx' element itself.
-pub(crate) fn parse_gpx(
-    mut buf: &mut Vec<u8>,
-    xml_reader: &mut Reader<&[u8]>,
-) -> Result<Gpx> {
+pub(crate) fn parse_gpx(xml_reader: &mut Reader<&[u8]>) -> Result<Gpx> {
     let mut gpx = Gpx::default();
 
     loop {
-        match xml_reader.read_event_into(&mut buf) {
+        match xml_reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"metadata" => {
-                    gpx.metadata = parse_metadata(buf, xml_reader)?;
+                    gpx.metadata = parse_metadata(xml_reader)?;
                 }
                 b"wpt" => {
-                    let waypoint = parse_waypoint(Attributes::new(&e)?, buf, xml_reader, b"wpt")?;
+                    let waypoint = parse_waypoint(Attributes::new(&e)?, xml_reader, b"wpt")?;
                     gpx.waypoints.push(waypoint);
                 }
                 b"rte" => {
-                    let route = parse_route(buf, xml_reader)?;
+                    let route = parse_route(xml_reader)?;
                     gpx.routes.push(route);
                 }
                 b"trk" => {
-                    let track = parse_track(buf, xml_reader)?;
+                    let track = parse_track(xml_reader)?;
                     gpx.tracks.push(track);
                 }
                 b"extensions" => {
@@ -67,7 +63,6 @@ pub(crate) fn parse_gpx(
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    debug!("Buffer size is {}", buf.len());
                     return Ok(gpx);
                 }
                 _ => (),

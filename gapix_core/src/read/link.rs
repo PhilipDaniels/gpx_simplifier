@@ -1,13 +1,14 @@
-use std::io::BufRead;
-
 use anyhow::{bail, Result};
 use quick_xml::{events::Event, Reader};
 
 use crate::model::Link;
 
-use super::{attributes::Attributes, bytes_to_string, read_inner_as_string};
+use super::{attributes::Attributes, bytes_to_string, XmlReaderExtensions};
 
-pub(crate) fn parse_link<R: BufRead>(mut attributes: Attributes, buf: &mut Vec<u8>, xml_reader: &mut Reader<R>) -> Result<Link> {
+pub(crate) fn parse_link(
+    mut attributes: Attributes,
+    xml_reader: &mut Reader<&[u8]>,
+) -> Result<Link> {
     let mut link = Link::default();
     link.href = attributes.get("href")?;
     if !attributes.is_empty() {
@@ -15,13 +16,13 @@ pub(crate) fn parse_link<R: BufRead>(mut attributes: Attributes, buf: &mut Vec<u
     }
 
     loop {
-        match xml_reader.read_event_into(buf) {
+        match xml_reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"text" => {
-                    link.text = Some(read_inner_as_string(buf, xml_reader)?);
+                    link.text = Some(xml_reader.read_inner_as()?);
                 }
                 b"type" => {
-                    link.r#type = Some(read_inner_as_string(buf, xml_reader)?);
+                    link.r#type = Some(xml_reader.read_inner_as()?);
                 }
                 e => bail!("Unexpected element {:?}", bytes_to_string(e)),
             },

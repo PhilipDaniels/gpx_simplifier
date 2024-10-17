@@ -4,8 +4,8 @@ use quick_xml::{events::Event, Reader};
 use crate::model::Route;
 
 use super::{
-    attributes::Attributes, bytes_to_string, extensions::parse_extensions, link::parse_link,
-    waypoint::parse_waypoint, XmlReaderExtensions,
+    attributes::Attributes, extensions::parse_extensions, link::parse_link,
+    waypoint::parse_waypoint, XmlReaderConversions, XmlReaderExtensions,
 };
 
 pub(crate) fn parse_route(xml_reader: &mut Reader<&[u8]>) -> Result<Route> {
@@ -27,7 +27,7 @@ pub(crate) fn parse_route(xml_reader: &mut Reader<&[u8]>) -> Result<Route> {
                     route.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e)?, xml_reader)?;
+                    let link = parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?;
                     route.links.push(link);
                 }
                 b"number" => {
@@ -40,10 +40,11 @@ pub(crate) fn parse_route(xml_reader: &mut Reader<&[u8]>) -> Result<Route> {
                     route.extensions = Some(parse_extensions(xml_reader)?);
                 }
                 b"rtept" => {
-                    let point = parse_waypoint(Attributes::new(&e)?, xml_reader, b"rtept")?;
+                    let point =
+                        parse_waypoint(Attributes::new(&e, xml_reader)?, xml_reader, b"rtept")?;
                     route.points.push(point);
                 }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)?),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"rte" => {

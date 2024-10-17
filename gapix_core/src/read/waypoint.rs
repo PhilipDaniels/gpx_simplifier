@@ -4,8 +4,8 @@ use quick_xml::{events::Event, Reader};
 use crate::model::Waypoint;
 
 use super::{
-    attributes::Attributes, bytes_to_string, extensions::parse_extensions, link::parse_link,
-    XmlReaderExtensions
+    attributes::Attributes, extensions::parse_extensions, link::parse_link, XmlReaderConversions,
+    XmlReaderExtensions,
 };
 
 /// Parses a waypoint. Waypoints can appear under the 'gpx' tag, as part of a
@@ -54,7 +54,7 @@ pub(crate) fn parse_waypoint(
                     wp.source = Some(xml_reader.read_inner_as()?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e)?, xml_reader)?;
+                    let link = parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?;
                     wp.links.push(link);
                 }
                 b"sym" => {
@@ -88,7 +88,7 @@ pub(crate) fn parse_waypoint(
                 b"extensions" => {
                     wp.extensions = Some(parse_extensions(xml_reader)?);
                 }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == expected_end_tag {

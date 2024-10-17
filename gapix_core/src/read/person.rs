@@ -4,7 +4,7 @@ use quick_xml::{events::Event, Reader};
 use crate::model::Person;
 
 use super::{
-    attributes::Attributes, bytes_to_string, email::parse_email, link::parse_link,
+    attributes::Attributes, email::parse_email, link::parse_link, XmlReaderConversions,
     XmlReaderExtensions,
 };
 
@@ -18,12 +18,12 @@ pub(crate) fn parse_person(xml_reader: &mut Reader<&[u8]>) -> Result<Person> {
                     person.name = Some(xml_reader.read_inner_as()?);
                 }
                 b"email" => {
-                    person.email = Some(parse_email(&e)?);
+                    person.email = Some(parse_email(&e, xml_reader)?);
                 }
                 b"link" => {
-                    person.link = Some(parse_link(Attributes::new(&e)?, xml_reader)?);
+                    person.link = Some(parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?);
                 }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"person" => {

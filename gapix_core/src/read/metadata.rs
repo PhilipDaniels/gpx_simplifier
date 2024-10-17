@@ -4,8 +4,9 @@ use quick_xml::{events::Event, Reader};
 use crate::model::Metadata;
 
 use super::{
-    attributes::Attributes, bounds::parse_bounds, bytes_to_string, copyright::parse_copyright,
-    extensions::parse_extensions, link::parse_link, person::parse_person, XmlReaderExtensions,
+    attributes::Attributes, bounds::parse_bounds, copyright::parse_copyright,
+    extensions::parse_extensions, link::parse_link, person::parse_person, XmlReaderConversions,
+    XmlReaderExtensions,
 };
 
 pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata> {
@@ -27,7 +28,7 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
                     md.copyright = Some(parse_copyright(xml_reader)?);
                 }
                 b"link" => {
-                    let link = parse_link(Attributes::new(&e)?, xml_reader)?;
+                    let link = parse_link(Attributes::new(&e, xml_reader)?, xml_reader)?;
                     md.links.push(link);
                 }
                 b"time" => {
@@ -37,12 +38,12 @@ pub(crate) fn parse_metadata(xml_reader: &mut Reader<&[u8]>) -> Result<Metadata>
                     md.keywords = Some(xml_reader.read_inner_as()?);
                 }
                 b"bounds" => {
-                    md.bounds = Some(parse_bounds(&e)?);
+                    md.bounds = Some(parse_bounds(&e, xml_reader)?);
                 }
                 b"extensions" => {
                     md.extensions = Some(parse_extensions(xml_reader)?);
                 }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"metadata" => {

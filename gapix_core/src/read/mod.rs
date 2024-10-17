@@ -53,18 +53,18 @@ pub fn read_gpx_from_reader(mut xml_reader: Reader<&[u8]>) -> Result<Gpx> {
     loop {
         match xml_reader.read_event() {
             Ok(Event::Decl(decl)) => {
-                xml_declaration = Some(parse_declaration(&decl)?);
+                xml_declaration = Some(parse_declaration(&decl, &xml_reader)?);
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"gpx" => {
-                    let attrs = parse_gpx_attributes(&e)?;
+                    let attrs = parse_gpx_attributes(&e, &xml_reader)?;
                     let mut partial_gpx = parse_gpx(&mut xml_reader)?;
                     partial_gpx.creator = attrs.creator;
                     partial_gpx.version = attrs.version;
                     partial_gpx.attributes = attrs.other_attributes;
                     gpx = Some(partial_gpx);
                 }
-                e => bail!("Unexpected opening element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::Eof) => {
                 // We should already have consumed the closing '<gpx>' tag in parse_gpx().
@@ -80,18 +80,31 @@ pub fn read_gpx_from_reader(mut xml_reader: Reader<&[u8]>) -> Result<Gpx> {
     }
 }
 
-/// Converts a byte slice to a String.
-fn bytes_to_string(value: &[u8]) -> Result<String> {
-    str::from_utf8(value)
-        .and_then(|s| Ok(s.to_string()))
-        .map_err(|e| e.into())
+pub(crate) trait XmlReaderConversions {
+    fn bytes_to_cow<'a, 'b>(&'a self, bytes: &'b [u8]) -> Result<Cow<'b, str>>;
+    fn bytes_to_string(&self, bytes: &[u8]) -> Result<String>;
+    fn cow_to_string(&self, bytes: Cow<'_, [u8]>) -> Result<String>;
 }
 
-/// Converts a Cow<u8> to a String in the most efficient manner possible.
-fn cow_to_string(v: Cow<'_, [u8]>) -> Result<String> {
-    match v {
-        Cow::Borrowed(s) => Ok(bytes_to_string(s)?),
-        Cow::Owned(s) => Ok(String::from_utf8(s)?),
+impl<R> XmlReaderConversions for Reader<R> {
+    #[inline]
+    fn bytes_to_cow<'a, 'b>(&'a self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+        Ok(self.decoder().decode(bytes)?)
+    }
+
+    #[inline]
+    fn bytes_to_string(&self, bytes: &[u8]) -> Result<String> {
+        // Ensure everything goes through decode().
+        Ok(self.bytes_to_cow(bytes)?.into())
+    }
+
+    #[inline]
+    fn cow_to_string(&self, bytes: Cow<'_, [u8]>) -> Result<String> {
+        match bytes {
+            // Ensure everything goes through decode().
+            Cow::Borrowed(slice) => Ok(self.bytes_to_string(slice)?),
+            Cow::Owned(vec) => Ok(self.bytes_to_string(&vec)?)
+        }
     }
 }
 
@@ -102,11 +115,11 @@ pub(crate) trait XmlReaderExtensions {
 }
 
 impl XmlReaderExtensions for Reader<&[u8]> {
+    #[inline]
     fn read_inner_as_string(&mut self) -> Result<String> {
         match self.read_event() {
             Ok(Event::Text(text)) => {
-                let text = self.decoder().decode(&text)?;
-                Ok(text.into())
+                Ok(self.bytes_to_string(&text)?)
             }
             e => bail!(
                 "Got unexpected XML element {:?} (was expecting Event::Text), this is either a bug or the document is corrupt",
@@ -115,11 +128,13 @@ impl XmlReaderExtensions for Reader<&[u8]> {
         }
     }
 
+    #[inline]
     fn read_inner_as_time(&mut self) -> Result<OffsetDateTime> {
         let t = self.read_inner_as_string()?;
         Ok(OffsetDateTime::parse(&t, &well_known::Rfc3339)?)
     }
 
+    #[inline]
     fn read_inner_as<T: FromStr>(&mut self) -> Result<T> {
         let t = self.read_inner_as_string()?;
 

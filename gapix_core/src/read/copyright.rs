@@ -3,7 +3,7 @@ use quick_xml::{events::Event, Reader};
 
 use crate::model::Copyright;
 
-use super::{bytes_to_string, XmlReaderExtensions};
+use super::{XmlReaderConversions, XmlReaderExtensions};
 
 pub(crate) fn parse_copyright(xml_reader: &mut Reader<&[u8]>) -> Result<Copyright> {
     let mut copyright = Copyright::default();
@@ -20,7 +20,7 @@ pub(crate) fn parse_copyright(xml_reader: &mut Reader<&[u8]>) -> Result<Copyrigh
                 b"author" => {
                     copyright.author = xml_reader.read_inner_as()?;
                 }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"copyright" => {

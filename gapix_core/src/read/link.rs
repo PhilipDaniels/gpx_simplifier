@@ -3,7 +3,7 @@ use quick_xml::{events::Event, Reader};
 
 use crate::model::Link;
 
-use super::{attributes::Attributes, bytes_to_string, XmlReaderExtensions};
+use super::{attributes::Attributes, XmlReaderConversions, XmlReaderExtensions};
 
 pub(crate) fn parse_link(
     mut attributes: Attributes,
@@ -24,7 +24,7 @@ pub(crate) fn parse_link(
                 b"type" => {
                     link.r#type = Some(xml_reader.read_inner_as()?);
                 }
-                e => bail!("Unexpected element {:?}", bytes_to_string(e)),
+                e => bail!("Unexpected Start element {:?}", xml_reader.bytes_to_cow(e)),
             },
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"link" => {

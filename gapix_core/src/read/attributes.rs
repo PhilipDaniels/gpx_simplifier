@@ -4,9 +4,9 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use quick_xml::events::BytesStart;
+use quick_xml::{events::BytesStart, Reader};
 
-use super::{bytes_to_string, cow_to_string};
+use super::XmlReaderConversions;
 
 #[derive(Debug)]
 pub(crate) struct Attributes {
@@ -16,14 +16,14 @@ pub(crate) struct Attributes {
 impl Attributes {
     /// Creates a new Attributes object by parsing out all the attributes of the
     /// specified tag.
-    pub(crate) fn new(tag: &BytesStart<'_>) -> Result<Self> {
+    pub(crate) fn new<R>(tag: &BytesStart<'_>, xml_reader: &Reader<R>) -> Result<Self> {
         let mut data = HashMap::new();
 
         for attr in tag.attributes() {
             let attr = attr?;
             let key = attr.key.into_inner();
-            let key = bytes_to_string(key)?;
-            let value = cow_to_string(attr.value)?;
+            let key = xml_reader.bytes_to_string(key)?;
+            let value = xml_reader.cow_to_string(attr.value)?;
 
             data.insert(key, value);
         }
